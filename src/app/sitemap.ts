@@ -1,7 +1,7 @@
 import { MetadataRoute } from 'next'
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = 'https://www.yourwebsite.com'; // Replace with your actual domain
+  const baseUrl = 'https://www.apartmentcompliance.com';
 
   return [
     {
