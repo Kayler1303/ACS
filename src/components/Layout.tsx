@@ -5,8 +5,15 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 
-const Header = () => (
-    <header className="bg-white shadow-md">
+const Header = () => {
+    const pathname = usePathname();
+    const navLinks = [
+        { href: '/solutions', label: 'Solutions' },
+        { href: '/about', label: 'About Us' },
+        { href: '/contact', label: 'Contact' },
+    ];
+    return (
+    <header className="bg-white">
         <div className="container mx-auto px-6 py-4">
             <div className="flex items-center justify-between">
                 <div className="flex-shrink-0">
@@ -15,14 +22,22 @@ const Header = () => (
                     </Link>
                 </div>
                 <nav className="space-x-6 relative top-4">
-                    <Link href="/solutions" className="text-brand-blue hover:text-gray-600 text-2xl">Solutions</Link>
-                    <Link href="/about" className="text-brand-blue hover:text-gray-600 text-2xl">About Us</Link>
-                    <Link href="/contact" className="text-brand-blue hover:text-gray-600 text-2xl">Contact</Link>
+                    {navLinks.map(({ href, label }) => (
+                        <Link
+                            key={href}
+                            href={href}
+                            className={`text-2xl hover:text-gray-600 ${
+                                pathname === href ? 'text-brand-accent' : 'text-brand-blue'
+                            }`}
+                        >
+                            {label}
+                        </Link>
+                    ))}
                 </nav>
             </div>
         </div>
     </header>
-);
+)};
 
 const Footer = ({ isContactPage }: { isContactPage: boolean }) => {
   const footerClasses = isContactPage

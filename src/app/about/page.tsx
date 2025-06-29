@@ -100,7 +100,7 @@ const AboutPage = () => {
               <ShieldCheckIcon className="w-8 h-8 text-brand-accent mr-4 flex-shrink-0" />
               <div>
                 <h3 className="text-xl font-bold text-brand-blue font-serif mb-2">Integrity</h3>
-                <p className="text-gray-700">We call things as they are — professionally, respectfully, and clearly.</p>
+                <p className="text-gray-700">We call things as they are - professionally, respectfully and clearly, all in the spirit of collaboration.</p>
               </div>
             </div>
             <div className="flex items-start">

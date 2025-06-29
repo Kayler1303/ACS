@@ -9,8 +9,12 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['var(--font-boston)'],
-        serif: ['var(--font-lora)'],
+        sans: ['var(--font-lora)'],
+        serif: ['var(--font-playfair-display)'],
+      },
+      colors: {
+        'brand-blue': '#0078C6',
+        'brand-accent': '#20BBFF',
       },
       backgroundImage: {
         "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",

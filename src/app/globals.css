@@ -1,4 +1,7 @@
 @import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 @theme {
   --color-brand-blue: #0078C6;
@@ -8,6 +11,7 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --foreground-rgb: 0, 0, 0;
 }
 
 @theme inline {
