@@ -19,7 +19,7 @@ const Header = () => {
             <div className="flex items-center justify-between">
                 <div className="flex-shrink-0">
                     <Link href="/">
-                        <Image src="/SVG FILE.svg" alt="Apartment Compliance Solutions" width={300} height={83} />
+                        <Image src="/logo-main.svg" alt="Apartment Compliance Solutions" width={300} height={83} />
                     </Link>
                 </div>
                 {/* Hamburger Menu Button */}

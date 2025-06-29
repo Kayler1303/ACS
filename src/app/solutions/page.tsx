@@ -15,7 +15,7 @@ export default function SolutionsPage() {
   return (
     <div className="bg-white">
       {/* Hero Section */}
-      <section className="relative h-64 rounded-lg overflow-hidden">
+      <section className="relative h-80 md:h-64 rounded-lg overflow-hidden">
         <Image
           src="/patrick-perkins-G3qlZQXsBOE-unsplash.jpg"
           alt="Modern building interior"
@@ -114,17 +114,20 @@ export default function SolutionsPage() {
       {/* Why Choose Us Section */}
       <section className="py-20 bg-white">
         <div className="container mx-auto px-6 max-w-4xl">
-          <h2 className="text-5xl font-bold text-center text-brand-blue uppercase mb-12 flex items-center justify-center gap-x-3" style={playfairFontStyle}>
-            <span>Why Choose</span>
-            <Image 
-              src="/SVG FILE.svg" 
-              alt="Apartment Compliance Solutions" 
-              width={350} 
-              height={97} 
-              className="inline-block"
-              style={{ position: 'relative', top: '-18px' }}
-            />
-          </h2>
+          <div className="text-center">
+            <h2 className="text-5xl font-bold text-brand-blue uppercase mb-4" style={playfairFontStyle}>
+              Why Choose
+            </h2>
+            <div className="flex justify-center mb-12">
+              <Image 
+                src="/logo-main.svg" 
+                alt="Apartment Compliance Solutions" 
+                width={350} 
+                height={97} 
+                className="inline-block"
+              />
+            </div>
+          </div>
           <div className="max-w-3xl mx-auto">
             <ul className="space-y-6">
               <li className="flex items-start text-lg">
