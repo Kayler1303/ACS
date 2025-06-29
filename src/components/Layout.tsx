@@ -70,6 +70,7 @@ const Header = () => {
     </header>
 )};
 
+// The Footer component displays the copyright information.
 const Footer = ({ isContactPage }: { isContactPage: boolean }) => {
   const footerClasses = isContactPage
     ? "bg-brand-blue text-white p-4 mt-8"
