@@ -1,24 +1,32 @@
 import { MetadataRoute } from 'next'
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = 'https://www.apartmentcompliance.com';
+  const baseUrl = 'https://www.yourwebsite.com'; // Replace with your actual domain
 
   return [
     {
       url: baseUrl,
       lastModified: new Date(),
-    },
-    {
-      url: `${baseUrl}/solutions`,
-      lastModified: new Date(),
+      changeFrequency: 'yearly',
+      priority: 1,
     },
     {
       url: `${baseUrl}/about`,
       lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.8,
+    },
+    {
+      url: `${baseUrl}/solutions`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.8,
     },
     {
       url: `${baseUrl}/contact`,
       lastModified: new Date(),
+      changeFrequency: 'yearly',
+      priority: 0.5,
     },
   ]
 } 

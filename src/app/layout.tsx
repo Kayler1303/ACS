@@ -2,6 +2,7 @@ import { Analytics } from "@vercel/analytics/react"
 import { Playfair_Display, Lora } from 'next/font/google';
 import './globals.css';
 import Layout from '../components/Layout';
+import GoogleAnalytics from "@/components/GoogleAnalytics";
 
 const playfair = Playfair_Display({
   subsets: ['latin'],
@@ -25,6 +26,7 @@ export default function RootLayout({
           {children}
         </Layout>
         <Analytics />
+        <GoogleAnalytics />
       </body>
     </html>
   );

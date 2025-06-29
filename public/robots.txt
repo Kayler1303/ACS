@@ -1,4 +1,6 @@
+# Allow all user-agents to crawl the entire site.
 User-agent: *
 Allow: /
 
-Sitemap: https://www.apartmentcompliance.com/sitemap.xml 
+# Specify the location of the sitemap.
+Sitemap: https://www.yourwebsite.com/sitemap.xml 
