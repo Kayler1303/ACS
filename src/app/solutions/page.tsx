@@ -122,7 +122,7 @@ export default function SolutionsPage() {
               width={350} 
               height={97} 
               className="inline-block"
-              style={{ position: 'relative', top: '-12px' }}
+              style={{ position: 'relative', top: '-18px' }}
             />
           </h2>
           <div className="max-w-3xl mx-auto">
