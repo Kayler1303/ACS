@@ -1,56 +1,28 @@
 "use client";
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { Lora } from 'next/font/google';
-import localFont from 'next/font/local';
-
-const lora = Lora({
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-lora',
-});
-
-const boston = localFont({
-  src: [
-    {
-      path: '../assets/fonts/BostonRegular.otf',
-      weight: '400',
-      style: 'normal',
-    },
-    {
-      path: '../assets/fonts/BostonBold.otf',
-      weight: '700',
-      style: 'normal',
-    },
-  ],
-  variable: '--font-boston',
-});
 
 const Header = () => (
-    <header className="bg-white text-black py-3 px-6">
-      <div className="container mx-auto flex justify-between items-center">
-        <Link href="/">
-          <Image src="/logo.svg" alt="Apartment Compliance Solutions Logo" width={350} height={95} />
-        </Link>
-        <nav className="mt-7">
-          <ul className="flex space-x-6">
-            <li>
-              <Link href="/solutions" className="text-xl text-brand-blue hover:text-brand-accent transition-colors">Solutions</Link>
-            </li>
-            <li>
-              <Link href="/about" className="text-xl text-brand-blue hover:text-brand-accent transition-colors">About Us</Link>
-            </li>
-            <li>
-              <Link href="/contact" className="text-xl text-brand-blue hover:text-brand-accent transition-colors">Contact Us</Link>
-            </li>
-          </ul>
-        </nav>
-      </div>
+    <header className="bg-white shadow-md">
+        <div className="container mx-auto px-6 py-4">
+            <div className="flex items-center justify-between">
+                <div className="flex-shrink-0">
+                    <Link href="/">
+                        <Image src="/SVG FILE.svg" alt="Apartment Compliance Solutions" width={420} height={116} />
+                    </Link>
+                </div>
+                <nav className="space-x-6 relative top-4">
+                    <Link href="/solutions" className="text-brand-blue hover:text-gray-600 text-2xl">Solutions</Link>
+                    <Link href="/about" className="text-brand-blue hover:text-gray-600 text-2xl">About Us</Link>
+                    <Link href="/contact" className="text-brand-blue hover:text-gray-600 text-2xl">Contact</Link>
+                </nav>
+            </div>
+        </div>
     </header>
-  );
+);
 
 const Footer = ({ isContactPage }: { isContactPage: boolean }) => {
   const footerClasses = isContactPage
@@ -71,7 +43,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   const isContactPage = pathname === '/contact';
   
   return (
-    <div className={`flex flex-col min-h-screen ${boston.variable} ${lora.variable} font-sans`}>
+    <div className="flex flex-col min-h-screen">
       <Header />
       <main className="flex-grow container mx-auto p-4">
         {children}
