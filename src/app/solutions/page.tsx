@@ -119,8 +119,8 @@ export default function SolutionsPage() {
             <Image 
               src="/SVG FILE.svg" 
               alt="Apartment Compliance Solutions" 
-              width={300} 
-              height={83} 
+              width={350} 
+              height={97} 
               className="inline-block"
               style={{ position: 'relative', top: '-12px' }}
             />
