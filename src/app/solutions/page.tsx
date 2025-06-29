@@ -90,7 +90,7 @@ export default function SolutionsPage() {
                 <li className="flex items-start"><CheckCircleIcon className="h-6 w-6 text-brand-accent mr-2 flex-shrink-0" />Written findings with recommended corrective actions</li>
                 <li className="flex items-start"><CheckCircleIcon className="h-6 w-6 text-brand-accent mr-2 flex-shrink-0" />Optional follow-up monitoring to track remediation</li>
               </ul>
-              <p className="mt-4 text-sm text-gray-800 italic">Nonprofits ensure they're upholding their fiduciary responsibilities with independent, verifiable documentation. Owners/operators can demonstrate good faith compliance with clear third-party confirmation, building trust with stakeholders and regulators alike.</p>
+              <p className="mt-4 text-sm text-gray-800 italic">Nonprofits ensure they&apos;re upholding their fiduciary responsibilities with independent, verifiable documentation. Owners/operators can demonstrate good faith compliance with clear third-party confirmation, building trust with stakeholders and regulators alike.</p>
             </div>
 
             {/* Service 3: Compliance Consulting & Advisory */}
@@ -148,7 +148,7 @@ export default function SolutionsPage() {
       <section className="bg-brand-blue">
         <div className="mx-auto max-w-7xl py-12 px-4 sm:px-6 lg:flex lg:items-center lg:justify-between lg:py-16 lg:px-8">
           <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl" style={playfairFontStyle}>
-            <span className="block">Let's build confidence into your compliance strategy.</span>
+            <span className="block">Let&apos;s build confidence into your compliance strategy.</span>
             <span className="block text-brand-accent">Contact us to learn more about how our services can support your property and partnership.</span>
           </h2>
           <div className="mt-8 flex lg:mt-0 lg:flex-shrink-0">

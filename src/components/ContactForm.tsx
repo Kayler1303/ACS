@@ -2,11 +2,6 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { Playfair_Display } from 'next/font/google';
-import localFont from 'next/font/local';
-
-const playfair = Playfair_Display({ subsets: ['latin'] });
-const bostonBold = localFont({ src: '../assets/fonts/BostonBold.otf' });
 
 const ContactForm = () => {
   const [formData, setFormData] = useState({
@@ -60,7 +55,7 @@ const ContactForm = () => {
 
       setStatus('submitted');
       setFormData({ name: '', organization: '', email: '', phone: '', message: '' });
-    } catch (error) {
+    } catch (err) {
       setStatus('error');
       setErrors({ api: 'Failed to send message. Please try again later.' });
     }

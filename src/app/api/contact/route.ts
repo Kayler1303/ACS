@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ success: true, data });
-  } catch (error) {
-    return NextResponse.json({ error: 'An unexpected error occurred' }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error });
   }
 } 

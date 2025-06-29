@@ -86,7 +86,7 @@ const AboutPage = () => {
             </div>
           </div>
           <p className="mt-12 text-lg text-gray-800 text-center max-w-3xl mx-auto">
-            Whether contracted directly by the nonprofit or engaged collaboratively with the ownership group, our role remains the same: deliver objective, informed compliance insight that strengthens the partnership and protects everyone's interests.
+            Whether contracted directly by the nonprofit or engaged collaboratively with the ownership group, our role remains the same: deliver objective, informed compliance insight that strengthens the partnership and protects everyone&apos;s interests.
           </p>
         </div>
       </section>
@@ -121,7 +121,7 @@ const AboutPage = () => {
                  <BuildingLibraryIcon className="w-8 h-8 text-brand-accent mr-4 flex-shrink-0" />
               <div>
                 <h3 className="text-xl font-bold text-brand-blue font-serif mb-2">Partnership</h3>
-                <p className="text-gray-700">We're here to support long-term success — not just one-time checklists.</p>
+                <p className="text-gray-700">We&apos;re here to support long-term success — not just one-time checklists.</p>
               </div>
             </div>
           </div>
@@ -132,7 +132,7 @@ const AboutPage = () => {
       <section className="bg-brand-blue">
         <div className="mx-auto max-w-7xl py-12 px-4 sm:px-6 lg:flex lg:items-center lg:justify-between lg:py-16 lg:px-8">
           <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl" style={playfairFontStyle}>
-            <span className="block">Let's Work Together.</span>
+            <span className="block">Let&apos;s Work Together.</span>
             <span className="block text-brand-accent">Reach out to start the conversation.</span>
           </h2>
           <div className="mt-8 flex lg:mt-0 lg:flex-shrink-0">

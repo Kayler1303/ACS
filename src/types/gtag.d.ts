@@ -1,4 +1,4 @@
 interface Window {
-    gtag: (event: string, action: string, params: { [key: string]: any }) => void;
-    dataLayer: any[];
+    gtag: (event: string, action: string, params: Record<string, string | number | boolean>) => void;
+    dataLayer: Record<string, unknown>[];
 } 
