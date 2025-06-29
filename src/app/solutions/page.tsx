@@ -15,17 +15,19 @@ export default function SolutionsPage() {
   return (
     <div className="bg-white">
       {/* Hero Section */}
-      <section className="relative h-80 md:h-64 rounded-lg overflow-hidden">
-        <Image
-          src="/patrick-perkins-G3qlZQXsBOE-unsplash.jpg"
-          alt="Modern building interior"
-          className="object-cover"
-          fill
-          priority
-          sizes="100vw"
-        />
+      <section className="relative rounded-lg overflow-hidden">
+        <div className="absolute inset-0">
+          <Image
+            src="/patrick-perkins-G3qlZQXsBOE-unsplash.jpg"
+            alt="Modern building interior"
+            className="object-cover"
+            fill
+            priority
+            sizes="100vw"
+          />
+        </div>
         <div className="absolute inset-0 bg-brand-blue opacity-60"></div>
-        <div className="relative h-full flex items-center justify-center text-center">
+        <div className="relative flex items-center justify-center text-center min-h-80 md:min-h-64 py-12 px-4">
           <h1 className="text-5xl font-bold text-white leading-tight max-w-4xl" style={playfairFontStyle}>
             Comprehensive Compliance Solutions for Affordable Housing Partnerships
           </h1>
@@ -124,7 +126,7 @@ export default function SolutionsPage() {
                 alt="Apartment Compliance Solutions" 
                 width={350} 
                 height={97} 
-                className="inline-block"
+                className="inline-block max-w-xs w-full h-auto"
               />
             </div>
           </div>
