@@ -28,7 +28,7 @@ export default function SolutionsPage() {
         </div>
         <div className="absolute inset-0 bg-brand-blue opacity-60"></div>
         <div className="relative flex items-center justify-center text-center min-h-80 md:min-h-64 py-12 px-4">
-          <h1 className="text-5xl font-bold text-white leading-tight max-w-4xl" style={playfairFontStyle}>
+          <h1 className="text-4xl md:text-5xl font-bold text-white leading-tight max-w-4xl" style={playfairFontStyle}>
             Comprehensive Compliance Solutions for Affordable Housing Partnerships
           </h1>
         </div>
@@ -120,13 +120,13 @@ export default function SolutionsPage() {
             <h2 className="text-5xl font-bold text-brand-blue uppercase mb-4" style={playfairFontStyle}>
               Why Choose
             </h2>
-            <div className="flex justify-center mb-12">
+            <div className="mb-12">
               <Image 
                 src="/logo-main.svg" 
                 alt="Apartment Compliance Solutions" 
                 width={350} 
                 height={97} 
-                className="inline-block max-w-xs w-full h-auto"
+                className="block mx-auto max-w-xs w-full h-auto"
               />
             </div>
           </div>
