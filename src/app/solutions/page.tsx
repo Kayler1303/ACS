@@ -14,9 +14,6 @@ export default function SolutionsPage() {
 
   return (
     <div className="bg-white">
-      <div className="bg-green-500 text-white text-center p-4 font-bold">
-        DEBUD: Deployment successful!
-      </div>
       {/* Hero Section */}
       <section className="relative rounded-lg overflow-hidden">
         <div className="absolute inset-0">
