@@ -44,7 +44,7 @@ export default function Home() {
         {/* Intro Section */}
         <section className="py-10 bg-white">
           <div className="container mx-auto px-6">
-            <div className="flex flex-col md:flex-row items-start gap-12">
+            <div className="flex flex-col md:flex-row items-center gap-12">
               <div className="md:w-1/2 text-lg text-gray-800 space-y-6">
                 <p>
                   At <LogoText />
@@ -64,22 +64,6 @@ export default function Home() {
                   className="rounded-lg shadow-xl"
                 />
               </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Map Section */}
-        <section className="py-10 bg-white">
-          <div className="container mx-auto px-6 text-center">
-            <h2 className="text-3xl font-bold text-brand-blue mb-8" style={playfairFontStyle}>Serving North & South Carolina</h2>
-            <div className="max-w-4xl mx-auto">
-              <Image 
-                src="/map.png"
-                alt="A map highlighting North Carolina and South Carolina"
-                width={1000}
-                height={600}
-                className="rounded-lg shadow-xl"
-              />
             </div>
           </div>
         </section>
@@ -119,6 +103,22 @@ export default function Home() {
                 <h3 className="text-xl leading-6 font-bold text-brand-blue" style={playfairFontStyle}>Custom Consulting</h3>
                 <p className="mt-4 text-base text-gray-600">We help optimize property performance while maintaining full program compliance.</p>
               </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Map Section */}
+        <section className="py-10 bg-white">
+          <div className="container mx-auto px-6 text-center">
+            <h2 className="text-3xl font-bold text-brand-blue mb-8" style={playfairFontStyle}>Serving North & South Carolina</h2>
+            <div className="max-w-4xl mx-auto">
+              <Image 
+                src="/map.png"
+                alt="A map highlighting North Carolina and South Carolina"
+                width={1000}
+                height={600}
+                className="rounded-lg shadow-xl"
+              />
             </div>
           </div>
         </section>
