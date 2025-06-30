@@ -84,7 +84,7 @@ export default function SolutionsPage() {
             <div className="bg-white p-8 rounded-lg shadow-lg">
               <h3 className="text-2xl font-bold text-brand-blue mb-4" style={playfairFontStyle}>Compliance Auditing</h3>
               <p className="text-gray-700 mb-4">
-                Our auditing services provide a deep, indepedent, detailed review of property compliance status — ideal for annual reviews, pre-sale due diligence, or when program compliance is uncertain.
+                Our auditing services provide a deep, independent, detailed review of property compliance status — ideal for annual reviews, pre-sale due diligence, or when program compliance is uncertain.
               </p>
               <ul className="space-y-2 text-gray-600">
                 <li className="flex items-start"><CheckCircleIcon className="h-6 w-6 text-brand-accent mr-2 flex-shrink-0" />Full audit of tenant files, income qualification, and lease data</li>
