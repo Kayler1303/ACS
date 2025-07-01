@@ -78,8 +78,11 @@ const Footer = ({ isContactPage }: { isContactPage: boolean }) => {
 
   return (
     <footer className={footerClasses}>
-      <div className="container mx-auto text-center">
+      <div className="container mx-auto text-center flex flex-col items-center">
         <p>&copy; {new Date().getFullYear()} Apartment Compliance Solutions. All Rights Reserved.</p>
+        <Link href="/privacy-policy" className="text-sm mt-2 hover:underline">
+          Privacy Policy
+        </Link>
       </div>
     </footer>
   );
