@@ -4,10 +4,12 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
+import { useSession, signOut } from 'next-auth/react';
 
 const Header = () => {
     const pathname = usePathname();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const { data: session } = useSession();
     const navLinks = [
         { href: '/solutions', label: 'Solutions' },
         { href: '/about', label: 'About Us' },
@@ -47,6 +49,20 @@ const Header = () => {
                             {label}
                         </Link>
                     ))}
+                    {session ? (
+                        <>
+                            <Link href="/dashboard" className={`text-2xl hover:text-gray-600 ${pathname === '/dashboard' ? 'text-brand-accent' : 'text-brand-blue'}`}>
+                                Dashboard
+                            </Link>
+                            <button onClick={() => signOut()} className="text-2xl hover:text-gray-600 text-brand-blue">
+                                Logout
+                            </button>
+                        </>
+                    ) : (
+                        <Link href="/auth/signin" className={`text-2xl hover:text-gray-600 ${pathname === '/api/auth/signin' ? 'text-brand-accent' : 'text-brand-blue'}`}>
+                            Login
+                        </Link>
+                    )}
                 </nav>
             </div>
             {/* Mobile Navigation Menu */}
@@ -64,6 +80,20 @@ const Header = () => {
                             {label}
                         </Link>
                     ))}
+                    {session ? (
+                        <>
+                            <Link href="/dashboard" onClick={() => setIsMenuOpen(false)} className={`block py-2 text-center text-lg ${pathname === '/dashboard' ? 'text-brand-accent' : 'text-brand-blue'}`}>
+                                Dashboard
+                            </Link>
+                            <button onClick={() => { signOut(); setIsMenuOpen(false); }} className="block py-2 text-center text-lg text-brand-blue w-full">
+                                Logout
+                            </button>
+                        </>
+                    ) : (
+                        <Link href="/auth/signin" onClick={() => setIsMenuOpen(false)} className={`block py-2 text-center text-lg ${pathname === '/api/auth/signin' ? 'text-brand-accent' : 'text-brand-blue'}`}>
+                            Login
+                        </Link>
+                    )}
                 </nav>
             )}
         </div>

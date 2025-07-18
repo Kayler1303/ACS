@@ -4,6 +4,7 @@ import './globals.css';
 import Layout from '../components/Layout';
 import GoogleAnalytics from "@/components/GoogleAnalytics";
 import { Suspense } from 'react';
+import { Providers } from './providers';
 
 const playfair = Playfair_Display({
   subsets: ['latin'],
@@ -23,13 +24,15 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${playfair.variable} ${lora.variable} font-sans`}>
       <body>
-        <Suspense>
-          <GoogleAnalytics />
-        </Suspense>
-        <Layout>
-          {children}
-        </Layout>
-        <Analytics />
+        <Providers>
+          <Suspense>
+            <GoogleAnalytics />
+          </Suspense>
+          <Layout>
+            {children}
+          </Layout>
+          <Analytics />
+        </Providers>
       </body>
     </html>
   );

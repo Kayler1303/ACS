@@ -1,0 +1,19 @@
+import { PrismaClient } from '@prisma/client';
+
+// In a real application, you should be careful about the number of PrismaClient
+// instances you create. In development, the global object is cleared on every
+// file change, which can lead to a new PrismaClient instance being created
+// on every reload. This prevents that by storing it on the global object.
+declare global {
+  // allow global `var` declarations
+  // eslint-disable-next-line no-var
+  var prisma: PrismaClient | undefined;
+}
+
+export const prisma =
+  global.prisma ||
+  new PrismaClient({
+    log: ['query'],
+  });
+
+if (process.env.NODE_ENV !== 'production') global.prisma = prisma; 

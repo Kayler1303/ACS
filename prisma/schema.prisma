@@ -1,0 +1,123 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
+}
+
+// User model for authentication
+// Each user can manage multiple properties.
+model User {
+  id                      String     @id @default(cuid())
+  email                   String     @unique
+  emailVerified           DateTime?
+  password                String // This will store a hashed password
+  name                    String?
+  company                 String // Company the user belongs to
+  createdAt               DateTime   @default(now())
+  updatedAt               DateTime   @updatedAt
+  properties              Property[]
+  verificationTokens      VerificationToken[]
+}
+
+// Property model represents an apartment complex or building.
+// Each property is owned by one User.
+model Property {
+  id            String   @id @default(cuid())
+  name          String
+  address       String?
+  county        String
+  state         String
+  numberOfUnits Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  units     Unit[]
+  rentRolls RentRoll[]
+}
+
+// Unit model represents a single rentable unit within a Property.
+// This is STATIC data that should not change over time.
+model Unit {
+  id            String   @id @default(cuid())
+  unitNumber    String
+  squareFootage Int?
+  bedroomCount  Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  tenancies Tenancy[]
+
+  @@unique([propertyId, unitNumber])
+}
+
+// RentRoll model represents a snapshot of property data at a specific point in time.
+model RentRoll {
+  id        String   @id @default(cuid())
+  date      DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  propertyId String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  tenancies Tenancy[]
+
+  @@unique([propertyId, date])
+}
+
+// Tenancy model represents the state of a unit at the time of a specific RentRoll.
+// This stores the DYNAMIC data that changes over time.
+model Tenancy {
+  id        String   @id @default(cuid())
+  leaseRent Decimal?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  unitId String
+  unit   Unit   @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  rentRollId String
+  rentRoll   RentRoll @relation(fields: [rentRollId], references: [id], onDelete: Cascade)
+
+  residents Resident[]
+
+  @@unique([unitId, rentRollId])
+}
+
+model Resident {
+  id               String   @id @default(cuid())
+  name             String
+  annualizedIncome Decimal
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  tenancyId String
+  tenancy   Tenancy @relation(fields: [tenancyId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  user User @relation(fields: [identifier], references: [id], onDelete: Cascade)
+
+  @@unique([identifier, token])
+}
