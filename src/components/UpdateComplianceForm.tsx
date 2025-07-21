@@ -99,11 +99,18 @@ export default function UpdateComplianceForm({ propertyId }: UpdateComplianceFor
     const combinedData = residentFileState.data.map(resRow => {
         const unitNumber = parseInt(String(resRow.unit), 10);
         const rentData = rentRollDataMap.get(unitNumber);
+        
+        // Combine lease dates, giving precedence to the rent roll file
+        const leaseStartDate = rentData?.leaseStartDate || resRow.leaseStartDate;
+        const leaseEndDate = rentData?.leaseEndDate || resRow.leaseEndDate;
+        
         return {
             unit: resRow.unit,
             resident: resRow.resident,
             totalIncome: resRow.totalIncome,
             rent: rentData ? rentData.rent : 'N/A', // Or some other default
+            leaseStartDate,
+            leaseEndDate,
         };
     });
 
@@ -218,7 +225,7 @@ export default function UpdateComplianceForm({ propertyId }: UpdateComplianceFor
   );
 
   const renderStep2 = () => {
-    const headers = ['Unit', 'Resident', 'Total Income', 'Lease Rent'];
+    const headers = ['Unit', 'Resident', 'Total Income', 'Lease Rent', 'Lease Start', 'Lease End'];
     
     return (
         <div>
@@ -235,6 +242,8 @@ export default function UpdateComplianceForm({ propertyId }: UpdateComplianceFor
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Resident</th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Income</th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lease Rent</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lease Start</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lease End</th>
                 </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -248,6 +257,8 @@ export default function UpdateComplianceForm({ propertyId }: UpdateComplianceFor
                             ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(row.rent)
                             : row.rent}
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.leaseStartDate ? new Date(row.leaseStartDate).toLocaleDateString() : 'N/A'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.leaseEndDate ? new Date(row.leaseEndDate).toLocaleDateString() : 'N/A'}</td>
                 </tr>
                 ))}
             </tbody>

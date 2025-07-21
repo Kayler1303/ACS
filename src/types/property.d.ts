@@ -1,5 +1,7 @@
 import { Property, Unit, RentRoll, Tenancy, Resident } from '@prisma/client';
 
+export type { Unit };
+
 export type FullTenancy = Tenancy & {
   residents: Resident[];
 };

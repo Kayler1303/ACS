@@ -8,7 +8,7 @@ import {
  * @param fileBuffer The buffer of the file to analyze.
  * @returns The analyzed document result.
  */
-export async function analyzeIncomeDocument(fileBuffer: Buffer) {
+export async function analyzeIncomeDocument(fileBuffer: Buffer, modelId: string) {
   const endpoint = process.env.AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT;
   const key = process.env.AZURE_DOCUMENT_INTELLIGENCE_KEY;
 
@@ -23,7 +23,7 @@ export async function analyzeIncomeDocument(fileBuffer: Buffer) {
   // It automatically classifies the document (e.g., as a W-2 or paystub) and
   // extracts the relevant fields.
   const poller = await client.beginAnalyzeDocument(
-    'prebuilt-income',
+    modelId,
     fileBuffer
   );
 

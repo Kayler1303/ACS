@@ -45,12 +45,15 @@ export default function PropertyCreateForm() {
       }
 
       const newProperty = await res.json();
+      console.log('Property created successfully:', newProperty);
 
       // On success, redirect to the new unit upload page
       router.push(`/property/${newProperty.id}/upload-units`);
+      console.log('Redirecting to:', `/property/${newProperty.id}/upload-units`);
 
     } catch (err: any) {
       setError(err.message);
+      console.error('Error in handleSubmit:', err);
     } finally {
       setIsLoading(false);
     }

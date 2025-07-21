@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import type { FullProperty, FullRentRoll, FullTenancy } from '@/types/property';
+import type { FullProperty, FullRentRoll, FullTenancy, Unit } from '@/types/property';
+import { format } from 'date-fns';
 
 interface PropertyPageClientProps {
   initialProperty: FullProperty;
@@ -120,13 +121,13 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
   useEffect(() => {
     const fetchIncomeLimits = async () => {
       try {
-        console.log('Fetching income limits for property:', property.id);
+        console.log('Fetching income limits for property:', property.id, '(auto-detecting current year)');
         
         // Add timeout to prevent hanging
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
         
-        const res = await fetch(`/api/properties/${property.id}/income-limits?year=2025`, {
+        const res = await fetch(`/api/properties/${property.id}/income-limits`, {
           signal: controller.signal
         });
         clearTimeout(timeoutId);
@@ -140,6 +141,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
           // Extract the income limits (everything except _metadata)
           const { _metadata, ...incomeLimits } = data;
           console.log('Parsed income limits:', incomeLimits);
+          console.log('📅 Year used for income limits:', _metadata?.actualYear, _metadata?.usedFallback ? '(fallback)' : '(current)');
           console.log('Setting hudIncomeLimits to:', incomeLimits);
           setHudIncomeLimits(incomeLimits);
         } else {
@@ -168,13 +170,19 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     if (includeRentAnalysis && !lihtcRentData) {
       const fetchLihtcRents = async () => {
         try {
-          const res = await fetch(`/api/properties/${property.id}/lihtc-rents?year=2024`);
+          console.log('📡 Fetching LIHTC rent data for property:', property.id, '(auto-detecting current year)');
+          const res = await fetch(`/api/properties/${property.id}/lihtc-rents`);
           if (res.ok) {
             const data = await res.json();
+            console.log('📊 LIHTC rent data received:', data);
+            console.log('📊 LIHTC max rents structure:', data.lihtcMaxRents);
+            console.log('📊 Year used for LIHTC data:', data._metadata?.actualYear, data._metadata?.usedFallback ? '(fallback)' : '(current)');
             setLihtcRentData(data);
+          } else {
+            console.error('❌ Failed to fetch LIHTC rents:', res.status, res.statusText);
           }
         } catch (error) {
-          console.error('Error fetching LIHTC rents:', error);
+          console.error('❌ Error fetching LIHTC rents:', error);
         }
       };
 
@@ -197,6 +205,15 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     const tenancyMap = new Map<string, FullTenancy>();
     selectedRentRoll.tenancies.forEach((tenancy: FullTenancy) => {
       tenancyMap.set(tenancy.unitId, tenancy);
+    });
+
+    // DEBUG: Log processing state
+    console.log('🏗️ Processing tenancies with rent analysis:', {
+      includeRentAnalysis,
+      hasLihtcData: !!lihtcRentData,
+      totalUnits: property.units.length,
+      includeUtilityAllowances,
+      utilityAllowances
     });
 
     // Process each unit
@@ -251,9 +268,9 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     console.log('Final processed tenancies:', processedWithCompliance.length);
     setProcessedTenancies(processedWithCompliance);
   }, [selectedRentRollId, property.rentRolls, property.units, hudIncomeLimits, complianceOption, includeRentAnalysis, lihtcRentData, includeUtilityAllowances, utilityAllowances]);
-
+                            
   const getActualBucket = (totalIncome: number, residentCount: number, hudIncomeLimits: HudIncomeLimits, complianceOption: string): string => {
-    if (residentCount === 0) return 'Vacant';
+                                if (residentCount === 0) return 'Vacant';
     if (residentCount > 0 && (!totalIncome || totalIncome === 0)) return 'No Income Information';
     
     const familySize = Math.min(residentCount, 8); // Cap at 8 per HUD guidelines
@@ -299,8 +316,30 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     // First check income qualification
     const incomeBucket = getActualBucket(totalIncome, residentCount, hudIncomeLimits, complianceOption);
     
+    // DEBUG: Log the inputs
+    console.log('🔍 Rent Analysis Debug:', {
+      totalIncome,
+      residentCount,
+      leaseRent,
+      bedroomCount,
+      incomeBucket,
+      includeRentAnalysis,
+      hasLihtcData: !!lihtcRentData?.lihtcMaxRents,
+      lihtcDataStructure: lihtcRentData ? Object.keys(lihtcRentData) : 'No data'
+    });
+    
     // If no rent analysis data or no lease rent, fall back to income-only
     if (!includeRentAnalysis || !lihtcRentData?.lihtcMaxRents || !bedroomCount || !leaseRent) {
+      console.log('❌ Rent Analysis BYPASSED:', {
+        includeRentAnalysis,
+        hasLihtcData: !!lihtcRentData?.lihtcMaxRents,
+        bedroomCount,
+        leaseRent,
+        reason: !includeRentAnalysis ? 'Rent analysis disabled' :
+                !lihtcRentData?.lihtcMaxRents ? 'No LIHTC data' :
+                !bedroomCount ? 'No bedroom count' :
+                !leaseRent ? 'No lease rent' : 'Unknown'
+      });
       return incomeBucket;
     }
 
@@ -308,16 +347,47 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     const utilityAllowance = utilityAllowances[bedroomCount] || 0;
     
     // Check rent compliance for each AMI level, factoring in utility allowances
-    const maxRent50 = lihtcRentData.lihtcMaxRents[`${bedroomCount}br_50`] - utilityAllowance;
-    const maxRent60 = lihtcRentData.lihtcMaxRents[`${bedroomCount}br_60`] - utilityAllowance;
-    const maxRent80 = lihtcRentData.lihtcMaxRents[`${bedroomCount}br_80`] - utilityAllowance;
+    const maxRent50 = (lihtcRentData.lihtcMaxRents['50percent']?.[`${bedroomCount}br`] || 0) - utilityAllowance;
+    const maxRent60 = (lihtcRentData.lihtcMaxRents['60percent']?.[`${bedroomCount}br`] || 0) - utilityAllowance;
+    const maxRent80 = (lihtcRentData.lihtcMaxRents['80percent']?.[`${bedroomCount}br`] || 0) - utilityAllowance;
+
+    // DEBUG: Log the rent limits
+    console.log('💰 Rent Limits:', {
+      bedroomCount,
+      utilityAllowance,
+      leaseRent,
+      maxRent50Raw: lihtcRentData.lihtcMaxRents['50percent']?.[`${bedroomCount}br`],
+      maxRent60Raw: lihtcRentData.lihtcMaxRents['60percent']?.[`${bedroomCount}br`],
+      maxRent80Raw: lihtcRentData.lihtcMaxRents['80percent']?.[`${bedroomCount}br`],
+      adjustedMaxRent50: maxRent50,
+      adjustedMaxRent60: maxRent60,
+      adjustedMaxRent80: maxRent80,
+      availableKeys: Object.keys(lihtcRentData.lihtcMaxRents || {}),
+      availableBedroomKeys50: lihtcRentData.lihtcMaxRents['50percent'] ? Object.keys(lihtcRentData.lihtcMaxRents['50percent']) : 'None'
+    });
 
     // Check from lowest to highest AMI
-    if (incomeBucket === '50% AMI' && leaseRent <= maxRent50) return '50% AMI';
-    if ((incomeBucket === '50% AMI' || incomeBucket === '60% AMI') && leaseRent <= maxRent60) return '60% AMI';
-    if ((['50% AMI', '60% AMI', '80% AMI'].includes(incomeBucket)) && leaseRent <= maxRent80) return '80% AMI';
-    
+    if (incomeBucket === '50% AMI' && leaseRent <= maxRent50) {
+      console.log('✅ Qualifies for 50% AMI (rent compliant)');
+      return '50% AMI';
+    }
+    if ((incomeBucket === '50% AMI' || incomeBucket === '60% AMI') && leaseRent <= maxRent60) {
+      console.log('✅ Qualifies for 60% AMI (rent compliant)');
+      return '60% AMI';
+    }
+    if ((['50% AMI', '60% AMI', '80% AMI'].includes(incomeBucket)) && leaseRent <= maxRent80) {
+      console.log('✅ Qualifies for 80% AMI (rent compliant)');
+      return '80% AMI';
+    }
+                                
     // If rent exceeds all limits, it's market rate
+    console.log('❌ Rent exceeds all limits → Market rate', {
+      incomeBucket,
+      leaseRent,
+      maxRent50,
+      maxRent60,
+      maxRent80
+    });
     return 'Market';
   };
 
@@ -337,7 +407,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     if (tenancy.residents.length > 0) {
       // Calculate what their bucket would have been at that time using current HUD limits
       const totalIncomeAtTime = tenancy.residents.reduce((acc: number, res: any) => acc + Number(res.annualizedIncome || 0), 0);
-      const residentCountAtTime = tenancy.residents.length;
+                                  const residentCountAtTime = tenancy.residents.length;
       
       originalBucket = includeRentAnalysis ? 
         getActualBucketWithRentAnalysis(
@@ -415,28 +485,34 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     }
   };
 
-  // Calculate summary statistics
-  const getTargetPercentages = (complianceOption: string) => {
+  // Calculate target unit counts with proper rounding
+  const getTargetCounts = (complianceOption: string, totalUnits: number): { [key: string]: number } => {
     switch (complianceOption) {
       case '20% at 50% AMI, 55% at 80% AMI':
+        const units50 = Math.ceil(totalUnits * 0.20); // Round UP for 50% AMI (minimum 20%)
+        const marketUnits = Math.floor(totalUnits * 0.25); // Round DOWN for Market (maximum 25%)
+        const units80 = totalUnits - units50 - marketUnits; // Remaining units for 80% AMI
         return { 
-          '50% AMI': 20, 
-          '80% AMI': 55, 
-          'Market': 0, 
+          '50% AMI': units50, 
+          '80% AMI': units80, 
+          'Market': marketUnits, 
           'Vacant': 0, 
           'No Income Information': 0 
         };
       case '40% at 60% AMI, 35% at 80% AMI':
+        const units60 = Math.ceil(totalUnits * 0.40); // Round UP for 60% AMI (minimum 40%)
+        const marketUnits2 = Math.floor(totalUnits * 0.25); // Round DOWN for Market (maximum 25%)
+        const units80_2 = totalUnits - units60 - marketUnits2; // Remaining units for 80% AMI
         return { 
-          '60% AMI': 40, 
-          '80% AMI': 35, 
-          'Market': 0, 
+          '60% AMI': units60, 
+          '80% AMI': units80_2, 
+          'Market': marketUnits2, 
           'Vacant': 0, 
           'No Income Information': 0 
         };
       case '100% at 80% AMI':
         return { 
-          '80% AMI': 100, 
+          '80% AMI': totalUnits, 
           'Market': 0, 
           'Vacant': 0, 
           'No Income Information': 0 
@@ -446,9 +522,22 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     }
   };
 
+  // Calculate target percentages for display
+  const getTargetPercentages = (complianceOption: string, totalUnits: number): { [key: string]: number } => {
+    const targetCounts = getTargetCounts(complianceOption, totalUnits);
+    const percentages: { [key: string]: number } = {};
+    
+    Object.keys(targetCounts).forEach(bucket => {
+      percentages[bucket] = totalUnits > 0 ? (targetCounts[bucket] / totalUnits * 100) : 0;
+    });
+    
+    return percentages;
+  };
+
   const calculateSummaryStats = () => {
     const totalUnits = processedTenancies.length;
-    const targets = getTargetPercentages(complianceOption);
+    const targetCounts = getTargetCounts(complianceOption, totalUnits);
+    const targets = getTargetPercentages(complianceOption, totalUnits);
     
     const bucketCounts = processedTenancies.reduce((acc, unit) => {
       const bucket = unit.complianceBucket;
@@ -456,13 +545,49 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       return acc;
     }, {} as {[key: string]: number});
 
-    const bucketCountsWithVacants = processedTenancies.reduce((acc, unit) => {
-      const bucket = unit.complianceBucket;
-      acc[bucket] = (acc[bucket] || 0) + 1;
-      return acc;
-    }, {} as {[key: string]: number});
+    // Calculate compliance with vacants - proper vacant unit distribution
+    const bucketCountsWithVacants = { ...bucketCounts };
+    const vacantUnits = bucketCounts['Vacant'] || 0;
+    
+    if (vacantUnits > 0) {
+      // Remove vacant units from the vacant bucket for the "with vacants" calculation
+      bucketCountsWithVacants['Vacant'] = 0;
+      
+      // Get all target buckets in priority order (lowest AMI first)
+      const targetBuckets = Object.keys(targetCounts).filter(bucket => targetCounts[bucket] > 0);
+      const bucketPriority = ['50% AMI', '60% AMI', '80% AMI'];
+      const sortedTargetBuckets = targetBuckets.sort((a, b) => {
+        const aIndex = bucketPriority.indexOf(a);
+        const bIndex = bucketPriority.indexOf(b);
+        if (aIndex === -1) return 1;
+        if (bIndex === -1) return -1;
+        return aIndex - bIndex;
+      });
+      
+      let remainingVacantUnits = vacantUnits;
+      
+      // Distribute vacant units to buckets that need them (starting with lowest AMI)
+      for (const bucket of sortedTargetBuckets) {
+        if (remainingVacantUnits <= 0) break;
+        
+        const targetCount = targetCounts[bucket];
+        const currentCount = bucketCounts[bucket] || 0;
+        const shortage = Math.max(0, targetCount - currentCount);
+        
+        const unitsToAdd = Math.min(shortage, remainingVacantUnits);
+        if (unitsToAdd > 0) {
+          bucketCountsWithVacants[bucket] = currentCount + unitsToAdd;
+          remainingVacantUnits -= unitsToAdd;
+        }
+      }
+      
+      // Put any remaining vacant units in the market bucket
+      if (remainingVacantUnits > 0) {
+        bucketCountsWithVacants['Market'] = (bucketCountsWithVacants['Market'] || 0) + remainingVacantUnits;
+      }
+    }
 
-    return { totalUnits, targets, bucketCounts, bucketCountsWithVacants };
+    return { totalUnits, targetCounts, targets, bucketCounts, bucketCountsWithVacants };
   };
 
   const stats = calculateSummaryStats();
@@ -480,6 +605,22 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
         </div>
       )}
       
+      {/* Update Compliance Data Section */}
+      <div className="mb-8 bg-white rounded-lg shadow-md overflow-hidden">
+        <div className="bg-gradient-to-r from-green-600 to-green-500 px-6 py-4">
+          <h2 className="text-lg font-semibold text-white">📊 Update Compliance Data</h2>
+          <p className="text-green-100 text-sm mt-1">Upload new resident & rent roll data to refresh your compliance analysis</p>
+        </div>
+        <div className="p-6">
+          <a
+            href={`/property/${property.id}/update-compliance`}
+            className="inline-flex items-center px-6 py-3 text-lg font-medium text-white bg-green-600 border border-transparent rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
+          >
+            📊 Update Compliance Data
+          </a>
+        </div>
+      </div>
+      
       {/* Compliance Analysis & Controls */}
       <div className="mb-8 bg-white rounded-lg shadow-md overflow-hidden">
         <div className="bg-gradient-to-r from-brand-blue to-brand-accent px-6 py-4">
@@ -492,7 +633,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
             {/* Analysis Parameters Section */}
             <div>
               <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-4">Analysis Parameters</h3>
-              
+                                          
               <div className="space-y-4">
                 <div className="space-y-2">
                   <label htmlFor="compliance-option" className="block text-sm font-medium text-gray-700">
@@ -502,7 +643,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                     id="compliance-option"
                     name="compliance-option"
                     className="w-full pl-3 pr-10 py-2.5 text-sm border-gray-300 focus:outline-none focus:ring-brand-blue focus:border-brand-blue rounded-md shadow-sm bg-white"
-                    value={complianceOption}
+                                                value={complianceOption}
                     onChange={(e) => setComplianceOption(e.target.value)}
                   >
                     <option value="20% at 50% AMI, 55% at 80% AMI">20% at 50% AMI, 55% at 80% AMI</option>
@@ -521,7 +662,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                     value={selectedRentRollId || ''}
                     onChange={(e) => setSelectedRentRollId(e.target.value)}
                     className="w-full pl-3 pr-10 py-2.5 text-sm border-gray-300 focus:outline-none focus:ring-brand-blue focus:border-brand-blue rounded-md shadow-sm bg-white"
-                  >
+                                              >
                     {property.rentRolls.map((rentRoll: FullRentRoll) => (
                       <option key={rentRoll.id} value={rentRoll.id}>
                         {new Date(rentRoll.date).toLocaleDateString()}
@@ -531,9 +672,13 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                   <p className="text-xs text-gray-500">Choose which rent roll snapshot to analyze</p>
                 </div>
               </div>
+            </div>
+            
+            {/* Actions Section */}
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-4">Analysis Options</h3>
               
-              {/* Analysis Options */}
-              <div className="mt-6 pt-4 border-t border-gray-200 space-y-3">
+              <div className="space-y-3">
                 <div className="flex items-center space-x-3">
                   <input
                     id="include-rent-analysis"
@@ -565,9 +710,9 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                     }}
                     disabled={!includeRentAnalysis}
                     className="h-4 w-4 text-brand-blue focus:ring-brand-blue border-gray-300 rounded disabled:opacity-50"
-                  />
+                                              />
                   <label htmlFor="include-utility-allowances" className={`text-sm font-medium ${includeRentAnalysis ? 'text-gray-700' : 'text-gray-400'}`}>
-                    ⚡ Include Utility Allowances
+                                                ⚡ Include Utility Allowances
                   </label>
                   {includeUtilityAllowances && includeRentAnalysis && (
                     <button
@@ -579,30 +724,8 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                   )}
                 </div>
                 <p className={`text-xs ml-7 ${includeRentAnalysis ? 'text-gray-500' : 'text-gray-400'}`}>
-                  Subtract utility allowances from LIHTC max rents (requires rent analysis)
+                  Subtract utility allowances from max rents (requires rent analysis)
                 </p>
-              </div>
-            </div>
-            
-            {/* Actions Section */}
-            <div>
-              <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-4">Actions</h3>
-              <p className="text-xs text-gray-500 mb-4">Upload new resident & rent roll data</p>
-              
-              <div className="space-y-3">
-                <a
-                  href={`/property/${property.id}/update-compliance`}
-                  className="block w-full px-4 py-3 text-center text-sm font-medium text-white bg-brand-blue border border-transparent rounded-md shadow-sm hover:bg-blue-600"
-                >
-                  📊 Update Compliance Data
-                </a>
-                
-                <a
-                  href={`/property/${property.id}/upload-units`}
-                  className="block w-full px-4 py-3 text-center text-sm font-medium text-brand-blue bg-blue-50 border border-blue-200 rounded-md shadow-sm hover:bg-blue-100"
-                >
-                  📋 Upload Unit List
-                </a>
               </div>
             </div>
           </div>
@@ -625,28 +748,28 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                   <thead>
                     <tr className="bg-gradient-to-r from-brand-blue to-brand-accent">
                       <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Bucket</th>
-                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Target</th>
-                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Actual</th>
-                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance</th>
-                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance With Vacants</th>
-                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Over/(Under)</th>
-                    </tr>
+                                                  <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Target</th>
+                                                  <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Actual</th>
+                                                  <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance</th>
+                                                  <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance With Vacants</th>
+                                                  <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Over/(Under)</th>
+                                                </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {Object.entries(stats.targets).map(([bucket, target]) => {
                       const actual = ((stats.bucketCounts[bucket] || 0) / stats.totalUnits * 100);
-                      const compliance = (actual / target * 100);
+                      const compliance = actual; // Compliance column shows percentage of total units in this bucket
                       const withVacants = ((stats.bucketCountsWithVacants[bucket] || 0) / stats.totalUnits * 100);
-                      const overUnder = actual - target;
+                                                  const overUnder = actual - target;
                       
                       return (
                         <tr key={bucket}>
                           <td className="px-4 py-4 whitespace-nowrap text-center text-sm font-medium text-gray-900">{bucket}</td>
-                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{target.toFixed(1)}%</td>
-                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{actual.toFixed(1)}%</td>
-                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{compliance.toFixed(1)}%</td>
-                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{withVacants.toFixed(1)}%</td>
-                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">
+                                                      <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{target.toFixed(1)}%</td>
+                                                      <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{actual.toFixed(1)}%</td>
+                                                      <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{compliance.toFixed(1)}%</td>
+                                                      <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{withVacants.toFixed(1)}%</td>
+                                                      <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">
                             {overUnder >= 0 ? '+' : ''}{overUnder.toFixed(1)}%
                           </td>
                         </tr>
@@ -665,18 +788,16 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                   <thead>
                     <tr className="bg-gradient-to-r from-brand-blue to-brand-accent">
                       <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Bucket</th>
-                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Target</th>
-                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Actual</th>
-                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance</th>
-                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance With Vacants</th>
-                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Over/(Under)</th>
-                    </tr>
+                                                  <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Target</th>
+                                                  <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Actual</th>
+                                                  <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance</th>
+                                                  <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance With Vacants</th>
+                                                  <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Over/(Under)</th>
+                                                </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {Object.entries(stats.targets).map(([bucket, targetPercent]) => {
-                      const targetUnits = bucket.includes('50%') || bucket.includes('60%') 
-                        ? Math.ceil(stats.totalUnits * targetPercent / 100)
-                        : Math.floor(stats.totalUnits * targetPercent / 100);
+                      const targetUnits = stats.targetCounts[bucket] || 0;
                       const actualUnits = stats.bucketCounts[bucket] || 0;
                       const complianceUnits = actualUnits;
                       const withVacantsUnits = stats.bucketCountsWithVacants[bucket] || 0;
@@ -685,11 +806,11 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                       return (
                         <tr key={bucket}>
                           <td className="px-4 py-4 whitespace-nowrap text-center text-sm font-medium text-gray-900">{bucket}</td>
-                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{targetUnits}</td>
-                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{actualUnits}</td>
-                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{complianceUnits}</td>
-                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{withVacantsUnits}</td>
-                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">
+                                                      <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{targetUnits}</td>
+                                                      <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{actualUnits}</td>
+                                                      <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{complianceUnits}</td>
+                                                      <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{withVacantsUnits}</td>
+                                                      <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">
                             {overUnderUnits >= 0 ? '+' : ''}{overUnderUnits}
                           </td>
                         </tr>
@@ -716,13 +837,13 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
               <thead className="bg-gradient-to-r from-brand-blue to-brand-accent">
                 <tr>
                   <th className="px-6 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Unit #</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Bedrooms</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Sq Ft</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-white uppercase tracking-wider"># of Residents</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Total Income</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Actual Bucket</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance Bucket</th>
-                </tr>
+                                              <th className="px-6 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Bedrooms</th>
+                                              <th className="px-6 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Sq Ft</th>
+                                              <th className="px-6 py-3 text-center text-xs font-medium text-white uppercase tracking-wider"># of Residents</th>
+                                              <th className="px-6 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Total Income</th>
+                                              <th className="px-6 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Actual Bucket</th>
+                                              <th className="px-6 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance Bucket</th>
+                                            </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {processedTenancies.map((unit) => (
@@ -758,7 +879,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">
                       {unit.totalIncome ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(unit.totalIncome) : '-'}
-                    </td>
+                                                </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">
                       {unit.actualBucket}
                     </td>
@@ -788,8 +909,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
           <div className="flex items-start">
             <div className="flex-shrink-0">
               <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />                                                              </svg>
             </div>
             <div className="ml-3 flex-1">
               <h3 className="text-sm font-medium text-red-800">Danger Zone</h3>
@@ -801,7 +921,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                   onClick={handleDeleteProperty}
                   disabled={isDeleting}
                   className="bg-red-600 border border-transparent rounded-md py-2 px-4 inline-flex justify-center text-sm font-medium text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
-                >
+                                                                        >
                   {isDeleting ? 'Deleting...' : 'Delete Property'}
                 </button>
               </div>
@@ -823,7 +943,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
               <div className="space-y-3">
                 {[...new Set(property.units.map((unit: any) => unit.bedroomCount))]
                   .filter((count): count is number => count !== null && count !== undefined && typeof count === 'number')
-                  .sort((a: number, b: number) => a - b)
+                                              .sort((a: number, b: number) => a - b)
                   .map((bedroomCount: number) => (
                     <div key={bedroomCount} className="flex items-center justify-between">
                       <label className="text-sm font-medium text-gray-700">
@@ -839,7 +959,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                             [bedroomCount]: parseFloat(e.target.value) || 0
                           }))}
                           className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-brand-blue focus:border-brand-blue"
-                          placeholder="0"
+                                                      placeholder="0"
                           min="0"
                           step="1"
                         />
@@ -853,7 +973,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                 <button
                   onClick={() => setShowUtilityModal(false)}
                   className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200"
-                >
+                                            >
                   Cancel
                 </button>
                 <button
@@ -862,7 +982,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                     // Keep the toggle enabled and data saved
                   }}
                   className="px-4 py-2 text-sm font-medium text-white bg-brand-blue border border-transparent rounded-md hover:bg-blue-600"
-                >
+                                            >
                   Save
                 </button>
               </div>

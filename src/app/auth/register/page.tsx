@@ -6,19 +6,40 @@ import { useRouter } from 'next/navigation';
 
 const playfairFontStyle = { fontFamily: "'Playfair Display', serif" };
 
+const SuccessModal = ({ message, onClose }: { message: string, onClose: () => void }) => (
+  <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center">
+    <div className="p-8 border w-96 shadow-lg rounded-md bg-white">
+      <div className="text-center">
+        <h3 className="text-2xl font-bold text-gray-900">Success!</h3>
+        <div className="mt-2 px-7 py-3">
+          <p className="text-lg text-gray-500">{message}</p>
+        </div>
+        <div className="flex justify-center mt-4">
+          <button
+            onClick={onClose}
+            className="px-6 py-2 bg-brand-blue text-white text-base font-medium rounded-md shadow-sm hover:bg-opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-accent"
+          >
+            Go to Login
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
 export default function RegisterPage() {
   const [name, setName] = useState('');
   const [company, setCompany] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setSuccess('');
+    setShowSuccessModal(false);
 
     const response = await fetch('/api/auth/register', {
       method: 'POST',
@@ -31,10 +52,13 @@ export default function RegisterPage() {
     if (!response.ok) {
       setError(data.message || 'Something went wrong.');
     } else {
-      setSuccess('Success! Please check your email to verify your account.');
-      // Optionally, redirect or clear the form
-      // router.push('/auth/signin');
+      setShowSuccessModal(true);
     }
+  };
+
+  const handleCloseModal = () => {
+    setShowSuccessModal(false);
+    router.push('/auth/signin');
   };
 
   return (
@@ -53,7 +77,6 @@ export default function RegisterPage() {
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && <div className="p-4 text-sm text-red-700 bg-red-100 rounded-lg">{error}</div>}
-          {success && <div className="p-4 text-sm text-green-700 bg-green-100 rounded-lg">{success}</div>}
           
           <div className="space-y-4">
             <input
@@ -106,6 +129,12 @@ export default function RegisterPage() {
           </div>
         </form>
       </div>
+      {showSuccessModal && (
+        <SuccessModal 
+          message="Please check your email to verify your account."
+          onClose={handleCloseModal}
+        />
+      )}
     </div>
   );
 } 

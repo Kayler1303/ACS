@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
   output   = "../node_modules/.prisma/client"
@@ -15,109 +9,171 @@ datasource db {
   directUrl = env("DIRECT_DATABASE_URL")
 }
 
-// User model for authentication
-// Each user can manage multiple properties.
 model User {
-  id                      String     @id @default(cuid())
-  email                   String     @unique
-  emailVerified           DateTime?
-  password                String // This will store a hashed password
-  name                    String?
-  company                 String // Company the user belongs to
-  createdAt               DateTime   @default(now())
-  updatedAt               DateTime   @updatedAt
-  properties              Property[]
-  verificationTokens      VerificationToken[]
+  id                 String              @id @default(cuid())
+  email              String              @unique
+  emailVerified      DateTime?
+  password           String
+  name               String?
+  company            String
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  properties         Property[]
+  verificationTokens VerificationToken[]
 }
 
-// Property model represents an apartment complex or building.
-// Each property is owned by one User.
 model Property {
-  id            String   @id @default(cuid())
+  id            String     @id @default(cuid())
   name          String
   address       String?
   county        String
   state         String
   numberOfUnits Int?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  ownerId String
-  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-
-  units     Unit[]
-  rentRolls RentRoll[]
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  ownerId       String
+  owner         User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  rentRolls     RentRoll[]
+  units         Unit[]
 }
 
-// Unit model represents a single rentable unit within a Property.
-// This is STATIC data that should not change over time.
 model Unit {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   unitNumber    String
   squareFootage Int?
   bedroomCount  Int?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  propertyId String
-  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-
-  tenancies Tenancy[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  propertyId    String
+  tenancies     Tenancy[]
+  property      Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@unique([propertyId, unitNumber])
 }
 
-// RentRoll model represents a snapshot of property data at a specific point in time.
 model RentRoll {
-  id        String   @id @default(cuid())
-  date      DateTime
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
+  id         String    @id @default(cuid())
+  date       DateTime
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
   propertyId String
-  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-
-  tenancies Tenancy[]
+  property   Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  tenancies  Tenancy[]
 
   @@unique([propertyId, date])
 }
 
-// Tenancy model represents the state of a unit at the time of a specific RentRoll.
-// This stores the DYNAMIC data that changes over time.
 model Tenancy {
-  id        String   @id @default(cuid())
-  leaseRent Decimal?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  unitId String
-  unit   Unit   @relation(fields: [unitId], references: [id], onDelete: Cascade)
-
-  rentRollId String
-  rentRoll   RentRoll @relation(fields: [rentRollId], references: [id], onDelete: Cascade)
-
-  residents Resident[]
+  id                  String               @id @default(cuid())
+  leaseRent           Decimal?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  unitId              String
+  rentRollId          String
+  leaseEndDate        DateTime
+  leaseStartDate      DateTime
+  incomeVerifications IncomeVerification[]
+  residents           Resident[]
+  rentRoll            RentRoll             @relation(fields: [rentRollId], references: [id], onDelete: Cascade)
+  unit                Unit                 @relation(fields: [unitId], references: [id], onDelete: Cascade)
 
   @@unique([unitId, rentRollId])
 }
 
 model Resident {
-  id               String   @id @default(cuid())
+  id               String           @id @default(cuid())
   name             String
-  annualizedIncome Decimal
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  tenancyId        String
+  verifiedIncome   Float?
+  annualizedIncome Float
+  incomeDocuments  IncomeDocument[]
+  tenancy          Tenancy          @relation(fields: [tenancyId], references: [id], onDelete: Cascade)
 
-  tenancyId String
-  tenancy   Tenancy @relation(fields: [tenancyId], references: [id], onDelete: Cascade)
+  @@index([tenancyId])
 }
 
 model VerificationToken {
   identifier String
   token      String   @unique
   expires    DateTime
-
-  user User @relation(fields: [identifier], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [identifier], references: [id], onDelete: Cascade)
 
   @@unique([identifier, token])
+}
+
+model IncomeVerification {
+  id                       String             @id @default(cuid())
+  status                   VerificationStatus @default(IN_PROGRESS)
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+  finalizedAt              DateTime?
+  calculatedVerifiedIncome Float?
+  tenancyId                String
+  associatedLeaseEnd       DateTime?
+  associatedLeaseStart     DateTime?
+  dueDate                  DateTime
+  leaseYear                Int?
+  reason                   VerificationReason @default(ANNUAL_RECERTIFICATION)
+  reminderSentAt           DateTime?
+  verificationPeriodEnd    DateTime
+  verificationPeriodStart  DateTime
+  incomeDocuments          IncomeDocument[]
+  tenancy                  Tenancy            @relation(fields: [tenancyId], references: [id], onDelete: Cascade)
+
+  @@index([tenancyId])
+  @@index([dueDate])
+  @@index([status])
+}
+
+model IncomeDocument {
+  id             String             @id @default(cuid())
+  documentType   DocumentType
+  documentDate   DateTime
+  uploadDate     DateTime           @default(now())
+  status         DocumentStatus     @default(UPLOADED)
+  filePath       String
+  box1_wages     Float?
+  box3_ss_wages  Float?
+  box5_med_wages Float?
+  employeeName   String?
+  employerName   String?
+  taxYear        Int?
+  verificationId String
+  residentId     String
+  resident       Resident           @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  verification   IncomeVerification @relation(fields: [verificationId], references: [id], onDelete: Cascade)
+
+  @@index([verificationId])
+  @@index([residentId])
+}
+
+enum DocumentType {
+  W2
+  PAYSTUB
+  BANK_STATEMENT
+  OFFER_LETTER
+  SOCIAL_SECURITY
+}
+
+enum DocumentStatus {
+  UPLOADED
+  PROCESSING
+  COMPLETED
+  NEEDS_REVIEW
+}
+
+enum VerificationStatus {
+  IN_PROGRESS
+  FINALIZED
+  OVERDUE
+}
+
+enum VerificationReason {
+  INITIAL_LEASE
+  ANNUAL_RECERTIFICATION
+  LEASE_RENEWAL
+  INCOME_CHANGE
+  COMPLIANCE_AUDIT
 }

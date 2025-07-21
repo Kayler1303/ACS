@@ -2,17 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 
-interface FinalizePayload {
+type BedroomCount = number | string;
+type UnitNumber = string;
+
+interface RequestBody {
   parsedUnits: {
     unitNumber: string;
     squareFootage: number | null;
   }[];
-  bedroomMap: Record<number, number | string>;
+  bedroomMap: Record<BedroomCount, number>;
 }
 
 export async function POST(
-  request: NextRequest,
+  req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   const session = await getServerSession(authOptions);
@@ -23,49 +27,39 @@ export async function POST(
   }
 
   try {
-    const body: FinalizePayload = await request.json();
+    const body: RequestBody = await req.json();
     const { parsedUnits, bedroomMap } = body;
 
-    const property = await prisma.property.findFirst({
-      where: {
-        id: propertyId,
-        ownerId: session.user.id,
-      },
-    });
-
-    if (!property) {
-      return NextResponse.json({ error: 'Property not found' }, { status: 404 });
-    }
-    
-    const unitsToCreate = parsedUnits.map(unit => {
-      const bdrCount = unit.squareFootage ? bedroomMap[unit.squareFootage] : null;
-      return {
-        propertyId,
-        unitNumber: unit.unitNumber,
-        squareFootage: unit.squareFootage,
-        bedroomCount: bdrCount ? parseInt(String(bdrCount), 10) : null,
-      };
-    });
-
-    await prisma.$transaction(async (tx) => {
-      // First, delete all existing static unit data for this property
-      await tx.unit.deleteMany({
-        where: { propertyId: propertyId },
-      });
-       // Then, delete associated rent rolls which will cascade to tenancies
-      await tx.rentRoll.deleteMany({
-        where: { propertyId: propertyId },
+    // Use a transaction to ensure all or nothing
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const property = await tx.property.findFirst({
+        where: {
+          id: propertyId,
+          ownerId: session.user.id,
+        },
       });
 
-      // Now, create the new units
+      if (!property) {
+        throw new Error('Property not found or you do not have permission to access it.');
+      }
+      
+      const unitsToCreate = parsedUnits.map((unit) => {
+        const bdrCount = unit.squareFootage ? bedroomMap[unit.squareFootage] : null;
+        return {
+          propertyId,
+          unitNumber: unit.unitNumber,
+          squareFootage: unit.squareFootage,
+          bedroomCount: bdrCount ? parseInt(String(bdrCount), 10) : null,
+        };
+      });
+
       await tx.unit.createMany({
         data: unitsToCreate,
         skipDuplicates: true,
       });
     });
 
-    return NextResponse.json({ message: 'Units created successfully' }, { status: 201 });
-
+    return NextResponse.json({ message: 'Units finalized successfully' });
   } catch (error) {
     console.error('Error finalizing unit creation:', error);
     return NextResponse.json(

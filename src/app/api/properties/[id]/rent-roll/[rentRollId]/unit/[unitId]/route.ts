@@ -32,7 +32,33 @@ export async function GET(req: NextRequest, { params }: { params: { id: string, 
                 }
             },
             include: {
-                residents: true,
+                residents: {
+                    orderBy: {
+                        annualizedIncome: 'desc'
+                    },
+                    include: {
+                        incomeDocuments: {
+                            orderBy: {
+                                uploadDate: 'desc'
+                            },
+                            include: {
+                                verification: true
+                            }
+                        }
+                    }
+                },
+                incomeVerifications: {
+                    orderBy: {
+                        createdAt: 'desc'
+                    },
+                    include: {
+                        incomeDocuments: {
+                            orderBy: {
+                                uploadDate: 'desc'
+                            }
+                        }
+                    }
+                },
                 unit: true,
                 rentRoll: true, // Include rent roll data with date
             }

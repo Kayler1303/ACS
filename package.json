@@ -19,6 +19,7 @@
     "@types/exceljs": "^0.5.3",
     "@vercel/analytics": "^1.5.0",
     "bcryptjs": "^3.0.2",
+    "date-fns": "^4.1.0",
     "next": "15.3.4",
     "next-auth": "^4.24.11",
     "papaparse": "^5.5.3",

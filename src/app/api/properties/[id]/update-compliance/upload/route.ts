@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import * as xlsx from 'xlsx';
+import { IndividualResidentData } from '@/types/compliance';
 
 // This function now intelligently finds the header row before parsing.
 async function findAndParse(rows: any[][], unitKeywords: string[]): Promise<any[]> {
@@ -40,7 +41,7 @@ async function findAndParse(rows: any[][], unitKeywords: string[]): Promise<any[
 }
 
 
-function mapAndProcessData(data: any[], fileType: 'resident' | 'rentRoll'): any[] {
+function mapAndProcessData(data: any[], fileType: 'resident' | 'rentRoll'): IndividualResidentData[] {
   const headerMapping = {
     unit: ['unit', 'units', 'unit number', 'unit #', 'unit no', 'bldg/unit', 'unit id', 'contact #', 'apartment', 'apartments'],
     resident: ['resident', 'residents', 'resident name', 'tenant', 'tenants', 'tenant name', 'name'],
@@ -48,11 +49,13 @@ function mapAndProcessData(data: any[], fileType: 'resident' | 'rentRoll'): any[
     lastName: ['last name', 'lastname'],
     rent: ['rent', 'lease rent', 'monthly rent', 'rent amount', 'current rent', 'market rent', 'actual rent', 'total rent'],
     income: ['income', 'revenue'],
+    leaseStartDate: ['lease start', 'lease start date', 'start date', 'move in', 'move-in date'],
+    leaseEndDate: ['lease end', 'lease end date', 'end date', 'move out', 'move-out date'],
   };
   
   const getMappedKey = (header: string): string | null => {
     header = header.toLowerCase().trim();
-    for (const key of ['unit', 'resident', 'firstName', 'lastName', 'rent']) {
+    for (const key of ['unit', 'resident', 'firstName', 'lastName', 'rent', 'leaseStartDate', 'leaseEndDate']) {
         if ((headerMapping as any)[key].includes(header)) {
             return key;
         }
@@ -64,7 +67,7 @@ function mapAndProcessData(data: any[], fileType: 'resident' | 'rentRoll'): any[
   };
 
   return data.map(row => {
-    const newRow: { [key: string]: any } = {};
+    const newRow: Partial<IndividualResidentData> = {};
     let totalIncome = 0;
     let firstName = '';
     let lastName = '';
@@ -94,6 +97,12 @@ function mapAndProcessData(data: any[], fileType: 'resident' | 'rentRoll'): any[
         case 'lastName':
             lastName = value;
             break;
+        case 'leaseStartDate':
+            newRow.leaseStartDate = value;
+            break;
+        case 'leaseEndDate':
+            newRow.leaseEndDate = value;
+            break;
         case 'income_source':
             const incomeValue = parseFloat(value.replace(/[^0-9.-]+/g,""));
             if (!isNaN(incomeValue)) {
@@ -110,7 +119,7 @@ function mapAndProcessData(data: any[], fileType: 'resident' | 'rentRoll'): any[
         newRow.totalIncome = totalIncome;
     }
 
-    return newRow;
+    return newRow as IndividualResidentData;
   }).filter(row => row.unit);
 }
 

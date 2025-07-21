@@ -4,6 +4,15 @@ import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
 import IncomeDocumentUploadForm from '@/components/IncomeDocumentUploadForm';
+import { format } from 'date-fns';
+
+type IncomeDocumentForPage = {
+  id: string;
+  documentType: string;
+  documentDate: Date;
+  uploadDate: Date;
+  status: string;
+}
 
 type ResidentPageProps = {
   params: {
@@ -28,6 +37,11 @@ export default async function ResidentPage({ params }: ResidentPageProps) {
               property: true,
             },
           },
+        },
+      },
+      incomeDocuments: {
+        orderBy: {
+          uploadDate: 'desc',
         },
       },
     },
@@ -60,9 +74,37 @@ export default async function ResidentPage({ params }: ResidentPageProps) {
         <div className="md:col-span-2">
           <h2 className="text-2xl font-semibold mb-4">Income Details</h2>
           <div className="bg-white p-6 rounded-lg shadow-md mb-8">
-            <p>Annualized Income: {resident.annualizedIncome?.toString() || 'Not yet calculated.'}</p>
-            {/* More details will go here */}
+            <p className="mb-2"><strong>Declared Annualized Income:</strong> {resident.annualizedIncome?.toString() ? `$${resident.annualizedIncome.toString()}` : 'Not provided.'}</p>
+            <p><strong>Verified Annualized Income:</strong> {resident.verifiedIncome?.toString() ? `$${resident.verifiedIncome.toString()}` : 'Not yet verified.'}</p>
           </div>
+
+          <h2 className="text-2xl font-semibold mb-4">Uploaded Documents</h2>
+           <div className="bg-white p-6 rounded-lg shadow-md">
+            {resident.incomeDocuments.length > 0 ? (
+              <ul className="space-y-3">
+                {resident.incomeDocuments.map((doc: IncomeDocumentForPage) => (
+                  <li key={doc.id} className="flex justify-between items-center p-2 border rounded-md">
+                    <div>
+                      <p className="font-semibold">{doc.documentType}</p>
+                      <p className="text-sm text-gray-500">
+                        Document Date: {format(doc.documentDate, 'MM/dd/yyyy')} | Uploaded: {format(doc.uploadDate, 'MM/dd/yyyy')}
+                      </p>
+                    </div>
+                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                      doc.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
+                      doc.status === 'PROCESSING' ? 'bg-yellow-100 text-yellow-800' :
+                      doc.status === 'NEEDS_REVIEW' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {doc.status}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>No documents have been uploaded for this resident yet.</p>
+            )}
+          </div>
+
         </div>
         <div>
           <h2 className="text-2xl font-semibold mb-4">Upload Income Documents</h2>

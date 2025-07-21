@@ -55,7 +55,7 @@ async function findHeadersAndParse(rows: any[][]): Promise<any[]> {
 }
 
 export async function POST(
-  request: NextRequest,
+  req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   const session = await getServerSession(authOptions);
@@ -77,7 +77,7 @@ export async function POST(
   }
 
   try {
-    const formData = await request.formData();
+    const formData = await req.formData();
     const file = formData.get('file') as File | null;
 
     if (!file) {

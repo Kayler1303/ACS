@@ -3,21 +3,8 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
+import { IndividualResidentData } from '@/types/compliance';
 
-type MergedDataRow = {
-  unit: string;
-  resident: string;
-  totalIncome: number;
-  rent: string | number;
-};
-
-type IndividualResidentData = {
-  unit: string;
-  resident: string;
-  income: number;
-  totalIncome: number;
-  rent: string | number;
-}
 
 interface Unit {
   id: string;
@@ -95,6 +82,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       for (const [unitId, rows] of unitGroups.entries()) {
         // Get rent amount from first row (all rows for same unit should have same rent)
         const rentValue = parseFloat(String(rows[0].rent || '0').replace(/[^0-9.-]+/g,""));
+        const { leaseStartDate, leaseEndDate } = rows[0];
+
+        if (!leaseStartDate || !leaseEndDate) {
+          throw new Error(`Lease start and end dates are required for unit ${rows[0].unit}.`);
+        }
         
         // Create tenancy data
         const timestamp = Date.now().toString();
@@ -104,6 +96,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           rentRollId: newRentRoll.id,
           unitId: unitId,
           leaseRent: rentValue,
+          leaseStartDate: new Date(leaseStartDate),
+          leaseEndDate: new Date(leaseEndDate),
           createdAt: new Date(),
           updatedAt: new Date(),
         });
@@ -117,7 +111,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
             id: `resident_${timestamp}_${randomSuffix}`,
             tenancyId: tenancyId,
             name: row.resident,
-            annualizedIncome: parseFloat(String(row.totalIncome || 0)), // Fixed: use totalIncome instead of income
+            annualizedIncome: Number(row.totalIncome) || 0,
             createdAt: new Date(),
             updatedAt: new Date(),
           });
@@ -149,7 +143,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   } catch (error: any) {
     console.error('Finalize error:', error);
-    if (error.message.includes('The following units could not be found')) {
+    if (error.message.includes('The following units could not be found') || error.message.includes('Lease start and end dates are required')) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
     return NextResponse.json({ error: 'An unexpected error occurred.' }, { status: 500 });

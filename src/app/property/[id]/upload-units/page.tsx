@@ -1,14 +1,19 @@
+"use client";
 
+import { useState } from 'react';
+import { useParams } from 'next/navigation';
 import UnitListUploadForm from '@/components/UnitListUploadForm';
+import { IndividualResidentData } from '@/types/compliance';
 
-interface UploadUnitsPageProps {
-  params: {
-    id: string;
-  };
-}
+type BedroomCount = number | string;
+type UnitNumber = string;
 
-export default async function UploadUnitsPage({ params }: UploadUnitsPageProps) {
-  const { id: propertyId } = params;
+export default function UploadUnitsPage() {
+  const params = useParams();
+  const propertyId = params.id as string;
+
+  const [step, setStep] = useState(1);
+  const [unitData, setUnitData] = useState<IndividualResidentData[]>([]);
 
   return (
     <div className="container mx-auto px-4 py-8">
