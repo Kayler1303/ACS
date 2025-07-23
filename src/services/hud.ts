@@ -1,5 +1,8 @@
 // src/services/hud.ts
 
+// In-memory cache
+const cache = new Map<string, any>();
+
 const stateNameToAbbreviation: { [key: string]: string } = {
     "alabama": "AL", "alaska": "AK", "arizona": "AZ", "arkansas": "AR", "california": "CA",
     "colorado": "CO", "connecticut": "CT", "delaware": "DE", "florida": "FL", "georgia": "GA",
@@ -25,6 +28,13 @@ function getStateAbbreviation(stateIdentifier: string): string | null {
 const API_BASE_URL = 'https://www.huduser.gov/hudapi/public';
 
 export async function getHudIncomeLimits(county: string, state: string, year: number = 2024) {
+    const cacheKey = `income-limits-${county}-${state}-${year}`;
+    if (cache.has(cacheKey)) {
+        console.log(`[Cache] HIT for ${cacheKey}`);
+        return cache.get(cacheKey);
+    }
+    console.log(`[Cache] MISS for ${cacheKey}`);
+
     const apiKey = process.env.HUD_API_KEY;
     if (!apiKey) {
         throw new Error("HUD_API_KEY environment variable not set.");
@@ -36,7 +46,7 @@ export async function getHudIncomeLimits(county: string, state: string, year: nu
     }
 
     // Remove the problematic 'updated' query parameter
-    const countiesResponse = await fetch(`${API_BASE_URL}/fmr/listCounties/${stateAbbr}`, {
+    const countiesResponse = await fetch(`${API_BASE_URL}/fmr/listCounties/${stateAbbr}?year=${year}`, {
         headers: { 'Authorization': `Bearer ${apiKey}` }
     });
 
@@ -75,6 +85,10 @@ export async function getHudIncomeLimits(county: string, state: string, year: nu
     }
 
     const incomeLimitsData = await incomeLimitsResponse.json();
+    
+    // Store in cache
+    cache.set(cacheKey, incomeLimitsData.data);
+
     return incomeLimitsData.data;
 }
 

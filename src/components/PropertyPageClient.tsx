@@ -201,39 +201,24 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       return;
     }
 
-    // Create a map for quick lookup of tenancies by unit
-    const tenancyMap = new Map<string, FullTenancy>();
-    selectedRentRoll.tenancies.forEach((tenancy: FullTenancy) => {
-      tenancyMap.set(tenancy.unitId, tenancy);
-    });
-
-    // DEBUG: Log processing state
-    console.log('🏗️ Processing tenancies with rent analysis:', {
-      includeRentAnalysis,
-      hasLihtcData: !!lihtcRentData,
-      totalUnits: property.units.length,
-      includeUtilityAllowances,
-      utilityAllowances
-    });
-
     // Process each unit
     const processed = property.units.map((unit: any) => {
-      const tenancy = tenancyMap.get(unit.id);
-      const residentCount = tenancy?.residents?.length || 0;
-      const totalIncome = tenancy?.residents?.reduce((acc: number, resident: any) => 
-        acc + Number(resident.annualizedIncome || 0), 0) || 0;
+      const tenancy = selectedRentRoll.tenancies.find((t: FullTenancy) => t.lease.unitId === unit.id);
+      const residents = tenancy?.lease.residents || [];
+      const residentCount = residents.length;
+      const totalIncome = residents.reduce((acc: number, resident: any) => acc + Number(resident.annualizedIncome || 0), 0);
 
-      const actualBucket = includeRentAnalysis ? 
+      const actualBucket = includeRentAnalysis ?
         getActualBucketWithRentAnalysis(
-          totalIncome, 
-          residentCount, 
-          hudIncomeLimits, 
+          totalIncome,
+          residentCount,
+          hudIncomeLimits,
           complianceOption,
-          Number(tenancy?.leaseRent || 0),
+          Number(tenancy?.lease.leaseRent || 0),
           unit.bedroomCount,
           lihtcRentData,
           includeUtilityAllowances ? utilityAllowances : {}
-        ) : 
+        ) :
         getActualBucket(totalIncome, residentCount, hudIncomeLimits, complianceOption);
 
       return {
@@ -248,15 +233,13 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       };
     });
 
-    console.log('Processed units:', processed.length);
-
     // Apply 140% rule for compliance buckets
     const processedWithCompliance = processed.map((unit: ProcessedUnit) => {
-      const tenancy = tenancyMap.get(unit.id);
+      const tenancy = selectedRentRoll.tenancies.find((t: FullTenancy) => t.lease.unitId === unit.id);
       const complianceBucket = getComplianceBucket(
-        unit, 
-        tenancy, 
-        hudIncomeLimits, 
+        unit,
+        tenancy,
+        hudIncomeLimits,
         complianceOption,
         includeRentAnalysis,
         lihtcRentData,
@@ -404,10 +387,11 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     
     // Get original bucket (what they qualified for at move-in using 140% rule)
     let originalBucket = 'Market';
-    if (tenancy.residents.length > 0) {
+    const residents = tenancy.lease.residents;
+    if (residents.length > 0) {
       // Calculate what their bucket would have been at that time using current HUD limits
-      const totalIncomeAtTime = tenancy.residents.reduce((acc: number, res: any) => acc + Number(res.annualizedIncome || 0), 0);
-                                  const residentCountAtTime = tenancy.residents.length;
+      const totalIncomeAtTime = residents.reduce((acc: number, res: any) => acc + Number(res.annualizedIncome || 0), 0);
+      const residentCountAtTime = residents.length;
       
       originalBucket = includeRentAnalysis ? 
         getActualBucketWithRentAnalysis(
@@ -415,7 +399,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
           residentCountAtTime, 
           hudIncomeLimits, 
           complianceOption,
-          Number(tenancy?.leaseRent || 0),
+          Number(tenancy?.lease.leaseRent || 0),
           unit.bedroomCount,
           lihtcRentData,
           utilityAllowances

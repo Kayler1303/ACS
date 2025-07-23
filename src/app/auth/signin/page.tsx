@@ -87,15 +87,24 @@ export default function SignInPage() {
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
-          </div>
 
-          <div>
-            <button
-              type="submit"
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-brand-blue hover:bg-opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-accent"
-            >
-              Sign in
-            </button>
+            <div className="flex items-center justify-end">
+              <div className="text-sm">
+                <Link href="/auth/forgot-password"
+                   className="font-medium text-brand-accent hover:text-brand-blue">
+                  Forgot your password?
+                </Link>
+              </div>
+            </div>
+
+            <div>
+              <button
+                type="submit"
+                className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-brand-blue hover:bg-opacity-90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-accent"
+              >
+                Sign in
+              </button>
+            </div>
           </div>
         </form>
       </div>

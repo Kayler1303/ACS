@@ -19,53 +19,66 @@ export async function GET(req: NextRequest, { params }: { params: { id: string, 
         return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
     }
 
+    // TODO: Implement rent roll reconciliation logic.
+    // This endpoint currently fetches the tenancy associated with a specific rent roll.
+    // In the future, we will need a mechanism to match provisional leases (leases without a tenancy)
+    // with new tenancies that appear in future rent roll uploads. This could be a user-driven
+    // matching process or some automated logic based on dates and unit numbers.
+
     try {
-        const tenancy = await prisma.tenancy.findFirst({
+        const unitWithLeases = await prisma.unit.findFirst({
             where: {
-                unitId: unitId,
-                rentRollId: rentRollId,
-                unit: {
-                    propertyId: propertyId,
-                    property: {
-                        ownerId: session.user.id,
-                    }
+                id: unitId,
+                propertyId: propertyId,
+                property: {
+                    ownerId: session.user.id,
                 }
             },
             include: {
-                residents: {
-                    orderBy: {
-                        annualizedIncome: 'desc'
-                    },
+                leases: {
                     include: {
-                        incomeDocuments: {
+                        residents: {
                             orderBy: {
-                                uploadDate: 'desc'
+                                annualizedIncome: 'desc'
+                            },
+                        },
+                        incomeVerifications: {
+                            orderBy: {
+                                createdAt: 'desc'
                             },
                             include: {
-                                verification: true
+                                incomeDocuments: {
+                                    orderBy: {
+                                        uploadDate: 'desc'
+                                    }
+                                }
+                            }
+                        },
+                        tenancy: {
+                            include: {
+                                rentRoll: true
                             }
                         }
                     }
-                },
-                incomeVerifications: {
-                    orderBy: {
-                        createdAt: 'desc'
-                    },
-                    include: {
-                        incomeDocuments: {
-                            orderBy: {
-                                uploadDate: 'desc'
-                            }
-                        }
-                    }
-                },
-                unit: true,
-                rentRoll: true, // Include rent roll data with date
+                }
             }
         });
 
+        if (!unitWithLeases) {
+            return NextResponse.json({ error: 'Unit not found' }, { status: 404 });
+        }
+
+        // Find the specific tenancy linked to the rent roll
+        const tenancyLease = unitWithLeases.leases.find((l: { tenancy: { rentRollId: string; } | null; }) => l.tenancy?.rentRollId === rentRollId);
+        const tenancy = tenancyLease ? {
+            id: tenancyLease.tenancy?.id,
+            lease: tenancyLease,
+            unit: unitWithLeases,
+            rentRoll: tenancyLease.tenancy?.rentRoll,
+        } : null;
+
         if (!tenancy) {
-            return NextResponse.json({ error: 'Tenancy not found' }, { status: 404 });
+            return NextResponse.json({ error: 'Tenancy for this rent roll not found' }, { status: 404 });
         }
 
         return NextResponse.json(tenancy);

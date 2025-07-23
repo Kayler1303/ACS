@@ -3,9 +3,15 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useState, useEffect, Fragment, useCallback } from 'react';
 import Link from 'next/link';
-import TenancyIncomeDocumentUploadForm from '@/components/TenancyIncomeDocumentUploadForm';
+import IncomeVerificationDocumentUploadForm from '@/components/IncomeVerificationDocumentUploadForm';
 import VerificationFinalizationDialog from '@/components/VerificationFinalizationDialog';
+import CreateLeaseDialog from '@/components/CreateLeaseDialog';
+import AddResidentDialog from '@/components/AddResidentDialog';
+import RenewalDialog from '@/components/RenewalDialog';
+import InitialAddResidentDialog from '@/components/InitialAddResidentDialog';
 import { format } from 'date-fns';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 // --- NEW Data Structures ---
 
@@ -41,6 +47,7 @@ interface IncomeVerification {
   leaseYear?: number;
   associatedLeaseStart?: string;
   associatedLeaseEnd?: string;
+  leaseId?: string; // Added leaseId to the interface
 }
 
 interface Resident {
@@ -57,6 +64,7 @@ interface Unit {
   unitNumber: string;
   squareFootage: number | null;
   bedroomCount: number | null;
+  leases: Lease[];
 }
 
 interface RentRoll {
@@ -64,23 +72,30 @@ interface RentRoll {
   date: string;
 }
 
-interface TenancyData {
+interface Lease {
   id: string;
-  leaseRent: string | null;
-  residents: Resident[];
-  unit: Unit;
-  rentRoll: RentRoll;
-  incomeVerifications: IncomeVerification[];
+  name: string;
   leaseStartDate: string;
   leaseEndDate: string;
+  leaseRent: string | null;
+  residents: Resident[];
+  incomeVerifications: IncomeVerification[];
+  tenancy?: { id: string; rentRollId: string; unitId: string; date: string }; // Added tenancy property
+}
+
+interface TenancyData {
+  id: string;
+  lease: Lease;
+  unit: Unit;
+  rentRoll: RentRoll;
 }
 
 // --- NEW VerificationRow Component ---
 
-function VerificationRow({ verification, tenancy, onActionComplete }: { verification: IncomeVerification, tenancy: TenancyData, onActionComplete: () => void }) {
+function VerificationRow({ verification, lease, onActionComplete }: { verification: IncomeVerification, lease: Lease, onActionComplete: () => void }) {
   
   const getResidentName = (residentId: string) => {
-    return tenancy.residents.find(r => r.id === residentId)?.name || 'Unknown Resident';
+    return lease.residents.find(r => r.id === residentId)?.name || 'Unknown Resident';
   }
 
   const handleDelete = async (documentId: string) => {
@@ -89,8 +104,8 @@ function VerificationRow({ verification, tenancy, onActionComplete }: { verifica
     }
     try {
       // Note: This endpoint would also need to be created if it doesn't exist.
-      // For now, assuming it will exist at /api/tenancies/:tenancyId/documents/:documentId
-      const res = await fetch(`/api/tenancies/${tenancy.id}/documents/${documentId}`, {
+      // For now, assuming it will exist at /api/leases/:leaseId/documents/:documentId
+      const res = await fetch(`/api/leases/${lease.id}/documents/${documentId}`, {
         method: 'DELETE',
       });
       if (!res.ok) {
@@ -221,20 +236,138 @@ export default function ResidentDetailPage() {
     isOpen: boolean;
     verification: IncomeVerification | null;
   }>({ isOpen: false, verification: null });
+  const [isCreateLeaseDialogOpen, setCreateLeaseDialogOpen] = useState(false);
+  const [isAddResidentDialogOpen, setAddResidentDialogOpen] = useState(false);
+  const [isRenewalDialogOpen, setRenewalDialogOpen] = useState(false);
+  const [isInitialAddResidentDialogOpen, setInitialAddResidentDialogOpen] = useState(false);
+  const [selectedLeaseForResident, setSelectedLeaseForResident] = useState<Lease | null>(null);
+  const [newLeaseName, setNewLeaseName] = useState('');
+  const [newLeaseStart, setNewLeaseStart] = useState('');
+  const [newLeaseEnd, setNewLeaseEnd] = useState('');
+  const [newLeaseRent, setNewLeaseRent] = useState('');
+
+  const handleDeleteLease = async (leaseId: string) => {
+    if (
+      !window.confirm(
+        'Are you sure you want to delete this provisional lease?'
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/leases/${leaseId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete lease');
+      }
+
+      // Refetch data to update the UI
+      fetchTenancyData();
+      toast.success('Provisional lease deleted successfully.');
+    } catch (error: any) {
+      console.error('Error deleting lease:', error);
+      toast.error(error.message || 'An error occurred while deleting the lease.');
+    }
+  };
+
+  const handleAddResident = async (name: string, annualizedIncome: string) => {
+    if (!selectedLeaseForResident) {
+      toast.error('No lease selected to add resident to.');
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/leases/${selectedLeaseForResident.id}/residents`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name, annualizedIncome }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to add resident');
+      }
+
+      toast.success('Resident added successfully.');
+      fetchTenancyData(false); // Refetch data to update the UI
+    } catch (error: any) {
+      console.error('Error adding resident:', error);
+      toast.error(error.message || 'An error occurred while adding the resident.');
+      throw error; // Re-throw to keep the dialog in an error state if needed
+    }
+  };
+
+  const handleCopyResidents = async (residentIds: string[]) => {
+    if (!selectedLeaseForResident) {
+      toast.error('No lease selected to add residents to.');
+      return;
+    }
+    try {
+      const response = await fetch(`/api/leases/${selectedLeaseForResident.id}/copy-residents`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ residentIds }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to copy residents');
+      }
+
+      toast.success('Residents copied successfully.');
+      fetchTenancyData(false);
+    } catch (error: any) {
+      console.error('Error copying residents:', error);
+      toast.error(error.message || 'An error occurred while copying residents.');
+      throw error;
+    }
+  };
+
+  const handleDeleteDocument = async (documentId: string) => {
+    if (!confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/documents/${documentId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete document');
+      }
+
+      toast.success('Document deleted successfully.');
+      fetchTenancyData(false); // Refresh data
+    } catch (error: any) {
+      console.error('Error deleting document:', error);
+      toast.error(error.message || 'An error occurred while deleting the document.');
+    }
+  };
 
   const formatUnitNumber = (unitNumber: string) => parseInt(unitNumber, 10).toString();
 
-  const handleCreateNewVerification = async () => {
+  const handleCreateNewVerification = async (leaseId: string) => {
     if (!tenancyData) return;
     
     // Only show confirmation if there's an existing in-progress verification
-    const hasInProgressVerification = tenancyData.incomeVerifications?.some(v => v.status === 'IN_PROGRESS');
+    const lease = tenancyData.unit.leases.find(l => l.id === leaseId);
+    const hasInProgressVerification = lease?.incomeVerifications?.some(v => v.status === 'IN_PROGRESS');
     if (hasInProgressVerification && !window.confirm('Are you sure you want to start a new verification period? This will finalize the current in-progress period.')) {
         return;
     }
     
     try {
-        const res = await fetch(`/api/tenancies/${tenancyData.id}/verifications`, {
+        const res = await fetch(`/api/leases/${leaseId}/verifications`, {
             method: 'POST',
         });
 
@@ -259,23 +392,31 @@ export default function ResidentDetailPage() {
 
   const handleFinalizeVerification = async (calculatedIncome: number) => {
     if (!finalizationDialog.verification || !tenancyData) return;
-
+    const leaseId = finalizationDialog.verification.leaseId; // Correct way to get leaseId
+    const verificationId = finalizationDialog.verification.id;
+    
     try {
-      const res = await fetch(`/api/tenancies/${tenancyData.id}/verifications`, {
+      const res = await fetch(`/api/leases/${leaseId}/verifications/${verificationId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          action: 'finalize',
-          verificationId: finalizationDialog.verification.id,
-          calculatedVerifiedIncome: calculatedIncome
+          calculatedVerifiedIncome: calculatedIncome,
         }),
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to finalize verification');
+        // Try to parse the error, but have a fallback.
+        let errorMsg = 'Failed to finalize verification';
+        try {
+          const data = await res.json();
+          errorMsg = data.error || errorMsg;
+        } catch (e) {
+          // The response was not JSON, which can happen on some server errors.
+          console.error("Could not parse error response as JSON", res.status, res.statusText);
+        }
+        throw new Error(errorMsg);
       }
 
       const result = await res.json();
@@ -285,12 +426,34 @@ export default function ResidentDetailPage() {
       fetchTenancyData(false);
       
       // Show success message
-      alert('Verification finalized successfully!');
+      toast.success('Verification finalized successfully!');
       
     } catch (err: any) {
       console.error('Finalization error:', err);
-      alert(`Error: ${err.message}`);
-      throw err; // Re-throw so dialog can handle error state
+      toast.error(err.message);
+      // We don't need to re-throw. The toast will show the error.
+    }
+  };
+
+  const handleCreateLease = async (leaseData: { name: string; leaseStartDate: string; leaseEndDate: string; leaseRent: number | null }) => {
+    try {
+      const res = await fetch(`/api/units/${unitId}/leases`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(leaseData),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to create lease');
+      }
+
+      setCreateLeaseDialogOpen(false);
+      fetchTenancyData(false);
+    } catch (err: any) {
+      alert(`Error creating lease: ${err.message}`);
     }
   };
 
@@ -322,7 +485,7 @@ export default function ResidentDetailPage() {
 
   // Updated Effect for polling
   useEffect(() => {
-    const isProcessing = tenancyData?.incomeVerifications.some(v =>
+    const isProcessing = tenancyData?.lease.incomeVerifications.some(v =>
         v.incomeDocuments.some(d => d.status === 'PROCESSING' || d.status === 'UPLOADED')
     );
 
@@ -338,68 +501,36 @@ export default function ResidentDetailPage() {
   const createLeasePeriods = () => {
     if (!tenancyData) return [];
     
-    const periods = [];
-    const leaseStart = new Date(tenancyData.leaseStartDate);
-    const leaseEnd = new Date(tenancyData.leaseEndDate);
-    const currentDate = new Date();
-    
-    // Calculate how many years the lease spans
-    const totalLeaseYears = Math.ceil((leaseEnd.getTime() - leaseStart.getTime()) / (365.25 * 24 * 60 * 60 * 1000));
-    
-    for (let year = 1; year <= Math.max(totalLeaseYears, 1); year++) {
-      const periodStart = new Date(leaseStart);
-      periodStart.setFullYear(leaseStart.getFullYear() + (year - 1));
-      
-      const periodEnd = new Date(periodStart);
-      periodEnd.setFullYear(periodStart.getFullYear() + 1);
-      periodEnd.setDate(periodEnd.getDate() - 1);
-      
-      // Don't include future periods that are more than 6 months out
-      const sixMonthsFromNow = new Date();
-      sixMonthsFromNow.setMonth(sixMonthsFromNow.getMonth() + 6);
-      if (periodStart > sixMonthsFromNow) continue;
-      
-      // Find verification for this period
-      const verification = tenancyData.incomeVerifications.find(v => {
-        // First check by lease year
-        if (v.leaseYear === year) return true;
-        
-        // Then check by verification period dates
-        if (v.verificationPeriodStart) {
-          const verificationStart = new Date(v.verificationPeriodStart);
-          return verificationStart.getFullYear() === periodStart.getFullYear();
-        }
-        
-        // Fallback: check if verification was created recently for periods that don't have specific lease years yet
-        if (!v.leaseYear && v.status === 'IN_PROGRESS') {
-          const createdAt = new Date(v.createdAt);
-          const now = new Date();
-          const timeDiff = now.getTime() - createdAt.getTime();
-          const hoursDiff = timeDiff / (1000 * 3600);
-          return hoursDiff < 1; // Created within the last hour
-        }
-        
-        return false;
-      });
-      
-      // Calculate total annualized income for this period
-      const totalAnnualizedIncome = tenancyData.residents.reduce((sum, resident) => 
-        sum + (resident.annualizedIncome || 0), 0
-      );
-      
-      periods.push({
-        leaseYear: year,
-        periodStart,
-        periodEnd,
-        totalAnnualizedIncome,
+    // TODO: Implement rent roll reconciliation logic.
+    // This function currently displays all leases for a unit. In the future, we will need to
+    // implement a mechanism to match provisional leases with new tenancies from rent roll uploads.
+    // This could involve a UI where the user can select a provisional lease to link to a new tenancy.
+
+    return tenancyData.unit.leases.map(lease => {
+      const leaseStart = lease.leaseStartDate ? new Date(lease.leaseStartDate) : null;
+      const leaseEnd = lease.leaseEndDate ? new Date(lease.leaseEndDate) : null;
+      const currentDate = new Date();
+
+      const verification = lease.incomeVerifications.find(v => v.status === 'IN_PROGRESS') || lease.incomeVerifications.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+
+      return {
+        ...lease,
+        periodStart: leaseStart,
+        periodEnd: leaseEnd,
+        isCurrentPeriod: leaseStart && leaseEnd && currentDate >= leaseStart && currentDate <= leaseEnd,
+        status: getPeriodStatus({ verification }),
         verification,
-        isCurrentPeriod: currentDate >= periodStart && currentDate <= periodEnd,
-        status: getPeriodStatus({ verification })
-      });
-    }
-    
-    // Return newest periods first
-    return periods.sort((a, b) => b.periodStart.getTime() - a.periodStart.getTime());
+        isProvisional: !lease.tenancy,
+      };
+    }).sort((a, b) => {
+      // Leases without a start date should be treated as newest and appear first
+      if (a.periodStart && !b.periodStart) return 1;
+      if (!a.periodStart && b.periodStart) return -1;
+      // If neither has a start date, maintain their relative order (e.g., by creation)
+      if (!a.periodStart && !b.periodStart) return 0; 
+      // If both have start dates, sort the newest date first
+      return b.periodStart!.getTime() - a.periodStart!.getTime();
+    });
   };
 
   const getPeriodStatus = (period: { verification?: IncomeVerification | null }) => {
@@ -425,11 +556,11 @@ export default function ResidentDetailPage() {
     }
   };
 
-  const handleStartVerification = async (leaseYear: number) => {
+  const handleStartVerification = async (leaseId: string) => {
     if (!tenancyData) return;
     
     try {
-      const res = await fetch(`/api/tenancies/${tenancyData.id}/verifications`, {
+      const res = await fetch(`/api/leases/${leaseId}/verifications`, {
         method: 'POST',
       });
 
@@ -486,17 +617,31 @@ export default function ResidentDetailPage() {
     );
   }
 
-  const totalIncome = tenancyData?.residents.reduce((sum, resident) => 
+  const totalIncome = tenancyData?.lease.residents.reduce((sum, resident) => 
     sum + (resident.annualizedIncome || 0), 0
   ) || 0;
 
-  const inProgressVerification = tenancyData?.incomeVerifications.find(v => v.status === 'IN_PROGRESS');
-  const finalizedVerifications = tenancyData?.incomeVerifications.filter(v => v.status !== 'IN_PROGRESS');
+  const inProgressVerification = tenancyData?.lease.incomeVerifications.find(v => v.status === 'IN_PROGRESS');
+  const finalizedVerifications = tenancyData?.lease.incomeVerifications.filter(v => v.status !== 'IN_PROGRESS');
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-6">
-        <Link href={`/property/${propertyId}`} className="text-brand-blue hover:underline mb-4 inline-block">
+    <div className="min-h-screen bg-gray-50">
+      <ToastContainer
+        position="top-right"
+        autoClose={5000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+      />
+      <div className="container mx-auto px-4 py-8">
+        <Link
+          href={`/property/${propertyId}`}
+          className="text-brand-blue hover:underline mb-4 inline-block"
+        >
           ← Back to Property
         </Link>
         <h1 className="text-4xl font-bold text-brand-blue">Unit {formatUnitNumber(tenancyData.unit.unitNumber)} - Resident Details</h1>
@@ -524,8 +669,8 @@ export default function ResidentDetailPage() {
           <div>
             <p className="text-sm font-medium text-gray-500">Lease Rent</p>
             <p className="text-lg font-semibold text-gray-900">
-              {tenancyData.leaseRent 
-                ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(parseFloat(tenancyData.leaseRent))
+              {tenancyData.lease.leaseRent 
+                ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(parseFloat(tenancyData.lease.leaseRent))
                 : 'N/A'
               }
             </p>
@@ -536,9 +681,12 @@ export default function ResidentDetailPage() {
        <div className="bg-white p-6 rounded-lg shadow-md mb-8">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-2xl font-semibold text-brand-blue">Lease Period Income Verification</h2>
-          <div className="text-sm text-gray-500">
-            <span className="font-medium">Current Lease:</span> {tenancyData ? `${format(new Date(tenancyData.leaseStartDate), 'MMM d, yyyy')} - ${format(new Date(tenancyData.leaseEndDate), 'MMM d, yyyy')}` : 'N/A'}
-          </div>
+          <button
+            onClick={() => setCreateLeaseDialogOpen(true)}
+            className="px-4 py-2 bg-brand-blue text-white rounded-md hover:bg-blue-700"
+          >
+            Create New Lease
+          </button>
         </div>
 
         {leasePeriods.length === 0 ? (
@@ -566,146 +714,197 @@ export default function ResidentDetailPage() {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {leasePeriods.map((period) => (
-                  <tr key={period.leaseYear} className={period.isCurrentPeriod ? 'bg-blue-50' : ''}>
-                    <td className="px-6 py-4">
-                      <div className="text-sm font-medium text-gray-900">
-                        {format(period.periodStart, 'MMM d, yyyy')} - {format(period.periodEnd, 'MMM d, yyyy')}
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        Year {period.leaseYear}
+                  <Fragment key={period.id}>
+                    <tr className={period.isCurrentPeriod ? 'bg-blue-50' : ''}>
+                      <td className="px-6 py-4">
+                        <div className="text-sm font-medium text-gray-900">
+                          {period.name}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          {period.periodStart && period.periodEnd ? (
+                            `${format(period.periodStart, 'MMM d, yyyy')} - ${format(period.periodEnd, 'MMM d, yyyy')}`
+                          ) : (
+                            'Lease Term Not Defined'
+                          )}
+                        </div>
                         {period.isCurrentPeriod && (
                           <span className="ml-2 text-blue-600 font-semibold">Current Period</span>
                         )}
-                      </div>
-                      {period.verification?.dueDate && (
-                        <div className="text-xs text-red-600 mt-1 font-medium">
-                          Due: {format(new Date(period.verification.dueDate), 'MMM d, yyyy')}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      {period.verification ? (
-                        <div className="space-y-2">
-                          <div className="text-xs text-gray-500">
-                            <div>Started: {format(new Date(period.verification.createdAt), 'MMM d, yyyy')}</div>
-                            {period.verification.reason && (
-                              <div className="capitalize">
-                                Reason: {period.verification.reason.replace('_', ' ').toLowerCase()}
+                        {period.verification?.dueDate && (
+                          <div className="text-xs text-red-600 mt-1 font-medium">
+                            Due: {format(new Date(period.verification.dueDate), 'MMM d, yyyy')}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        {period.verification ? (
+                          <div className="space-y-2">
+                            <div className="text-xs text-gray-500">
+                              <div>Started: {format(new Date(period.verification.createdAt), 'MMM d, yyyy')}</div>
+                              {period.verification.reason && (
+                                <div className="capitalize">
+                                  Reason: {period.verification.reason.replace('_', ' ').toLowerCase()}
+                                </div>
+                              )}
+                            </div>
+                            {period.verification.incomeDocuments && period.verification.incomeDocuments.length > 0 ? (
+                              <div className="space-y-2">
+                                <div className="text-xs font-medium text-gray-700">Documents ({period.verification.incomeDocuments.length}):</div>
+                                <div className="space-y-1 max-h-32 overflow-y-auto">
+                                  {period.verification.incomeDocuments.map((doc) => {
+                                    // Find the resident for this document
+                                    const resident = tenancyData?.unit.leases.find(l => l.id === period.id)?.residents.find(r => r.id === doc.residentId);
+                                    return (
+                                      <div key={doc.id} className="text-xs border rounded p-2 bg-gray-50">
+                                        <div className="flex items-center justify-between mb-1">
+                                          <div className="flex items-center space-x-2">
+                                            <span className="font-medium text-gray-700">{doc.documentType}</span>
+                                            {resident && (
+                                              <span className="text-xs text-blue-600 font-medium">({resident.name})</span>
+                                            )}
+                                          </div>
+                                          <div className="flex items-center space-x-2">
+                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                              doc.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
+                                              doc.status === 'PROCESSING' ? 'bg-yellow-100 text-yellow-800' :
+                                              'bg-red-100 text-red-800'
+                                            }`}>
+                                              {doc.status}
+                                            </span>
+                                            <button
+                                              onClick={() => {
+                                                handleDeleteDocument(doc.id);
+                                              }}
+                                              className="text-red-500 hover:text-red-700 ml-4"
+                                              aria-label={`Delete document ${doc.documentType}`}
+                                            >
+                                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                              </svg>
+                                            </button>
+                                          </div>
+                                        </div>
+                                        {doc.documentType === 'W2' && doc.status === 'COMPLETED' && (
+                                          <div className="mt-1 text-gray-600 space-y-1">
+                                            {doc.taxYear && <div>Tax Year: {doc.taxYear}</div>}
+                                            {doc.employerName && <div>Employer: {doc.employerName}</div>}
+                                            {doc.box1_wages && (
+                                              <div className="font-medium text-green-700">
+                                                Wages: {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(doc.box1_wages)}
+                                              </div>
+                                            )}
+                                            {doc.box3_ss_wages && (
+                                              <div className="text-sm">
+                                                Social Security Wages: {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(doc.box3_ss_wages)}
+                                              </div>
+                                            )}
+                                            {doc.box5_med_wages && (
+                                              <div className="text-sm">
+                                                Medicare Wages: {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(doc.box5_med_wages)}
+                                              </div>
+                                            )}
+                                          </div>
+                                        )}
+                                        {doc.uploadDate && (
+                                          <div className="text-gray-400 mt-1">
+                                            Uploaded: {format(new Date(doc.uploadDate), 'MMM d, yyyy')}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
                               </div>
+                            ) : (
+                              <div className="text-xs text-gray-500 italic">No documents uploaded yet</div>
                             )}
                           </div>
-                          {period.verification.incomeDocuments && period.verification.incomeDocuments.length > 0 ? (
-                            <div className="space-y-2">
-                              <div className="text-xs font-medium text-gray-700">Documents ({period.verification.incomeDocuments.length}):</div>
-                              <div className="space-y-1 max-h-32 overflow-y-auto">
-                                {period.verification.incomeDocuments.map((doc) => {
-                                  // Find the resident for this document
-                                  const resident = tenancyData?.residents.find(r => r.id === doc.residentId);
-                                  return (
-                                    <div key={doc.id} className="text-xs border rounded p-2 bg-gray-50">
-                                      <div className="flex items-center justify-between mb-1">
-                                        <div className="flex items-center space-x-2">
-                                          <span className="font-medium text-gray-700">{doc.documentType}</span>
-                                          {resident && (
-                                            <span className="text-xs text-blue-600 font-medium">({resident.name})</span>
-                                          )}
-                                        </div>
-                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                          doc.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
-                                          doc.status === 'PROCESSING' ? 'bg-yellow-100 text-yellow-800' :
-                                          'bg-red-100 text-red-800'
-                                        }`}>
-                                          {doc.status}
-                                        </span>
-                                      </div>
-                                      {doc.documentType === 'W2' && doc.status === 'COMPLETED' && (
-                                        <div className="mt-1 text-gray-600 space-y-1">
-                                          {doc.taxYear && <div>Tax Year: {doc.taxYear}</div>}
-                                          {doc.employerName && <div>Employer: {doc.employerName}</div>}
-                                          {doc.box1_wages && (
-                                            <div className="font-medium text-green-700">
-                                              Wages: {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(doc.box1_wages)}
-                                            </div>
-                                          )}
-                                        </div>
-                                      )}
-                                      {doc.uploadDate && (
-                                        <div className="text-gray-400 mt-1">
-                                          Uploaded: {format(new Date(doc.uploadDate), 'MMM d, yyyy')}
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="text-xs text-gray-500 italic">No documents uploaded yet</div>
+                        ) : (
+                          <div className="text-xs text-gray-500 italic">No verification started</div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {getStatusBadge(period.status)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div className="flex flex-col space-y-2">
+                          {period.status === 'needs_verification' && (
+                            <button 
+                              onClick={() => handleStartVerification(period.id)}
+                              className="text-brand-blue hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded-md transition-colors"
+                            >
+                              Verify Income
+                            </button>
+                          )}
+                          {period.status === 'in_progress' && period.verification && (
+                            <>
+                              <button 
+                                onClick={() => {/* TODO: Open verification details modal */}}
+                                className="text-blue-600 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded-md transition-colors block w-full text-left"
+                              >
+                                Continue Verification
+                              </button>
+                              <button 
+                                onClick={() => handleOpenFinalizationDialog(period.verification!)}
+                                className="text-green-600 hover:text-green-900 bg-green-50 hover:bg-green-100 px-3 py-1 rounded-md transition-colors block w-full text-left"
+                              >
+                                Finalize Verification
+                              </button>
+                            </>
+                          )}
+                          {period.status === 'completed' && period.verification && (
+                            <button 
+                              onClick={() => {/* TODO: View verification details */}}
+                              className="text-green-600 hover:text-green-900 bg-green-50 hover:bg-green-100 px-3 py-1 rounded-md transition-colors"
+                            >
+                              View Details
+                            </button>
+                          )}
+                          {period.isProvisional && (
+                            <>
+                              <button
+                                onClick={() => {
+                                  setSelectedLeaseForResident(period);
+                                  setInitialAddResidentDialogOpen(true);
+                                }}
+                                className="text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-md transition-colors block w-full text-left"
+                              >
+                                Add Resident
+                              </button>
+                              <button
+                                onClick={() => handleDeleteLease(period.id)}
+                                className="text-red-600 hover:text-red-900 bg-red-50 hover:bg-red-100 px-3 py-1 rounded-md transition-colors block w-full text-left"
+                              >
+                                Delete Lease
+                              </button>
+                            </>
                           )}
                         </div>
-                      ) : (
-                        <div className="text-xs text-gray-500 italic">No verification started</div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {getStatusBadge(period.status)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      {period.status === 'needs_verification' && (
-                        <button 
-                          onClick={() => handleStartVerification(period.leaseYear)}
-                          className="text-brand-blue hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded-md transition-colors"
-                        >
-                          Verify Income
-                        </button>
-                      )}
-                      {period.status === 'in_progress' && period.verification && (
-                        <div className="space-y-2">
-                          <button 
-                            onClick={() => {/* TODO: Open verification details modal */}}
-                            className="text-blue-600 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded-md transition-colors block w-full text-left"
-                          >
-                            Continue Verification
-                          </button>
-                          <button 
-                            onClick={() => handleOpenFinalizationDialog(period.verification!)}
-                            className="text-green-600 hover:text-green-900 bg-green-50 hover:bg-green-100 px-3 py-1 rounded-md transition-colors block w-full text-left"
-                          >
-                            Finalize Verification
-                          </button>
-                        </div>
-                      )}
-                      {period.status === 'completed' && period.verification && (
-                        <button 
-                          onClick={() => {/* TODO: View verification details */}}
-                          className="text-green-600 hover:text-green-900 bg-green-50 hover:bg-green-100 px-3 py-1 rounded-md transition-colors"
-                        >
-                          View Details
-                        </button>
-                      )}
-                    </td>
-                  </tr>
+                      </td>
+                    </tr>
+                    {period.status === 'in_progress' && (
+                      <tr>
+                        <td colSpan={4} className="p-0 bg-white">
+                          <div className="p-6 bg-blue-50 border-y-2 border-blue-100">
+                            <h4 className="font-semibold text-gray-700 mb-3">Upload Documents for This Verification Period</h4>
+                            <IncomeVerificationDocumentUploadForm
+                              verificationId={period.verification.id}
+                              residents={period.residents.map(r => ({ id: r.id, name: r.name }))}
+                              onUploadComplete={() => fetchTenancyData(false)}
+                              hasExistingDocuments={!!period.verification?.incomeDocuments?.length}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
           </div>
         )}
 
-        {/* Show upload form for in-progress verification */}
-        {(() => {
-          const inProgressPeriod = leasePeriods.find(p => p.status === 'in_progress');
-          return inProgressPeriod && (
-            <div className="mt-6 p-4 border rounded-lg bg-blue-50">
-              <h4 className="font-semibold text-gray-700 mb-3">Upload Documents for In-Progress Verification</h4>
-              <TenancyIncomeDocumentUploadForm
-                tenancyId={tenancyData?.id || ''}
-                residents={tenancyData?.residents.map(r => ({ id: r.id, name: r.name })) || []}
-                onUploadComplete={() => fetchTenancyData(false)}
-                hasExistingDocuments={!!inProgressPeriod.verification?.incomeDocuments?.length}
-              />
-            </div>
-          );
-        })()}
+        {/* The upload form is now rendered within the table for the corresponding lease period. */}
       </div>
 
       <div className="bg-white p-6 rounded-lg shadow-md">
@@ -720,7 +919,7 @@ export default function ResidentDetailPage() {
           </p>
         </div>
         
-        {tenancyData.residents.length === 0 ? (
+        {tenancyData.lease.residents.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-gray-500">No residents found for this unit in the selected rent roll.</p>
           </div>
@@ -729,7 +928,7 @@ export default function ResidentDetailPage() {
             <div className="mb-6">
               <div className="flex items-center justify-between mb-4">
                 <p className="text-lg font-medium text-gray-700">
-                  Total Residents: <span className="font-semibold">{tenancyData.residents.length}</span>
+                  Total Residents: <span className="font-semibold">{tenancyData.lease.residents.length}</span>
                 </p>
                 <p className="text-lg font-medium text-gray-700">
                   Total Household Income: <span className="font-semibold text-green-600">
@@ -758,7 +957,7 @@ export default function ResidentDetailPage() {
                   </tr>
                 </thead>
                  <tbody className="bg-white divide-y divide-gray-200">
-                  {tenancyData.residents.map((resident) => (
+                  {tenancyData.lease.residents.map((resident) => (
                     <ResidentRow key={resident.id} resident={resident} totalIncome={totalIncome} />
                   ))}
                 </tbody>
@@ -775,10 +974,50 @@ export default function ResidentDetailPage() {
           onClose={handleCloseFinalizationDialog}
           onConfirm={handleFinalizeVerification}
           verification={finalizationDialog.verification}
-          residents={tenancyData?.residents || []}
-          tenancyId={tenancyData?.id || ''}
+          residents={tenancyData?.unit.leases.find(l => l.id === finalizationDialog.verification?.leaseId)?.residents || []}
+        />
+      )}
+      <CreateLeaseDialog
+        isOpen={isCreateLeaseDialogOpen}
+        onClose={() => setCreateLeaseDialogOpen(false)}
+        onSubmit={handleCreateLease}
+        unitId={unitId as string}
+      />
+      {selectedLeaseForResident && (
+        <InitialAddResidentDialog
+          isOpen={isInitialAddResidentDialogOpen}
+          onClose={() => setInitialAddResidentDialogOpen(false)}
+          onRenewal={() => {
+            setInitialAddResidentDialogOpen(false);
+            setRenewalDialogOpen(true);
+          }}
+          onNewApplicant={() => {
+            setInitialAddResidentDialogOpen(false);
+            setAddResidentDialogOpen(true);
+          }}
+          leaseName={selectedLeaseForResident.name}
+        />
+      )}
+      {selectedLeaseForResident && (
+        <AddResidentDialog
+          isOpen={isAddResidentDialogOpen}
+          onClose={() => setAddResidentDialogOpen(false)}
+          onSubmit={handleAddResident}
+          leaseName={selectedLeaseForResident.name}
+        />
+      )}
+      {selectedLeaseForResident && (
+        <RenewalDialog
+          isOpen={isRenewalDialogOpen}
+          onClose={() => setRenewalDialogOpen(false)}
+          onAddSelected={handleCopyResidents}
+          leaseName={selectedLeaseForResident.name}
+          currentResidents={
+            tenancyData.unit.leases.find(l => l.tenancy && l.leaseStartDate)
+              ?.residents || []
+          }
         />
       )}
     </div>
   );
-} 
+}

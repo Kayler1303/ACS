@@ -38,15 +38,15 @@ model Property {
 }
 
 model Unit {
-  id            String    @id @default(cuid())
+  id            String   @id @default(cuid())
   unitNumber    String
   squareFootage Int?
   bedroomCount  Int?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
   propertyId    String
-  tenancies     Tenancy[]
-  property      Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  property      Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  leases        Lease[]
 
   @@unique([propertyId, unitNumber])
 }
@@ -63,21 +63,34 @@ model RentRoll {
   @@unique([propertyId, date])
 }
 
-model Tenancy {
+model Lease {
   id                  String               @id @default(cuid())
+  name                String
+  leaseStartDate      DateTime?
+  leaseEndDate        DateTime?
   leaseRent           Decimal?
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   unitId              String
-  rentRollId          String
-  leaseEndDate        DateTime
-  leaseStartDate      DateTime
+  unit                Unit                 @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  tenancy             Tenancy?
   incomeVerifications IncomeVerification[]
   residents           Resident[]
-  rentRoll            RentRoll             @relation(fields: [rentRollId], references: [id], onDelete: Cascade)
-  unit                Unit                 @relation(fields: [unitId], references: [id], onDelete: Cascade)
 
-  @@unique([unitId, rentRollId])
+  @@index([unitId])
+}
+
+model Tenancy {
+  id         String   @id @default(cuid())
+  rentRollId String
+  rentRoll   RentRoll @relation(fields: [rentRollId], references: [id], onDelete: Cascade)
+  leaseId    String   @unique
+  lease      Lease    @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([leaseId, rentRollId])
+  @@index([rentRollId])
 }
 
 model Resident {
@@ -85,13 +98,13 @@ model Resident {
   name             String
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
-  tenancyId        String
+  leaseId          String
   verifiedIncome   Float?
   annualizedIncome Float
   incomeDocuments  IncomeDocument[]
-  tenancy          Tenancy          @relation(fields: [tenancyId], references: [id], onDelete: Cascade)
+  lease            Lease            @relation(fields: [leaseId], references: [id], onDelete: Cascade)
 
-  @@index([tenancyId])
+  @@index([leaseId])
 }
 
 model VerificationToken {
@@ -110,7 +123,7 @@ model IncomeVerification {
   updatedAt                DateTime           @updatedAt
   finalizedAt              DateTime?
   calculatedVerifiedIncome Float?
-  tenancyId                String
+  leaseId                  String
   associatedLeaseEnd       DateTime?
   associatedLeaseStart     DateTime?
   dueDate                  DateTime
@@ -120,19 +133,19 @@ model IncomeVerification {
   verificationPeriodEnd    DateTime
   verificationPeriodStart  DateTime
   incomeDocuments          IncomeDocument[]
-  tenancy                  Tenancy            @relation(fields: [tenancyId], references: [id], onDelete: Cascade)
+  lease                    Lease              @relation(fields: [leaseId], references: [id], onDelete: Cascade)
 
-  @@index([tenancyId])
+  @@index([leaseId])
   @@index([dueDate])
   @@index([status])
 }
 
 model IncomeDocument {
-  id             String             @id @default(cuid())
+  id             String         @id @default(cuid())
   documentType   DocumentType
   documentDate   DateTime
-  uploadDate     DateTime           @default(now())
-  status         DocumentStatus     @default(UPLOADED)
+  uploadDate     DateTime       @default(now())
+  status         DocumentStatus @default(UPLOADED)
   filePath       String
   box1_wages     Float?
   box3_ss_wages  Float?
@@ -142,7 +155,7 @@ model IncomeDocument {
   taxYear        Int?
   verificationId String
   residentId     String
-  resident       Resident           @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  resident       Resident       @relation(fields: [residentId], references: [id], onDelete: Cascade)
   verification   IncomeVerification @relation(fields: [verificationId], references: [id], onDelete: Cascade)
 
   @@index([verificationId])

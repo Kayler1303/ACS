@@ -56,7 +56,7 @@ export default function RentRollUploadForm({ propertyId }: RentRollUploadFormPro
         throw new Error(data.error || 'Something went wrong');
       }
 
-      router.refresh();
+      router.push(`/property/${propertyId}/reconciliation`);
 
     } catch (err: any) {
       setError(err.message);

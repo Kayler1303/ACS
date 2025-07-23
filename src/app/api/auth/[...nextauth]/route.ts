@@ -48,16 +48,15 @@ export const authOptions: AuthOptions = {
   },
   callbacks: {
     async jwt({ token, user }) {
-      // On sign-in, add user id to the token
       if (user) {
         token.id = user.id;
+        token.sub = user.id;
       }
       return token;
     },
     async session({ session, token }) {
-      // Add user id to the session from the token
       if (session.user) {
-        session.user.id = token.sub as string;
+        session.user.id = token.id as string;
       }
       return session;
     },

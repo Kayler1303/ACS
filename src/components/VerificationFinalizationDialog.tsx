@@ -40,7 +40,6 @@ interface VerificationFinalizationDialogProps {
   onConfirm: (calculatedIncome: number) => Promise<void>;
   verification: IncomeVerification;
   residents: Resident[];
-  tenancyId: string;
 }
 
 export default function VerificationFinalizationDialog({
@@ -49,7 +48,6 @@ export default function VerificationFinalizationDialog({
   onConfirm,
   verification,
   residents,
-  tenancyId
 }: VerificationFinalizationDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -85,8 +83,7 @@ export default function VerificationFinalizationDialog({
   );
 
   const handleFinalize = async () => {
-    if (!hasCompletedDocuments) return;
-    
+    // Allow finalization even with no documents
     setIsSubmitting(true);
     try {
       await onConfirm(totalVerifiedIncome);
@@ -251,9 +248,9 @@ export default function VerificationFinalizationDialog({
             </button>
             <button
               onClick={handleFinalize}
-              disabled={!hasCompletedDocuments || isSubmitting}
+              disabled={isSubmitting}
               className={`px-4 py-2 text-sm font-medium text-white rounded-md ${
-                hasCompletedDocuments && !isSubmitting
+                !isSubmitting
                   ? 'bg-green-600 hover:bg-green-700'
                   : 'bg-gray-400 cursor-not-allowed'
               }`}

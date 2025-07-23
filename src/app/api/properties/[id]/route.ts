@@ -25,15 +25,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           },
         },
         rentRolls: {
+          orderBy: {
+            date: 'desc',
+          },
           include: {
             tenancies: {
               include: {
-                residents: true,
+                lease: {
+                  include: {
+                    residents: true,
+                    unit: true,
+                  },
+                },
               },
             },
-          },
-          orderBy: {
-            date: 'desc',
           },
         },
       },
