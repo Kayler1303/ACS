@@ -772,6 +772,9 @@ export default function ResidentDetailPage() {
                             'Lease Term Not Defined'
                           )}
                         </div>
+                        <div className="text-xs text-gray-600 mt-1">
+                          {period.residents.length} {period.residents.length === 1 ? 'resident' : 'residents'}
+                        </div>
                         {period.isCurrentPeriod && (
                           <span className="ml-2 text-blue-600 font-semibold">Current Period</span>
                         )}

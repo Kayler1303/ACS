@@ -5,7 +5,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
 export async function POST(
   req: Request,
-  { params }: { params: { leaseId: string } }
+  { params }: { params: Promise<{ leaseId: string }> }
 ) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
@@ -13,7 +13,7 @@ export async function POST(
   }
 
   try {
-    const { leaseId } = params;
+    const { leaseId } = await params;
     const { name, annualizedIncome } = await req.json();
 
     if (!name || !annualizedIncome) {

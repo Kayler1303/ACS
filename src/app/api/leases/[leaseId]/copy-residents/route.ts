@@ -7,12 +7,12 @@ import { Decimal } from '@prisma/client/runtime/library';
 type Resident = {
   id: string;
   name: string;
-  annualizedIncome: Decimal;
+  annualizedIncome: number;
 }
 
 export async function POST(
   req: Request,
-  { params }: { params: { leaseId: string } }
+  { params }: { params: Promise<{ leaseId: string }> }
 ) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
@@ -20,7 +20,7 @@ export async function POST(
   }
 
   try {
-    const { leaseId: targetLeaseId } = params;
+    const { leaseId: targetLeaseId } = await params;
     const { residentIds } = await req.json();
 
     if (!residentIds || !Array.isArray(residentIds) || residentIds.length === 0) {
@@ -58,7 +58,7 @@ export async function POST(
     // 3. Prepare the data for the new resident records
     const newResidentsData = sourceResidents.map((resident: Resident) => ({
       name: resident.name,
-      annualizedIncome: resident.annualizedIncome,
+      annualizedIncome: Number(resident.annualizedIncome),
       leaseId: targetLeaseId,
     }));
 
