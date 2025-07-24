@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import type { FullProperty, FullRentRoll, FullTenancy, Unit } from '@/types/property';
+import type { Resident } from '@prisma/client';
 import { format } from 'date-fns';
+import { PropertyVerificationSummary, VerificationStatus } from '@/services/verification';
 
 interface PropertyPageClientProps {
   initialProperty: FullProperty;
@@ -30,6 +32,7 @@ interface ProcessedUnit {
   totalIncome: number;
   actualBucket: string;
   complianceBucket: string;
+  verificationStatus?: VerificationStatus;
 }
 
 // Helper function to format unit numbers (remove leading zeros)
@@ -108,7 +111,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
 
   const [processedTenancies, setProcessedTenancies] = useState<ProcessedUnit[]>([]);
   const [hudIncomeLimits, setHudIncomeLimits] = useState<HudIncomeLimits | null>(null);
-  const [lihtcRentData, setLihtcRentData] = useState<any | null>(null);
+  const [lihtcRentData, setLihtcRentData] = useState<Record<string, unknown> | null>(null);
   const [complianceOption, setComplianceOption] = useState<string>("20% at 50% AMI, 55% at 80% AMI");
   const [includeRentAnalysis, setIncludeRentAnalysis] = useState<boolean>(false);
   const [includeUtilityAllowances, setIncludeUtilityAllowances] = useState<boolean>(false);
@@ -116,6 +119,8 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
   const [utilityAllowances, setUtilityAllowances] = useState<{[bedroomCount: number]: number}>({});
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [verificationData, setVerificationData] = useState<PropertyVerificationSummary | null>(null);
+  const [verificationLoading, setVerificationLoading] = useState(false);
 
   // Fetch HUD income limits
   useEffect(() => {
@@ -148,8 +153,8 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
           const errorText = await res.text();
           console.error('Failed to fetch income limits:', res.status, res.statusText, errorText);
         }
-      } catch (error: any) {
-        if (error.name === 'AbortError') {
+      } catch (error: unknown) {
+        if ((error as { name?: string })?.name === 'AbortError') {
           console.error('Income limits fetch timed out after 30 seconds');
         } else {
           console.error('Error fetching income limits:', error);
@@ -190,70 +195,32 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     }
   }, [includeRentAnalysis, property.id, lihtcRentData]);
 
-  // Process tenancies whenever dependencies change
+  // Fetch verification status data
   useEffect(() => {
-    if (!selectedRentRollId || !hudIncomeLimits) {
-      return;
-    }
+    const fetchVerificationData = async () => {
+      if (!selectedRentRollId) return;
+      
+      setVerificationLoading(true);
+      try {
+        const res = await fetch(`/api/properties/${property.id}/verification-status`);
+        if (res.ok) {
+          const data = await res.json();
+          setVerificationData(data);
+        } else {
+          console.error('Failed to fetch verification status:', res.status, res.statusText);
+        }
+      } catch (error) {
+        console.error('Error fetching verification status:', error);
+      } finally {
+        setVerificationLoading(false);
+      }
+    };
 
-    const selectedRentRoll = property.rentRolls.find((rr: FullRentRoll) => rr.id === selectedRentRollId);
-    if (!selectedRentRoll) {
-      return;
-    }
+    fetchVerificationData();
+  }, [property.id, selectedRentRollId]);
 
-    // Process each unit
-    const processed = property.units.map((unit: any) => {
-      const tenancy = selectedRentRoll.tenancies.find((t: FullTenancy) => t.lease.unitId === unit.id);
-      const residents = tenancy?.lease.residents || [];
-      const residentCount = residents.length;
-      const totalIncome = residents.reduce((acc: number, resident: any) => acc + Number(resident.annualizedIncome || 0), 0);
-
-      const actualBucket = includeRentAnalysis ?
-        getActualBucketWithRentAnalysis(
-          totalIncome,
-          residentCount,
-          hudIncomeLimits,
-          complianceOption,
-          Number(tenancy?.lease.leaseRent || 0),
-          unit.bedroomCount,
-          lihtcRentData,
-          includeUtilityAllowances ? utilityAllowances : {}
-        ) :
-        getActualBucket(totalIncome, residentCount, hudIncomeLimits, complianceOption);
-
-      return {
-        id: unit.id,
-        unitNumber: unit.unitNumber,
-        bedroomCount: unit.bedroomCount,
-        squareFootage: unit.squareFootage,
-        residentCount,
-        totalIncome,
-        actualBucket,
-        complianceBucket: actualBucket, // Will be updated below
-      };
-    });
-
-    // Apply 140% rule for compliance buckets
-    const processedWithCompliance = processed.map((unit: ProcessedUnit) => {
-      const tenancy = selectedRentRoll.tenancies.find((t: FullTenancy) => t.lease.unitId === unit.id);
-      const complianceBucket = getComplianceBucket(
-        unit,
-        tenancy,
-        hudIncomeLimits,
-        complianceOption,
-        includeRentAnalysis,
-        lihtcRentData,
-        includeUtilityAllowances ? utilityAllowances : {}
-      );
-      return { ...unit, complianceBucket };
-    });
-
-    console.log('Final processed tenancies:', processedWithCompliance.length);
-    setProcessedTenancies(processedWithCompliance);
-  }, [selectedRentRollId, property.rentRolls, property.units, hudIncomeLimits, complianceOption, includeRentAnalysis, lihtcRentData, includeUtilityAllowances, utilityAllowances]);
-                            
-  const getActualBucket = (totalIncome: number, residentCount: number, hudIncomeLimits: HudIncomeLimits, complianceOption: string): string => {
-                                if (residentCount === 0) return 'Vacant';
+  const getActualBucket = useCallback((totalIncome: number, residentCount: number, hudIncomeLimits: HudIncomeLimits, complianceOption: string): string => {
+    if (residentCount === 0) return 'Vacant';
     if (residentCount > 0 && (!totalIncome || totalIncome === 0)) return 'No Income Information';
     
     const familySize = Math.min(residentCount, 8); // Cap at 8 per HUD guidelines
@@ -284,16 +251,16 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       default:
         return 'Market';
     }
-  };
+  }, []);
 
-  const getActualBucketWithRentAnalysis = (
+  const getActualBucketWithRentAnalysis = useCallback((
     totalIncome: number, 
     residentCount: number, 
     hudIncomeLimits: HudIncomeLimits, 
     complianceOption: string,
     leaseRent: number,
     bedroomCount: number | null,
-    lihtcRentData: any,
+    lihtcRentData: Record<string, unknown> | null,
     utilityAllowances: {[bedroomCount: number]: number}
   ): string => {
     // First check income qualification
@@ -330,23 +297,24 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     const utilityAllowance = utilityAllowances[bedroomCount] || 0;
     
     // Check rent compliance for each AMI level, factoring in utility allowances
-    const maxRent50 = (lihtcRentData.lihtcMaxRents['50percent']?.[`${bedroomCount}br`] || 0) - utilityAllowance;
-    const maxRent60 = (lihtcRentData.lihtcMaxRents['60percent']?.[`${bedroomCount}br`] || 0) - utilityAllowance;
-    const maxRent80 = (lihtcRentData.lihtcMaxRents['80percent']?.[`${bedroomCount}br`] || 0) - utilityAllowance;
+    const maxRents = lihtcRentData.lihtcMaxRents as Record<string, Record<string, number>>;
+    const maxRent50 = (maxRents['50percent']?.[`${bedroomCount}br`] || 0) - utilityAllowance;
+    const maxRent60 = (maxRents['60percent']?.[`${bedroomCount}br`] || 0) - utilityAllowance;
+    const maxRent80 = (maxRents['80percent']?.[`${bedroomCount}br`] || 0) - utilityAllowance;
 
     // DEBUG: Log the rent limits
     console.log('💰 Rent Limits:', {
       bedroomCount,
       utilityAllowance,
       leaseRent,
-      maxRent50Raw: lihtcRentData.lihtcMaxRents['50percent']?.[`${bedroomCount}br`],
-      maxRent60Raw: lihtcRentData.lihtcMaxRents['60percent']?.[`${bedroomCount}br`],
-      maxRent80Raw: lihtcRentData.lihtcMaxRents['80percent']?.[`${bedroomCount}br`],
+      maxRent50Raw: maxRents['50percent']?.[`${bedroomCount}br`],
+      maxRent60Raw: maxRents['60percent']?.[`${bedroomCount}br`],
+      maxRent80Raw: maxRents['80percent']?.[`${bedroomCount}br`],
       adjustedMaxRent50: maxRent50,
       adjustedMaxRent60: maxRent60,
       adjustedMaxRent80: maxRent80,
-      availableKeys: Object.keys(lihtcRentData.lihtcMaxRents || {}),
-      availableBedroomKeys50: lihtcRentData.lihtcMaxRents['50percent'] ? Object.keys(lihtcRentData.lihtcMaxRents['50percent']) : 'None'
+      availableKeys: Object.keys(maxRents || {}),
+      availableBedroomKeys50: maxRents['50percent'] ? Object.keys(maxRents['50percent']) : 'None'
     });
 
     // Check from lowest to highest AMI
@@ -372,15 +340,15 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       maxRent80
     });
     return 'Market';
-  };
+  }, [getActualBucket, includeRentAnalysis]);
 
-  const getComplianceBucket = (
+  const getComplianceBucket = useCallback((
     unit: ProcessedUnit, 
     tenancy: FullTenancy | undefined, 
     hudIncomeLimits: HudIncomeLimits | null, 
     complianceOption: string,
     includeRentAnalysis: boolean,
-    lihtcRentData: any,
+    lihtcRentData: Record<string, unknown> | null,
     utilityAllowances: {[bedroomCount: number]: number}
   ): string => {
     if (!tenancy || !hudIncomeLimits) return unit.actualBucket;
@@ -390,7 +358,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     const residents = tenancy.lease.residents;
     if (residents.length > 0) {
       // Calculate what their bucket would have been at that time using current HUD limits
-      const totalIncomeAtTime = residents.reduce((acc: number, res: any) => acc + Number(res.annualizedIncome || 0), 0);
+      const totalIncomeAtTime = residents.reduce((acc: number, res: Resident) => acc + Number(res.annualizedIncome || 0), 0);
       const residentCountAtTime = residents.length;
       
       originalBucket = includeRentAnalysis ? 
@@ -418,7 +386,73 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     const actualIndex = bucketPriority.indexOf(unit.actualBucket);
     
     return actualIndex <= originalIndex ? unit.actualBucket : originalBucket;
-  };
+  }, [getActualBucket, getActualBucketWithRentAnalysis]);
+
+  // Process tenancies whenever dependencies change
+  useEffect(() => {
+    if (!selectedRentRollId || !hudIncomeLimits) {
+      return;
+    }
+
+    const selectedRentRoll = property.rentRolls.find((rr: FullRentRoll) => rr.id === selectedRentRollId);
+    if (!selectedRentRoll) {
+      return;
+    }
+
+    // Process each unit
+    const processed = property.units.map((unit: any) => {
+      const tenancy = selectedRentRoll.tenancies.find((t: FullTenancy) => t.lease.unitId === unit.id);
+      const residents = tenancy?.lease.residents || [];
+      const residentCount = residents.length;
+      const totalIncome = residents.reduce((acc: number, resident: any) => acc + Number(resident.annualizedIncome || 0), 0);
+
+      const actualBucket = includeRentAnalysis ?
+        getActualBucketWithRentAnalysis(
+          totalIncome,
+          residentCount,
+          hudIncomeLimits,
+          complianceOption,
+          Number(tenancy?.lease.leaseRent || 0),
+          unit.bedroomCount,
+          lihtcRentData,
+          includeUtilityAllowances ? utilityAllowances : {}
+        ) :
+        getActualBucket(totalIncome, residentCount, hudIncomeLimits, complianceOption);
+
+      // Get verification status for this unit
+      const unitVerification = verificationData?.units.find(v => v.unitId === unit.id);
+      
+      return {
+        id: unit.id,
+        unitNumber: unit.unitNumber,
+        bedroomCount: unit.bedroomCount,
+        squareFootage: unit.squareFootage,
+        residentCount,
+        totalIncome,
+        actualBucket,
+        complianceBucket: actualBucket, // Will be updated below
+        verificationStatus: unitVerification?.verificationStatus,
+      };
+    });
+
+    // Apply 140% rule for compliance buckets
+    const processedWithCompliance = processed.map((unit: ProcessedUnit) => {
+      const tenancy = selectedRentRoll.tenancies.find((t: FullTenancy) => t.lease.unitId === unit.id);
+      const complianceBucket = getComplianceBucket(
+        unit,
+        tenancy,
+        hudIncomeLimits,
+        complianceOption,
+        includeRentAnalysis,
+        lihtcRentData,
+        includeUtilityAllowances ? utilityAllowances : {}
+      );
+      return { ...unit, complianceBucket };
+    });
+
+    console.log('Final processed tenancies:', processedWithCompliance.length);
+    setProcessedTenancies(processedWithCompliance);
+  }, [selectedRentRollId, property.rentRolls, property.units, hudIncomeLimits, complianceOption, includeRentAnalysis, lihtcRentData, includeUtilityAllowances, utilityAllowances, verificationData, getActualBucket, getActualBucketWithRentAnalysis, getComplianceBucket]);
 
   const handleUpdateUnit = async (unitId: string, field: string, value: string) => {
     try {
@@ -435,7 +469,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       // Update local state
       setProperty((prev: FullProperty) => ({
         ...prev,
-        units: prev.units.map((unit: any) => 
+        units: prev.units.map((unit: Unit) => 
           unit.id === unitId 
             ? { ...unit, [field]: field === 'unitNumber' ? value : Number(value) }
             : unit
@@ -462,8 +496,8 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       }
 
       window.location.href = '/dashboard';
-    } catch (error: any) {
-      setError(error.message);
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : 'An unexpected error occurred');
     } finally {
       setIsDeleting(false);
     }
@@ -827,6 +861,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                                               <th className="px-6 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Total Income</th>
                                               <th className="px-6 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Actual Bucket</th>
                                               <th className="px-6 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance Bucket</th>
+                                              <th className="px-6 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Verification Status</th>
                                             </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -870,6 +905,40 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                     <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">
                       {unit.complianceBucket}
                     </td>
+                                         <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
+                       {verificationLoading ? (
+                         <div className="flex items-center justify-center">
+                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-brand-blue"></div>
+                         </div>
+                       ) : unit.verificationStatus ? (
+                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                           unit.verificationStatus === 'Verified' ? 'bg-green-100 text-green-800 border border-green-200' :
+                           unit.verificationStatus === 'Needs Investigation' ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' :
+                           unit.verificationStatus === 'Out of Date Income Documents' ? 'bg-red-100 text-red-800 border border-red-200' :
+                           unit.verificationStatus === 'Vacant' ? 'bg-gray-100 text-gray-600 border border-gray-200' :
+                           'bg-gray-100 text-gray-800 border border-gray-200'
+                         }`}>
+                           {unit.verificationStatus === 'Verified' && (
+                             <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                               <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                             </svg>
+                           )}
+                           {unit.verificationStatus === 'Needs Investigation' && (
+                             <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                               <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                             </svg>
+                           )}
+                           {unit.verificationStatus === 'Out of Date Income Documents' && (
+                             <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                             </svg>
+                           )}
+                           {unit.verificationStatus}
+                         </span>
+                       ) : (
+                         <span className="text-gray-400 text-xs">-</span>
+                       )}
+                     </td>
                   </tr>
                 ))}
               </tbody>
@@ -925,7 +994,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
               </p>
 
               <div className="space-y-3">
-                {[...new Set(property.units.map((unit: any) => unit.bedroomCount))]
+                {[...new Set(property.units.map((unit: Unit) => unit.bedroomCount))]
                   .filter((count): count is number => count !== null && count !== undefined && typeof count === 'number')
                                               .sort((a: number, b: number) => a - b)
                   .map((bedroomCount: number) => (
