@@ -23,6 +23,15 @@ interface HudIncomeLimits {
   '80percent': { [key: string]: number };
 }
 
+interface ProvisionalLease {
+  id: string;
+  name: string;
+  leaseStartDate?: string;
+  leaseEndDate?: string;
+  leaseRent?: number;
+  unitId: string;
+}
+
 interface ProcessedUnit {
   id: string;
   unitNumber: string;
@@ -33,6 +42,7 @@ interface ProcessedUnit {
   actualBucket: string;
   complianceBucket: string;
   verificationStatus?: VerificationStatus;
+  provisionalLeases?: ProvisionalLease[];
 }
 
 // Helper function to format unit numbers (remove leading zeros)
@@ -121,6 +131,8 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
   const [error, setError] = useState<string | null>(null);
   const [verificationData, setVerificationData] = useState<PropertyVerificationSummary | null>(null);
   const [verificationLoading, setVerificationLoading] = useState(false);
+  const [provisionalLeases, setProvisionalLeases] = useState<ProvisionalLease[]>([]);
+  const [selectedProvisionalLeases, setSelectedProvisionalLeases] = useState<Set<string>>(new Set());
 
   // Fetch HUD income limits
   useEffect(() => {
@@ -218,6 +230,25 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
 
     fetchVerificationData();
   }, [property.id, selectedRentRollId]);
+
+  // Fetch provisional leases data
+  useEffect(() => {
+    const fetchProvisionalLeases = async () => {
+      try {
+        const res = await fetch(`/api/properties/${property.id}/provisional-leases`);
+        if (res.ok) {
+          const data = await res.json();
+          setProvisionalLeases(data);
+        } else {
+          console.error('Failed to fetch provisional leases:', res.status, res.statusText);
+        }
+      } catch (error) {
+        console.error('Error fetching provisional leases:', error);
+      }
+    };
+
+    fetchProvisionalLeases();
+  }, [property.id]);
 
   const getActualBucket = useCallback((totalIncome: number, residentCount: number, hudIncomeLimits: HudIncomeLimits, complianceOption: string): string => {
     if (residentCount === 0) return 'Vacant';
@@ -422,6 +453,9 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       // Get verification status for this unit
       const unitVerification = verificationData?.units.find(v => v.unitId === unit.id);
       
+      // Get provisional leases for this unit
+      const unitProvisionalLeases = provisionalLeases.filter(lease => lease.unitId === unit.id);
+      
       return {
         id: unit.id,
         unitNumber: unit.unitNumber,
@@ -432,6 +466,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
         actualBucket,
         complianceBucket: actualBucket, // Will be updated below
         verificationStatus: unitVerification?.verificationStatus,
+        provisionalLeases: unitProvisionalLeases,
       };
     });
 
@@ -452,7 +487,20 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
 
     console.log('Final processed tenancies:', processedWithCompliance.length);
     setProcessedTenancies(processedWithCompliance);
-  }, [selectedRentRollId, property.rentRolls, property.units, hudIncomeLimits, complianceOption, includeRentAnalysis, lihtcRentData, includeUtilityAllowances, utilityAllowances, verificationData, getActualBucket, getActualBucketWithRentAnalysis, getComplianceBucket]);
+  }, [selectedRentRollId, property.rentRolls, property.units, hudIncomeLimits, complianceOption, includeRentAnalysis, lihtcRentData, includeUtilityAllowances, utilityAllowances, verificationData, provisionalLeases, getActualBucket, getActualBucketWithRentAnalysis, getComplianceBucket]);
+
+  // Handle provisional lease checkbox changes
+  const handleProvisionalLeaseToggle = (leaseId: string) => {
+    setSelectedProvisionalLeases(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(leaseId)) {
+        newSet.delete(leaseId);
+      } else {
+        newSet.add(leaseId);
+      }
+      return newSet;
+    });
+  };
 
   const handleUpdateUnit = async (unitId: string, field: string, value: string) => {
     try {
@@ -862,6 +910,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                                               <th className="px-6 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Actual Bucket</th>
                                               <th className="px-6 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance Bucket</th>
                                               <th className="px-6 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Verification Status</th>
+                                              <th className="px-6 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Future Leases</th>
                                             </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -935,6 +984,31 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                            )}
                            {unit.verificationStatus}
                          </span>
+                                               ) : (
+                          <span className="text-gray-400 text-xs">-</span>
+                        )}
+                     </td>
+                     <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
+                       {unit.provisionalLeases && unit.provisionalLeases.length > 0 ? (
+                         <div className="space-y-2">
+                           {unit.provisionalLeases.map((lease) => (
+                             <div key={lease.id} className="flex items-center justify-center space-x-2">
+                               <input
+                                 type="checkbox"
+                                 id={`lease-${lease.id}`}
+                                 checked={selectedProvisionalLeases.has(lease.id)}
+                                 onChange={() => handleProvisionalLeaseToggle(lease.id)}
+                                 className="h-4 w-4 text-brand-blue focus:ring-brand-blue border-gray-300 rounded"
+                               />
+                               <label
+                                 htmlFor={`lease-${lease.id}`}
+                                 className="text-sm text-gray-700 cursor-pointer"
+                               >
+                                 {lease.name}
+                               </label>
+                             </div>
+                           ))}
+                         </div>
                        ) : (
                          <span className="text-gray-400 text-xs">-</span>
                        )}
