@@ -1315,7 +1315,12 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                                  title={!lease.isVerificationFinalized ? 'Income verification must be finalized first' : ''}
                                >
                                  <div className="flex flex-col">
-                                   <span>{lease.name}</span>
+                                   <Link
+                                     href={`/property/${property.id}/rent-roll/${selectedRentRollId}/unit/${unit.id}`}
+                                     className="text-sm text-brand-blue hover:text-brand-accent underline cursor-pointer"
+                                   >
+                                     {lease.name}
+                                   </Link>
                                    {lease.isVerificationFinalized && lease.amiBucketInfo ? (
                                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                                        lease.amiBucketInfo.actualBucket === '50% AMI' ? 'bg-green-100 text-green-800' :
@@ -1330,10 +1335,13 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                                        Calculating...
                                      </span>
                                    ) : (
-                                     <div className="text-xs text-gray-500 italic text-center">
+                                     <Link
+                                       href={`/property/${property.id}/rent-roll/${selectedRentRollId}/unit/${unit.id}`}
+                                       className="text-xs text-brand-blue hover:text-brand-accent underline cursor-pointer text-center"
+                                     >
                                        <div>Income Verification</div>
                                        <div>Not Finalized</div>
-                                     </div>
+                                     </Link>
                                    )}
                                  </div>
                                </label>
