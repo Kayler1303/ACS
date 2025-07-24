@@ -1101,9 +1101,10 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                                        Calculating...
                                      </span>
                                    ) : (
-                                     <span className="text-xs text-gray-500 italic">
-                                       Income Verification Not Finalized
-                                     </span>
+                                     <div className="text-xs text-gray-500 italic text-center">
+                                       <div>Income Verification</div>
+                                       <div>Not Finalized</div>
+                                     </div>
                                    )}
                                  </div>
                                </label>
