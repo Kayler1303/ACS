@@ -1101,8 +1101,8 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                                        Calculating...
                                      </span>
                                    ) : (
-                                     <span className="text-xs text-gray-500">
-                                       {lease.residentCount} {lease.residentCount === 1 ? 'resident' : 'residents'}
+                                     <span className="text-xs text-gray-500 italic">
+                                       Income Verification Not Finalized
                                      </span>
                                    )}
                                  </div>
