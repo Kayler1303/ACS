@@ -293,27 +293,35 @@ export default function ResidentDetailPage() {
     }
   };
 
-  const handleAddResident = async (name: string, annualizedIncome: string) => {
+  const handleAddResident = async (residents: Array<{ name: string }>) => {
     if (!selectedLeaseForResident) {
-      toast.error('No lease selected to add resident to.');
+      toast.error('No lease selected to add residents to.');
       return;
     }
 
     try {
-      const response = await fetch(`/api/leases/${selectedLeaseForResident.id}/residents`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ name, annualizedIncome }),
-      });
+      // Add each resident individually
+      for (const resident of residents) {
+        const response = await fetch(`/api/leases/${selectedLeaseForResident.id}/residents`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
+            name: resident.name, 
+            annualizedIncome: '0' // Default to 0, income will be set during verification process
+          }),
+        });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to add resident');
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `Failed to add resident: ${resident.name}`);
+        }
       }
 
-      toast.success('Resident added successfully.');
+      // Show appropriate success message
+      const residentCount = residents.length;
+      toast.success(`Successfully added ${residentCount} ${residentCount === 1 ? 'resident' : 'residents'}.`);
       
       // If this was a new lease workflow, automatically start income verification
       if (isNewLeaseWorkflow && selectedLeaseForResident) {
