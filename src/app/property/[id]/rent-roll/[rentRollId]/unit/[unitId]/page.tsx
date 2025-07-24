@@ -253,10 +253,17 @@ export default function ResidentDetailPage() {
     hasExistingDocuments: boolean;
   } | null>(null);
   const [selectedLeaseForResident, setSelectedLeaseForResident] = useState<Lease | null>(null);
+  const [isNewLeaseWorkflow, setIsNewLeaseWorkflow] = useState(false);
   const [newLeaseName, setNewLeaseName] = useState('');
   const [newLeaseStart, setNewLeaseStart] = useState('');
   const [newLeaseEnd, setNewLeaseEnd] = useState('');
   const [newLeaseRent, setNewLeaseRent] = useState('');
+
+  // Helper function to clean up new lease workflow state
+  const resetNewLeaseWorkflow = () => {
+    setIsNewLeaseWorkflow(false);
+    setSelectedLeaseForResident(null);
+  };
 
   const handleDeleteLease = async (leaseId: string) => {
     if (
@@ -308,6 +315,14 @@ export default function ResidentDetailPage() {
 
       toast.success('Resident added successfully.');
       fetchTenancyData(false); // Refetch data to update the UI
+      
+      // If this was a new lease workflow, automatically start income verification
+      if (isNewLeaseWorkflow && selectedLeaseForResident) {
+        setTimeout(() => {
+          handleStartVerification(selectedLeaseForResident.id);
+        }, 1000); // Small delay to ensure data has refreshed
+        setIsNewLeaseWorkflow(false); // Reset the flag
+      }
     } catch (error: unknown) {
       console.error('Error adding resident:', error);
       toast.error((error instanceof Error ? error.message : 'An error occurred while adding the resident.'));
@@ -370,6 +385,14 @@ export default function ResidentDetailPage() {
       }
 
       fetchTenancyData(false);
+      
+      // If this was a new lease workflow, automatically start income verification
+      if (isNewLeaseWorkflow && selectedLeaseForResident) {
+        setTimeout(() => {
+          handleStartVerification(selectedLeaseForResident.id);
+        }, 1000); // Small delay to ensure data has refreshed
+        setIsNewLeaseWorkflow(false); // Reset the flag
+      }
     } catch (error: unknown) {
       console.error('Error adding residents:', error);
       toast.error((error instanceof Error ? error.message : 'An error occurred while adding residents.'));
@@ -513,6 +536,7 @@ export default function ResidentDetailPage() {
       
       // Automatically open the "Add Resident" dialog for the newly created lease
       setSelectedLeaseForResident(newLease);
+      setIsNewLeaseWorkflow(true); // Mark this as a new lease workflow
       setInitialAddResidentDialogOpen(true);
       
       fetchTenancyData(false);
@@ -1030,7 +1054,10 @@ export default function ResidentDetailPage() {
       {selectedLeaseForResident && (
         <InitialAddResidentDialog
           isOpen={isInitialAddResidentDialogOpen}
-          onClose={() => setInitialAddResidentDialogOpen(false)}
+          onClose={() => {
+            setInitialAddResidentDialogOpen(false);
+            resetNewLeaseWorkflow();
+          }}
           onRenewal={() => {
             setInitialAddResidentDialogOpen(false);
             setRenewalDialogOpen(true);
@@ -1045,7 +1072,10 @@ export default function ResidentDetailPage() {
       {selectedLeaseForResident && (
         <AddResidentDialog
           isOpen={isAddResidentDialogOpen}
-          onClose={() => setAddResidentDialogOpen(false)}
+          onClose={() => {
+            setAddResidentDialogOpen(false);
+            resetNewLeaseWorkflow();
+          }}
           onSubmit={handleAddResident}
           leaseName={selectedLeaseForResident.name}
         />
@@ -1053,7 +1083,10 @@ export default function ResidentDetailPage() {
       {selectedLeaseForResident && (
         <RenewalDialog
           isOpen={isRenewalDialogOpen}
-          onClose={() => setRenewalDialogOpen(false)}
+          onClose={() => {
+            setRenewalDialogOpen(false);
+            resetNewLeaseWorkflow();
+          }}
           onAddSelected={handleCopyResidents}
           leaseName={selectedLeaseForResident.name}
           currentResidents={
