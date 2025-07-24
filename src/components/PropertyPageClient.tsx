@@ -653,7 +653,21 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       }
     }
 
-    return { totalUnits, targetCounts, targets, bucketCounts, bucketCountsWithVacants };
+    // Calculate verified income units
+    const verifiedIncomeUnits = processedTenancies.filter(unit => 
+      unit.verificationStatus === 'Verified'
+    ).length;
+    const verifiedIncomePercentage = totalUnits > 0 ? (verifiedIncomeUnits / totalUnits * 100) : 0;
+
+    return { 
+      totalUnits, 
+      targetCounts, 
+      targets, 
+      bucketCounts, 
+      bucketCountsWithVacants, 
+      verifiedIncomeUnits, 
+      verifiedIncomePercentage 
+    };
   };
 
   const stats = calculateSummaryStats();
@@ -819,10 +833,11 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                                                   <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance</th>
                                                   <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance With Vacants</th>
                                                   <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Over/(Under)</th>
+                                                  <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Verified Income Units</th>
                                                 </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {Object.entries(stats.targets).map(([bucket, target]) => {
+                    {Object.entries(stats.targets).map(([bucket, target], index) => {
                       const actual = ((stats.bucketCounts[bucket] || 0) / stats.totalUnits * 100);
                       const compliance = actual; // Compliance column shows percentage of total units in this bucket
                       const withVacants = ((stats.bucketCountsWithVacants[bucket] || 0) / stats.totalUnits * 100);
@@ -837,6 +852,9 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                                                       <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{withVacants.toFixed(1)}%</td>
                                                       <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">
                             {overUnder >= 0 ? '+' : ''}{overUnder.toFixed(1)}%
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">
+                            {index === 0 ? `${stats.verifiedIncomePercentage.toFixed(1)}%` : '-'}
                           </td>
                         </tr>
                       );
@@ -859,10 +877,11 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                                                   <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance</th>
                                                   <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance With Vacants</th>
                                                   <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Over/(Under)</th>
+                                                  <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Verified Income Units</th>
                                                 </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {Object.entries(stats.targets).map(([bucket, targetPercent]) => {
+                    {Object.entries(stats.targets).map(([bucket, targetPercent], index) => {
                       const targetUnits = stats.targetCounts[bucket] || 0;
                       const actualUnits = stats.bucketCounts[bucket] || 0;
                       const complianceUnits = actualUnits;
@@ -878,6 +897,9 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                                                       <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{withVacantsUnits}</td>
                                                       <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">
                             {overUnderUnits >= 0 ? '+' : ''}{overUnderUnits}
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">
+                            {index === 0 ? stats.verifiedIncomeUnits : '-'}
                           </td>
                         </tr>
                       );
