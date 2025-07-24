@@ -836,22 +836,26 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
         </div>
       )}
       
-      {/* Update Compliance Data Section */}
-      <div className="mb-8 bg-white rounded-lg shadow-md overflow-hidden">
-        <div className="bg-gradient-to-r from-green-600 to-green-500 px-6 py-4">
-          <h2 className="text-lg font-semibold text-white">📊 Update Compliance Data</h2>
-          <p className="text-green-100 text-sm mt-1">Upload new resident & rent roll data to refresh your compliance analysis</p>
-        </div>
-        <div className="p-6">
-          <a
-            href={`/property/${property.id}/update-compliance`}
-            className="inline-flex items-center px-6 py-3 text-lg font-medium text-white bg-green-600 border border-transparent rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
-          >
-            📊 Update Compliance Data
-          </a>
+      {/* Actions Panel */}
+      <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg">
+        <div className="px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <span className="text-sm font-medium text-gray-700">Actions:</span>
+              <a
+                href={`/property/${property.id}/update-compliance`}
+                className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-blue transition-colors"
+              >
+                📁 Update Compliance Data
+              </a>
+            </div>
+            <div className="text-xs text-gray-500">
+              Upload new resident & rent roll data to refresh analysis
+            </div>
+          </div>
         </div>
       </div>
-      
+
       {/* Compliance Analysis & Controls */}
       <div className="mb-8 bg-white rounded-lg shadow-md overflow-hidden">
         <div className="bg-gradient-to-r from-brand-blue to-brand-accent px-6 py-4">
