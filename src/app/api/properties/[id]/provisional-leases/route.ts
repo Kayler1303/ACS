@@ -24,6 +24,7 @@ export async function GET(
       },
       include: {
         unit: true,
+        residents: true,
         incomeVerifications: {
           orderBy: {
             createdAt: 'desc'
@@ -33,11 +34,12 @@ export async function GET(
       },
     });
 
-    // Add verification status to each lease
+    // Add verification status and resident count to each lease
     const leasesWithVerificationStatus = provisionalLeases.map(lease => ({
       ...lease,
       isVerificationFinalized: lease.incomeVerifications.length > 0 && 
-        lease.incomeVerifications[0].status === 'FINALIZED'
+        lease.incomeVerifications[0].status === 'FINALIZED',
+      residentCount: lease.residents.length
     }));
 
     return NextResponse.json(leasesWithVerificationStatus, { status: 200 });

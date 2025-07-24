@@ -31,6 +31,7 @@ interface ProvisionalLease {
   leaseRent?: number;
   unitId: string;
   isVerificationFinalized: boolean;
+  residentCount: number;
 }
 
 interface ProcessedUnit {
@@ -1050,7 +1051,12 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                                  }`}
                                  title={!lease.isVerificationFinalized ? 'Income verification must be finalized first' : ''}
                                >
-                                 {lease.name}
+                                 <div className="flex flex-col">
+                                   <span>{lease.name}</span>
+                                   <span className="text-xs text-gray-500">
+                                     {lease.residentCount} {lease.residentCount === 1 ? 'resident' : 'residents'}
+                                   </span>
+                                 </div>
                                </label>
                              </div>
                            ))}
