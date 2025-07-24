@@ -92,7 +92,6 @@ interface TenancyData {
 
 interface NewResident {
   name: string;
-  annualizedIncome: string;
 }
 
 // --- NEW VerificationRow Component ---
@@ -341,7 +340,7 @@ export default function ResidentDetailPage() {
             },
             body: JSON.stringify({ 
               name: newResident.name, 
-              annualizedIncome: newResident.annualizedIncome 
+              annualizedIncome: '0' // Default to 0, income will be set during verification process
             }),
           });
 

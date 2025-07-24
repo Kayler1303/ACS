@@ -9,7 +9,6 @@ type Resident = {
 
 type NewResident = {
   name: string;
-  annualizedIncome: string;
 };
 
 interface RenewalDialogProps {
@@ -44,13 +43,13 @@ export default function RenewalDialog({
   };
 
   const handleAddNewResident = () => {
-    setNewResidents(prev => [...prev, { name: '', annualizedIncome: '' }]);
+    setNewResidents(prev => [...prev, { name: '' }]);
   };
 
-  const handleNewResidentChange = (index: number, field: keyof NewResident, value: string) => {
+  const handleNewResidentChange = (index: number, value: string) => {
     setNewResidents(prev => 
       prev.map((resident, i) => 
-        i === index ? { ...resident, [field]: value } : resident
+        i === index ? { name: value } : resident
       )
     );
   };
@@ -60,17 +59,10 @@ export default function RenewalDialog({
   };
 
   const handleAddSelected = async () => {
-    const validNewResidents = newResidents.filter(r => r.name.trim() && r.annualizedIncome.trim());
+    const validNewResidents = newResidents.filter(r => r.name.trim());
     
     if (selectedIds.length === 0 && validNewResidents.length === 0) {
       alert('Please select at least one existing resident or add a new resident.');
-      return;
-    }
-
-    // Validate new residents have valid income amounts
-    const invalidIncomes = validNewResidents.some(r => isNaN(parseFloat(r.annualizedIncome)) || parseFloat(r.annualizedIncome) <= 0);
-    if (invalidIncomes) {
-      alert('Please enter valid income amounts for all new residents.');
       return;
     }
 
@@ -86,7 +78,7 @@ export default function RenewalDialog({
     }
   };
 
-  const totalResidents = selectedIds.length + newResidents.filter(r => r.name.trim() && r.annualizedIncome.trim()).length;
+  const totalResidents = selectedIds.length + newResidents.filter(r => r.name.trim()).length;
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-75 z-50 flex items-center justify-center">
@@ -142,16 +134,7 @@ export default function RenewalDialog({
                       type="text"
                       placeholder="Resident Name"
                       value={resident.name}
-                      onChange={(e) => handleNewResidentChange(index, 'name', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-brand-blue"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <input
-                      type="number"
-                      placeholder="Annual Income"
-                      value={resident.annualizedIncome}
-                      onChange={(e) => handleNewResidentChange(index, 'annualizedIncome', e.target.value)}
+                      onChange={(e) => handleNewResidentChange(index, e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue focus:border-brand-blue"
                     />
                   </div>
