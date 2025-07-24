@@ -34,7 +34,7 @@ export default function LoginPage() {
         // On successful login, redirect to the callback URL
         router.push(callbackUrl);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError('Invalid email or password. Please try again.');
     } finally {
       setIsLoading(false);

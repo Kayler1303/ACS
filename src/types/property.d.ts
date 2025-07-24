@@ -1,9 +1,12 @@
-import { Property, Unit, RentRoll, Tenancy, Resident } from '@prisma/client';
+import { Property, Unit, RentRoll, Tenancy, Resident, Lease } from '@prisma/client';
 
 export type { Unit };
 
 export type FullTenancy = Tenancy & {
-  residents: Resident[];
+  lease: Lease & {
+    residents: Resident[];
+    unit: Unit;
+  };
 };
 
 export type FullRentRoll = RentRoll & {

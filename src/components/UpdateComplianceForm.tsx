@@ -78,8 +78,8 @@ export default function UpdateComplianceForm({ propertyId }: UpdateComplianceFor
             setRentRollFileState(prev => ({ ...prev, isUploaded: true, data: data }));
         }
 
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {
       setIsLoading(false);
     }
@@ -154,8 +154,8 @@ export default function UpdateComplianceForm({ propertyId }: UpdateComplianceFor
       router.push(`/property/${propertyId}`);
       router.refresh();
 
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {
       setIsLoading(false);
     }

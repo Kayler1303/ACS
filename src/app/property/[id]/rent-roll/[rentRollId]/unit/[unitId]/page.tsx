@@ -113,8 +113,8 @@ function VerificationRow({ verification, lease, onActionComplete }: { verificati
         throw new Error(data.error || 'Failed to delete document');
       }
       onActionComplete();
-    } catch (err: any) {
-      alert(`Error: ${err.message}`);
+    } catch (err: unknown) {
+      alert(`Error: ${err instanceof Error ? err.message : 'An unexpected error occurred'}`);
     }
   };
 
@@ -268,9 +268,9 @@ export default function ResidentDetailPage() {
       // Refetch data to update the UI
       fetchTenancyData();
       toast.success('Provisional lease deleted successfully.');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error deleting lease:', error);
-      toast.error(error.message || 'An error occurred while deleting the lease.');
+      toast.error((error instanceof Error ? error.message : 'An error occurred while deleting the lease.'));
     }
   };
 
@@ -296,9 +296,9 @@ export default function ResidentDetailPage() {
 
       toast.success('Resident added successfully.');
       fetchTenancyData(false); // Refetch data to update the UI
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error adding resident:', error);
-      toast.error(error.message || 'An error occurred while adding the resident.');
+      toast.error((error instanceof Error ? error.message : 'An error occurred while adding the resident.'));
       throw error; // Re-throw to keep the dialog in an error state if needed
     }
   };
@@ -324,9 +324,9 @@ export default function ResidentDetailPage() {
 
       toast.success('Residents copied successfully.');
       fetchTenancyData(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error copying residents:', error);
-      toast.error(error.message || 'An error occurred while copying residents.');
+      toast.error((error instanceof Error ? error.message : 'An error occurred while copying residents.'));
       throw error;
     }
   };
@@ -348,9 +348,9 @@ export default function ResidentDetailPage() {
 
       toast.success('Document deleted successfully.');
       fetchTenancyData(false); // Refresh data
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error deleting document:', error);
-      toast.error(error.message || 'An error occurred while deleting the document.');
+      toast.error((error instanceof Error ? error.message : 'An error occurred while deleting the document.'));
     }
   };
 
@@ -377,8 +377,8 @@ export default function ResidentDetailPage() {
         }
 
         fetchTenancyData(false); // This will refetch the data and update the UI
-    } catch (err: any) {
-        alert(`Error: ${err.message}`);
+    } catch (err: unknown) {
+        alert(`Error: ${err instanceof Error ? err.message : 'An unexpected error occurred'}`);
     }
   };
 
@@ -428,9 +428,9 @@ export default function ResidentDetailPage() {
       // Show success message
       toast.success('Verification finalized successfully!');
       
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Finalization error:', err);
-      toast.error(err.message);
+      toast.error(err instanceof Error ? err.message : 'An unexpected error occurred');
       // We don't need to re-throw. The toast will show the error.
     }
   };
@@ -452,8 +452,8 @@ export default function ResidentDetailPage() {
 
       setCreateLeaseDialogOpen(false);
       fetchTenancyData(false);
-    } catch (err: any) {
-      alert(`Error creating lease: ${err.message}`);
+    } catch (err: unknown) {
+      alert(`Error creating lease: ${err instanceof Error ? err.message : 'An unexpected error occurred'}`);
     }
   };
 
@@ -472,8 +472,8 @@ export default function ResidentDetailPage() {
       }
       const data = await response.json();
       setTenancyData(data);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {
       if (showLoadingSpinner) setLoading(false);
     }
@@ -570,8 +570,8 @@ export default function ResidentDetailPage() {
       }
 
       fetchTenancyData(false);
-    } catch (err: any) {
-      alert(`Error: ${err.message}`);
+    } catch (err: unknown) {
+      alert(`Error: ${err instanceof Error ? err.message : 'An unexpected error occurred'}`);
     }
   };
 

@@ -4,6 +4,14 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import Papa from 'papaparse';
 
+interface RentRollRow {
+  unitNumber?: string;
+  residentName?: string;
+  leaseRent?: string;
+  annualizedIncome?: string;
+  [key: string]: string | undefined;
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -43,7 +51,7 @@ export async function POST(
 
     const fileText = await file.text();
     
-    const parseResult = await new Promise<Papa.ParseResult<any>>((resolve, reject) => {
+    const parseResult = await new Promise<Papa.ParseResult<RentRollRow>>((resolve, reject) => {
         Papa.parse(fileText, {
           header: true,
           skipEmptyLines: true,

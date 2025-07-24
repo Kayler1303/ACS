@@ -59,7 +59,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ message: 'If an account with this email exists, a password reset link has been sent.' }, { status: 200 });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Forgot password error:', error);
     return NextResponse.json({ message: 'An unexpected error occurred.' }, { status: 500 });
   }

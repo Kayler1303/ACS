@@ -31,8 +31,8 @@ export default function UpdateCompliancePage() {
           }
           const data = await res.json();
           setProperty(data);
-        } catch (err: any) {
-          setError(err.message);
+        } catch (err: unknown) {
+          setError(err instanceof Error ? err.message : 'An unexpected error occurred');
         } finally {
           setIsLoading(false);
         }

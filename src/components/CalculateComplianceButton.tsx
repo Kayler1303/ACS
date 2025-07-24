@@ -30,8 +30,8 @@ export default function CalculateComplianceButton({
       }
       setMessage(data.message);
       router.refresh();
-    } catch (error: any) {
-      setMessage(error.message);
+    } catch (error: unknown) {
+      setMessage(error instanceof Error ? error.message : 'An unexpected error occurred');
     } finally {
       setIsLoading(false);
     }

@@ -1,7 +1,7 @@
 // src/services/hud.ts
 
 // In-memory cache
-const cache = new Map<string, any>();
+const cache = new Map<string, Record<string, unknown>>();
 
 const stateNameToAbbreviation: { [key: string]: string } = {
     "alabama": "AL", "alaska": "AK", "arizona": "AZ", "arkansas": "AR", "california": "CA",
@@ -64,7 +64,7 @@ export async function getHudIncomeLimits(county: string, state: string, year: nu
         throw new Error("Unexpected response structure from HUD API for listCounties. Expected an array of counties.");
     }
     
-    const foundCounty = countiesList.find((c: any) => {
+    const foundCounty = countiesList.find((c: Record<string, unknown>) => {
         if (!c) return false;
         const countyName = c.county_name || c.cntyname; // Check both properties
         return countyName && typeof countyName === 'string' && countyName.toLowerCase().startsWith(county.toLowerCase());
@@ -96,7 +96,7 @@ export async function getHudIncomeLimits(county: string, state: string, year: nu
  * Calculate LIHTC maximum rents from income limits
  * LIHTC max rents are typically 30% of the income limit divided by 12 months
  */
-export function calculateLihtcMaxRents(incomeLimitsData: any) {
+export function calculateLihtcMaxRents(incomeLimitsData: Record<string, Record<string, number>>) {
     const maxRents: { [key: string]: { [key: string]: number } } = {};
     
     // Standard bedroom counts and corresponding family sizes
@@ -160,7 +160,7 @@ export async function getHudFairMarketRents(county: string, state: string, year:
     const countiesData = await countiesResponse.json();
     const countiesList = countiesData.data || countiesData;
     
-    const foundCounty = countiesList.find((c: any) => {
+    const foundCounty = countiesList.find((c: Record<string, unknown>) => {
         if (!c) return false;
         const countyName = c.county_name || c.cntyname;
         return countyName && typeof countyName === 'string' && countyName.toLowerCase().startsWith(county.toLowerCase());

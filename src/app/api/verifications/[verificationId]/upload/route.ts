@@ -5,7 +5,8 @@ import { prisma } from '@/lib/prisma';
 import { writeFile } from 'fs/promises';
 import path from 'path';
 import { analyzeIncomeDocument } from '@/services/azureAi';
-import { DocumentStatus } from '@prisma/client';
+import { DocumentStatus, DocumentType } from '@prisma/client';
+import { analyzePaystubs } from '@/services/income';
 
 async function saveFileLocally(fileBuffer: Buffer, fileName: string): Promise<string> {
   const uniqueFileName = `${Date.now()}-${fileName}`;
@@ -42,7 +43,7 @@ export async function POST(
 
     const formData = await req.formData();
     const file = formData.get('file') as File;
-    const documentType = formData.get('documentType') as any;
+    const documentType = formData.get('documentType') as DocumentType;
     const residentId = formData.get('residentId') as string;
 
     if (!file || !documentType || !residentId) {
@@ -65,50 +66,83 @@ export async function POST(
     });
 
     try {
-      const analysisResult = await analyzeIncomeDocument(fileBuffer, "prebuilt-tax.us.w2");
+      const modelId = documentType === DocumentType.W2 ? "prebuilt-tax.us.w2" : "prebuilt-income";
+      const analysisResult = await analyzeIncomeDocument(fileBuffer, modelId);
       console.log("Azure analysis result:", JSON.stringify(analysisResult, null, 2));
 
       const doc = analysisResult.documents?.[0];
       if (doc) {
         const fields = doc.fields;
-        const wages = fields.WagesTipsAndOtherCompensation;
-        const wageAmount = wages && wages.kind === 'number' ? wages.value : 0;
         
-        const taxYearField = fields.TaxYear;
-        const taxYearValue = (taxYearField?.kind === 'string' && taxYearField.value) ? parseInt(taxYearField.value, 10) : 0;
+        if (documentType === DocumentType.W2) {
+            const wages = fields.WagesTipsAndOtherCompensation;
+            const wageAmount = wages && wages.kind === 'number' ? wages.value : 0;
+            
+            const taxYearField = fields.TaxYear;
+            const taxYearValue = (taxYearField?.kind === 'string' && taxYearField.value) ? parseInt(taxYearField.value, 10) : 0;
 
-        const employee = fields.Employee;
-        const employeeName = employee && employee.kind === 'object' ? (employee.properties?.Name)?.content : '';
+            const employee = fields.Employee;
+            const employeeName = employee && employee.kind === 'object' ? (employee.properties?.Name)?.content : '';
 
-        const employer = fields.Employer;
-        const employerName = employer && employer.kind === 'object' ? (employer.properties?.Name)?.content : '';
+            const employer = fields.Employer;
+            const employerName = employer && employer.kind === 'object' ? (employer.properties?.Name)?.content : '';
 
-        const socialSecurityWagesField = fields.SocialSecurityWages;
-        const socialSecurityWages = socialSecurityWagesField && socialSecurityWagesField.kind === 'number' ? socialSecurityWagesField.value : null;
+            const socialSecurityWagesField = fields.SocialSecurityWages;
+            const socialSecurityWages = socialSecurityWagesField && socialSecurityWagesField.kind === 'number' ? socialSecurityWagesField.value : null;
 
-        const medicareWagesField = fields.MedicareWagesAndTips;
-        const medicareWages = medicareWagesField && medicareWagesField.kind === 'number' ? medicareWagesField.value : null;
+            const medicareWagesField = fields.MedicareWagesAndTips;
+            const medicareWages = medicareWagesField && medicareWagesField.kind === 'number' ? medicareWagesField.value : null;
+            
+            if (wageAmount && taxYearValue && employeeName && employerName) {
+                document = await prisma.incomeDocument.update({
+                  where: { id: document.id },
+                  data: {
+                    status: DocumentStatus.COMPLETED,
+                    box1_wages: wageAmount,
+                    box3_ss_wages: socialSecurityWages,
+                    box5_med_wages: medicareWages,
+                    taxYear: taxYearValue,
+                    employeeName: employeeName,
+                    employerName: employerName,
+                    calculatedAnnualizedIncome: wageAmount,
+                  },
+                });
+              } else {
+                console.log("W2 fields not found or empty in Azure response. Document requires manual review.");
+                document = await prisma.incomeDocument.update({
+                  where: { id: document.id },
+                  data: { status: DocumentStatus.NEEDS_REVIEW },
+                });
+              }
+        } else if (documentType === DocumentType.PAYSTUB) {
+            const payPeriodStartDateField = fields.PayPeriodStartDate;
+            const payPeriodStartDate = payPeriodStartDateField?.kind === 'date' ? payPeriodStartDateField.value : null;
+            
+            const payPeriodEndDateField = fields.PayPeriodEndDate;
+            const payPeriodEndDate = payPeriodEndDateField?.kind === 'date' ? payPeriodEndDateField.value : null;
 
-        if (wageAmount && taxYearValue && employeeName && employerName) {
-          document = await prisma.incomeDocument.update({
-            where: { id: document.id },
-            data: {
-              status: DocumentStatus.COMPLETED,
-              box1_wages: wageAmount,
-              box3_ss_wages: socialSecurityWages,
-              box5_med_wages: medicareWages,
-              taxYear: taxYearValue,
-              employeeName: employeeName,
-              employerName: employerName,
-            },
-          });
-        } else {
-          console.log("W2 fields not found or empty in Azure response. Document requires manual review.");
-          document = await prisma.incomeDocument.update({
-            where: { id: document.id },
-            data: { status: DocumentStatus.NEEDS_REVIEW },
-          });
+            const grossPayField = fields.GrossPay;
+            const grossPayAmount = grossPayField?.kind === 'number' ? grossPayField.value : null;
+
+            if(payPeriodStartDate && payPeriodEndDate && grossPayAmount) {
+                document = await prisma.incomeDocument.update({
+                    where: { id: document.id },
+                    data: {
+                        status: DocumentStatus.COMPLETED,
+                        payPeriodStartDate,
+                        payPeriodEndDate,
+                        grossPayAmount
+                    },
+                  });
+            } else {
+                console.log("Paystub fields not found or empty in Azure response. Document requires manual review.");
+                document = await prisma.incomeDocument.update({
+                  where: { id: document.id },
+                  data: { status: DocumentStatus.NEEDS_REVIEW },
+                });
+            }
         }
+
       } else {
         console.log("No document found in Azure response. Document requires manual review.");
         document = await prisma.incomeDocument.update({
@@ -124,9 +158,36 @@ export async function POST(
       });
     }
 
-    return NextResponse.json(document, { status: 201 });
+    if (document.documentType === DocumentType.PAYSTUB && document.status === DocumentStatus.COMPLETED) {
+        const residentPaystubs = await prisma.incomeDocument.findMany({
+            where: {
+                residentId: residentId,
+                verificationId: verificationId,
+                documentType: DocumentType.PAYSTUB,
+                status: DocumentStatus.COMPLETED,
+            }
+        });
+        
+        const analysisResult = analyzePaystubs(residentPaystubs);
+        
+        if (analysisResult.annualizedIncome) {
+            await prisma.incomeDocument.updateMany({
+                where: {
+                    id: { in: residentPaystubs.map(p => p.id) }
+                },
+                data: {
+                    calculatedAnnualizedIncome: analysisResult.annualizedIncome,
+                    payFrequency: analysisResult.payFrequency,
+                }
+            });
+        }
+    }
+
+    const updatedDocument = await prisma.incomeDocument.findUnique({ where: { id: document.id }});
+
+    return NextResponse.json(updatedDocument, { status: 201 });
   } catch (error) {
     console.error('Error uploading document:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
-} 
+}

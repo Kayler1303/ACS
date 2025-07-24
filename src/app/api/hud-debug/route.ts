@@ -30,12 +30,12 @@ export async function GET() {
                 body: responseText
             }
         });
-    } catch (error: any) {
+    } catch (error: unknown) {
         return NextResponse.json({
             hasApiKey: true,
             apiKeyLength: apiKey.length,
             apiKeyStart: apiKey.substring(0, 8) + '...',
-            error: error.message
+            error: error instanceof Error ? error.message : 'An unexpected error occurred'
         });
     }
 } 

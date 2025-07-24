@@ -7,9 +7,9 @@ import { unlink } from 'fs/promises';
 async function deleteFileLocally(filePath: string): Promise<void> {
   try {
     await unlink(filePath);
-  } catch (error: any) {
+  } catch (error: unknown) {
     // If the file doesn't exist, we can ignore the error.
-    if (error.code !== 'ENOENT') {
+    if ((error as { code?: string })?.code !== 'ENOENT') {
       throw error;
     }
   }

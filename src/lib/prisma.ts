@@ -6,7 +6,6 @@ import { PrismaClient } from '@prisma/client';
 // on every reload. This prevents that by storing it on the global object.
 declare global {
   // allow global `var` declarations
-  // eslint-disable-next-line no-var
   var prisma: PrismaClient | undefined;
 }
 

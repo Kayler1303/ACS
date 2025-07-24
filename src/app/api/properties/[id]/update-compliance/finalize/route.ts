@@ -3,6 +3,26 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
+
+interface TenancyData {
+  id: string;
+  rentRollId: string;
+  unitId: string;
+  leaseRent: number;
+  leaseStartDate: Date;
+  leaseEndDate: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface ResidentData {
+  id: string;
+  tenancyId: string;
+  name: string;
+  annualizedIncome: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
 import { IndividualResidentData } from '@/types/compliance';
 
 
@@ -141,10 +161,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         rentRollId: result.rentRollId,
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Finalize error:', error);
-    if (error.message.includes('The following units could not be found') || error.message.includes('Lease start and end dates are required')) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    if (errorMessage.includes('The following units could not be found') || errorMessage.includes('Lease start and end dates are required')) {
+      return NextResponse.json({ error: errorMessage }, { status: 400 });
     }
     return NextResponse.json({ error: 'An unexpected error occurred.' }, { status: 500 });
   }

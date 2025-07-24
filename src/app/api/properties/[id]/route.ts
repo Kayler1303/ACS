@@ -50,7 +50,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     return NextResponse.json(property);
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching full property data:', error);
     return NextResponse.json({ error: 'An unexpected error occurred.' }, { status: 500 });
   }
@@ -88,9 +88,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
     return NextResponse.json({ message: 'Property deleted successfully' }, { status: 200 });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error deleting property:', error);
-    if (error.code === 'P2025') { // Prisma code for record to delete not found
+    if ((error as { code?: string })?.code === 'P2025') { // Prisma code for record to delete not found
         return NextResponse.json({ error: 'Property not found.' }, { status: 404 });
     }
     return NextResponse.json({ error: 'An unexpected error occurred during property deletion.' }, { status: 500 });

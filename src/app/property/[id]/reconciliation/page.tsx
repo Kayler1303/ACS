@@ -55,8 +55,8 @@ export default function ReconciliationPage() {
 
         setProvisionalLeases(leasesData);
         setNewTenancies(tenanciesData);
-      } catch (err: any) {
-        setError(err.message);
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'An unexpected error occurred');
       } finally {
         setIsLoading(false);
       }
@@ -102,8 +102,8 @@ export default function ReconciliationPage() {
       setSelectedLeaseId(null);
       setSelectedTenancyId(null);
 
-    } catch (err: any) {
-      alert(`Error: ${err.message}`);
+    } catch (err: unknown) {
+      alert(`Error: ${err instanceof Error ? err.message : 'An unexpected error occurred'}`);
     }
   };
 

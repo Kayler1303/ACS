@@ -67,8 +67,8 @@ export default function UnitListUploadForm({ propertyId }: UnitListUploadFormPro
       
       setStep(2);
 
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {
       setIsLoading(false);
     }
@@ -101,8 +101,8 @@ export default function UnitListUploadForm({ propertyId }: UnitListUploadFormPro
       // Refresh the page to ensure new data is loaded
       router.refresh();
 
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {
       setIsLoading(false);
     }

@@ -65,8 +65,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
             }
         });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error(`Failed to fetch LIHTC rent data for property ${propertyId}:`, error);
-        return NextResponse.json({ error: error.message || 'An unexpected error occurred.' }, { status: 500 });
+        return NextResponse.json({ error: (error instanceof Error ? error.message : 'An unexpected error occurred.') }, { status: 500 });
     }
 } 

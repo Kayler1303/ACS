@@ -6,14 +6,14 @@ import { getUnitVerificationStatus, PropertyVerificationSummary, UnitVerificatio
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
-  const propertyId = params.id;
+  const { id: propertyId } = await params;
 
   try {
     // Get the property with units, leases, residents, income documents, and rent rolls

@@ -153,6 +153,11 @@ model IncomeDocument {
   employeeName   String?
   employerName   String?
   taxYear        Int?
+  calculatedAnnualizedIncome Float?
+  payPeriodStartDate DateTime?
+  payPeriodEndDate   DateTime?
+  grossPayAmount     Float?
+  payFrequency       String?
   verificationId String
   residentId     String
   resident       Resident       @relation(fields: [residentId], references: [id], onDelete: Cascade)

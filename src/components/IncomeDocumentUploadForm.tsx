@@ -64,8 +64,8 @@ export default function IncomeDocumentUploadForm({ residentId, onUploadComplete,
       setSuccessMessage(data.message);
       onUploadComplete(); // This will trigger the data refetch in the parent component
       
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {
       setIsLoading(false);
     }

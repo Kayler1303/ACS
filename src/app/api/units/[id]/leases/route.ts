@@ -23,7 +23,13 @@ export async function POST(
   }
 
   try {
-    const data: any = {
+    const data: {
+      name: string;
+      unit: { connect: { id: string } };
+      leaseStartDate?: Date;
+      leaseEndDate?: Date;
+      leaseRent?: number;
+    } = {
       name,
       unit: {
         connect: {

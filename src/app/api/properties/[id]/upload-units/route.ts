@@ -145,10 +145,11 @@ export async function POST(
       expectedUnitsCount: property.numberOfUnits,
     }, { status: 200 });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Unit upload parsing error:', error);
-    if (error.message.includes('Could not find a header row')) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    if (errorMessage.includes('Could not find a header row')) {
+      return NextResponse.json({ error: errorMessage }, { status: 400 });
     }
     return NextResponse.json(
       { error: 'An unexpected error occurred during unit upload.' },

@@ -51,8 +51,9 @@ export default function PropertyCreateForm() {
       router.push(`/property/${newProperty.id}/upload-units`);
       console.log('Redirecting to:', `/property/${newProperty.id}/upload-units`);
 
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
+      setError(errorMessage);
       console.error('Error in handleSubmit:', err);
     } finally {
       setIsLoading(false);

@@ -58,8 +58,8 @@ export default function RentRollUploadForm({ propertyId }: RentRollUploadFormPro
 
       router.push(`/property/${propertyId}/reconciliation`);
 
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {
       setIsLoading(false);
     }

@@ -35,7 +35,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
     return NextResponse.json(property);
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching property details:', error);
     return NextResponse.json({ error: 'An unexpected error occurred.' }, { status: 500 });
   }

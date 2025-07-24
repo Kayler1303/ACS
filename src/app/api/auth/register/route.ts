@@ -69,7 +69,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ message: 'User created successfully. Please check your email to verify your account.' }, { status: 201 });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Registration error:', error);
     if (error instanceof PrismaClientKnownRequestError) {
       if (error.code === 'P2002') {

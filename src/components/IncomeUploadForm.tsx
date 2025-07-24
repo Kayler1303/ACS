@@ -44,8 +44,8 @@ const IncomeUploadForm = () => {
       const data = await response.json();
       setResult(data);
 
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {
       setIsUploading(false);
     }

@@ -64,8 +64,8 @@ export async function GET(request: Request) {
             }, { status: 404 });
         }
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error('HUD test route error:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: error instanceof Error ? error.message : 'An unexpected error occurred' }, { status: 500 });
     }
 } 
