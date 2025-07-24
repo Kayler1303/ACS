@@ -1317,7 +1317,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                                  <div className="flex flex-col">
                                    <Link
                                      href={`/property/${property.id}/rent-roll/${selectedRentRollId}/unit/${unit.id}`}
-                                     className="text-sm text-brand-blue hover:text-brand-accent underline cursor-pointer"
+                                     className="text-sm text-gray-900 hover:text-brand-blue cursor-pointer"
                                    >
                                      {lease.name}
                                    </Link>
@@ -1337,7 +1337,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                                    ) : (
                                      <Link
                                        href={`/property/${property.id}/rent-roll/${selectedRentRollId}/unit/${unit.id}`}
-                                       className="text-xs text-brand-blue hover:text-brand-accent underline cursor-pointer text-center"
+                                       className="text-xs text-red-600 hover:text-red-800 cursor-pointer text-center"
                                      >
                                        <div>Income Verification</div>
                                        <div>Not Finalized</div>
