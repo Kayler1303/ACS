@@ -32,6 +32,13 @@ interface ProvisionalLease {
   unitId: string;
   isVerificationFinalized: boolean;
   residentCount: number;
+  amiBucketInfo?: {
+    actualBucket: string;
+    complianceBucket: string;
+    amiPercentage: number;
+    householdIncome: number;
+    householdSize: number;
+  };
 }
 
 interface ProcessedUnit {
@@ -241,6 +248,12 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
         if (res.ok) {
           const data = await res.json();
           setProvisionalLeases(data);
+          
+          // Fetch AMI bucket data for finalized provisional leases
+          const finalizedLeases = data.filter((lease: ProvisionalLease) => lease.isVerificationFinalized);
+          for (const lease of finalizedLeases) {
+            fetchAmiBucketForProvisionalLease(lease.id);
+          }
         } else {
           console.error('Failed to fetch provisional leases:', res.status, res.statusText);
         }
@@ -251,6 +264,27 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
 
     fetchProvisionalLeases();
   }, [property.id]);
+
+  // Function to fetch AMI bucket data for a specific provisional lease
+  const fetchAmiBucketForProvisionalLease = async (leaseId: string) => {
+    try {
+      const response = await fetch(`/api/leases/${leaseId}/ami-bucket`);
+      if (response.ok) {
+        const amiBucketData = await response.json();
+        
+        // Update the provisional lease with AMI bucket information
+        setProvisionalLeases(prev => 
+          prev.map(lease => 
+            lease.id === leaseId 
+              ? { ...lease, amiBucketInfo: amiBucketData }
+              : lease
+          )
+        );
+      }
+    } catch (error) {
+      console.error(`Error fetching AMI bucket data for lease ${leaseId}:`, error);
+    }
+  };
 
   const getActualBucket = useCallback((totalIncome: number, residentCount: number, hudIncomeLimits: HudIncomeLimits, complianceOption: string): string => {
     if (residentCount === 0) return 'Vacant';
@@ -1053,9 +1087,24 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                                >
                                  <div className="flex flex-col">
                                    <span>{lease.name}</span>
-                                   <span className="text-xs text-gray-500">
-                                     {lease.residentCount} {lease.residentCount === 1 ? 'resident' : 'residents'}
-                                   </span>
+                                   {lease.isVerificationFinalized && lease.amiBucketInfo ? (
+                                     <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                       lease.amiBucketInfo.actualBucket === '50% AMI' ? 'bg-green-100 text-green-800' :
+                                       lease.amiBucketInfo.actualBucket === '60% AMI' ? 'bg-blue-100 text-blue-800' :
+                                       lease.amiBucketInfo.actualBucket === '80% AMI' ? 'bg-purple-100 text-purple-800' :
+                                       'bg-gray-100 text-gray-800'
+                                     }`}>
+                                       {lease.amiBucketInfo.actualBucket}
+                                     </span>
+                                   ) : lease.isVerificationFinalized ? (
+                                     <span className="text-xs text-gray-400 italic">
+                                       Calculating...
+                                     </span>
+                                   ) : (
+                                     <span className="text-xs text-gray-500">
+                                       {lease.residentCount} {lease.residentCount === 1 ? 'resident' : 'residents'}
+                                     </span>
+                                   )}
                                  </div>
                                </label>
                              </div>
