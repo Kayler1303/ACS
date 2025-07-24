@@ -721,7 +721,107 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     };
   };
 
+  // Calculate projected compliance with selected provisional leases
+  const calculateProjectedSummaryStats = () => {
+    const totalUnits = processedTenancies.length;
+    const targetCounts = getTargetCounts(complianceOption, totalUnits);
+    const targets = getTargetPercentages(complianceOption, totalUnits);
+    
+    // Create projected tenancies by replacing compliance buckets for selected provisional leases
+    const projectedTenancies = processedTenancies.map(unit => {
+      // Check if this unit has a selected provisional lease
+      const selectedProvisionalLease = unit.provisionalLeases?.find(lease => 
+        selectedProvisionalLeases.has(lease.id) && lease.amiBucketInfo
+      );
+      
+      if (selectedProvisionalLease && selectedProvisionalLease.amiBucketInfo) {
+        // Replace the compliance bucket with the provisional lease's AMI bucket
+        return {
+          ...unit,
+          complianceBucket: selectedProvisionalLease.amiBucketInfo.actualBucket
+        };
+      }
+      
+      return unit;
+    });
+    
+    const bucketCounts = projectedTenancies.reduce((acc, unit) => {
+      const bucket = unit.complianceBucket;
+      acc[bucket] = (acc[bucket] || 0) + 1;
+      return acc;
+    }, {} as {[key: string]: number});
+
+    // Calculate compliance with vacants - proper vacant unit distribution
+    const bucketCountsWithVacants = { ...bucketCounts };
+    const vacantUnits = bucketCounts['Vacant'] || 0;
+    
+    if (vacantUnits > 0) {
+      // Remove vacant units from the vacant bucket for the "with vacants" calculation
+      bucketCountsWithVacants['Vacant'] = 0;
+      
+      // Get all target buckets in priority order (lowest AMI first)
+      const targetBuckets = Object.keys(targetCounts).filter(bucket => targetCounts[bucket] > 0);
+      const bucketPriority = ['50% AMI', '60% AMI', '80% AMI'];
+      const sortedTargetBuckets = targetBuckets.sort((a, b) => {
+        const aIndex = bucketPriority.indexOf(a);
+        const bIndex = bucketPriority.indexOf(b);
+        if (aIndex === -1) return 1;
+        if (bIndex === -1) return -1;
+        return aIndex - bIndex;
+      });
+      
+      let remainingVacantUnits = vacantUnits;
+      
+      // Distribute vacant units to buckets that need them (starting with lowest AMI)
+      for (const bucket of sortedTargetBuckets) {
+        if (remainingVacantUnits <= 0) break;
+        
+        const targetCount = targetCounts[bucket];
+        const currentCount = bucketCounts[bucket] || 0;
+        const shortage = Math.max(0, targetCount - currentCount);
+        
+        const unitsToAdd = Math.min(shortage, remainingVacantUnits);
+        if (unitsToAdd > 0) {
+          bucketCountsWithVacants[bucket] = currentCount + unitsToAdd;
+          remainingVacantUnits -= unitsToAdd;
+        }
+      }
+      
+      // Put any remaining vacant units in the market bucket
+      if (remainingVacantUnits > 0) {
+        bucketCountsWithVacants['Market'] = (bucketCountsWithVacants['Market'] || 0) + remainingVacantUnits;
+      }
+    }
+
+    // Calculate verified income units by bucket (excluding vacants) - using projected data
+    const verifiedIncomeByBucket: { [key: string]: { verified: number; total: number; percentage: number } } = {};
+    
+    Object.keys(bucketCounts).forEach(bucket => {
+      if (bucket === 'Vacant') return; // Skip vacant units
+      
+      const unitsInBucket = projectedTenancies.filter(unit => unit.complianceBucket === bucket);
+      const verifiedInBucket = unitsInBucket.filter(unit => unit.verificationStatus === 'Verified');
+      
+      verifiedIncomeByBucket[bucket] = {
+        verified: verifiedInBucket.length,
+        total: unitsInBucket.length,
+        percentage: unitsInBucket.length > 0 ? (verifiedInBucket.length / unitsInBucket.length * 100) : 0
+      };
+    });
+
+    return { 
+      totalUnits, 
+      targetCounts, 
+      targets, 
+      bucketCounts, 
+      bucketCountsWithVacants, 
+      verifiedIncomeByBucket 
+    };
+  };
+
   const stats = calculateSummaryStats();
+  const projectedStats = calculateProjectedSummaryStats();
+  const hasSelectedProvisionalLeases = selectedProvisionalLeases.size > 0;
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -951,6 +1051,135 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                           </td>
                           <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">
                             {stats.verifiedIncomeByBucket[bucket] ? stats.verifiedIncomeByBucket[bucket].verified : '-'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Projected Compliance Summary */}
+      {processedTenancies.length > 0 && hasSelectedProvisionalLeases && (
+        <div className="mb-8 bg-white rounded-lg shadow-md overflow-hidden">
+          <div className="bg-gradient-to-r from-green-600 to-green-700 px-6 py-4">
+            <h2 className="text-lg font-semibold text-white">Projected Compliance (With Selected Future Leases)</h2>
+            <p className="text-green-100 text-sm mt-1">
+              Compliance analysis including {selectedProvisionalLeases.size} selected provisional lease{selectedProvisionalLeases.size === 1 ? '' : 's'}
+            </p>
+          </div>
+          
+          <div className="p-6">
+            {/* Percentages Section */}
+            <div className="mb-8">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Percentages</h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full table-fixed">
+                  <thead>
+                    <tr className="bg-gradient-to-r from-green-600 to-green-700">
+                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Bucket</th>
+                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Target</th>
+                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Projected</th>
+                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance</th>
+                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance With Vacants</th>
+                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Over/(Under)</th>
+                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Verified Income Units</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {Object.entries(projectedStats.targets).map(([bucket, target], index) => {
+                      const projected = ((projectedStats.bucketCounts[bucket] || 0) / projectedStats.totalUnits * 100);
+                      const compliance = projected; // Compliance column shows percentage of total units in this bucket
+                      const withVacants = ((projectedStats.bucketCountsWithVacants[bucket] || 0) / projectedStats.totalUnits * 100);
+                      const overUnder = projected - target;
+                      const current = ((stats.bucketCounts[bucket] || 0) / stats.totalUnits * 100);
+                      const change = projected - current;
+                      
+                      return (
+                        <tr key={bucket}>
+                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm font-medium text-gray-900">{bucket}</td>
+                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{target.toFixed(1)}%</td>
+                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">
+                            <div className="flex flex-col items-center">
+                              <span>{projected.toFixed(1)}%</span>
+                              {change !== 0 && (
+                                <span className={`text-xs font-medium ${
+                                  change > 0 ? 'text-green-600' : 'text-red-600'
+                                }`}>
+                                  {change > 0 ? '+' : ''}{change.toFixed(1)}%
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{compliance.toFixed(1)}%</td>
+                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{withVacants.toFixed(1)}%</td>
+                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">
+                            {overUnder >= 0 ? '+' : ''}{overUnder.toFixed(1)}%
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">
+                            {projectedStats.verifiedIncomeByBucket[bucket] ? `${projectedStats.verifiedIncomeByBucket[bucket].percentage.toFixed(1)}%` : '-'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Unit Counts Section */}
+            <div>
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Unit Counts</h3>
+              <div className="overflow-x-auto">
+                <table className="min-w-full table-fixed">
+                  <thead>
+                    <tr className="bg-gradient-to-r from-green-600 to-green-700">
+                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Bucket</th>
+                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Target</th>
+                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Projected</th>
+                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance</th>
+                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance With Vacants</th>
+                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Over/(Under)</th>
+                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Verified Income Units</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {Object.entries(projectedStats.targets).map(([bucket, targetPercent], index) => {
+                      const targetUnits = projectedStats.targetCounts[bucket] || 0;
+                      const projectedUnits = projectedStats.bucketCounts[bucket] || 0;
+                      const complianceUnits = projectedUnits;
+                      const withVacantsUnits = projectedStats.bucketCountsWithVacants[bucket] || 0;
+                      const overUnderUnits = projectedUnits - targetUnits;
+                      const currentUnits = stats.bucketCounts[bucket] || 0;
+                      const changeUnits = projectedUnits - currentUnits;
+                      
+                      return (
+                        <tr key={bucket}>
+                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm font-medium text-gray-900">{bucket}</td>
+                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{targetUnits}</td>
+                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">
+                            <div className="flex flex-col items-center">
+                              <span>{projectedUnits}</span>
+                              {changeUnits !== 0 && (
+                                <span className={`text-xs font-medium ${
+                                  changeUnits > 0 ? 'text-green-600' : 'text-red-600'
+                                }`}>
+                                  {changeUnits > 0 ? '+' : ''}{changeUnits}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{complianceUnits}</td>
+                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{withVacantsUnits}</td>
+                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">
+                            {overUnderUnits >= 0 ? '+' : ''}{overUnderUnits}
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">
+                            {projectedStats.verifiedIncomeByBucket[bucket] ? projectedStats.verifiedIncomeByBucket[bucket].verified : '-'}
                           </td>
                         </tr>
                       );
