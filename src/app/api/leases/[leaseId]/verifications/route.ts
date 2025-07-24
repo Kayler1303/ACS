@@ -6,14 +6,14 @@ import { add, endOfDay, startOfDay, sub } from 'date-fns';
 
 export async function POST(
   req: Request,
-  { params }: { params: { leaseId: string } }
+  { params }: { params: Promise<{ leaseId: string }> }
 ) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { leaseId } = params;
+  const { leaseId } = await params;
 
   if (!leaseId) {
     return NextResponse.json({ error: 'Lease ID is required' }, { status: 400 });

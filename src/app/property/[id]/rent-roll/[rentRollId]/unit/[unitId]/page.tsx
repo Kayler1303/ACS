@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useState, useEffect, Fragment, useCallback } from 'react';
 import Link from 'next/link';
 import IncomeVerificationDocumentUploadForm from '@/components/IncomeVerificationDocumentUploadForm';
+import IncomeVerificationUploadDialog from '@/components/IncomeVerificationUploadDialog';
 import VerificationFinalizationDialog from '@/components/VerificationFinalizationDialog';
 import CreateLeaseDialog from '@/components/CreateLeaseDialog';
 import AddResidentDialog from '@/components/AddResidentDialog';
@@ -244,6 +245,13 @@ export default function ResidentDetailPage() {
   const [isAddResidentDialogOpen, setAddResidentDialogOpen] = useState(false);
   const [isRenewalDialogOpen, setRenewalDialogOpen] = useState(false);
   const [isInitialAddResidentDialogOpen, setInitialAddResidentDialogOpen] = useState(false);
+  const [isUploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [uploadDialogData, setUploadDialogData] = useState<{
+    verificationId: string;
+    leaseName: string;
+    residents: Array<{ id: string; name: string }>;
+    hasExistingDocuments: boolean;
+  } | null>(null);
   const [selectedLeaseForResident, setSelectedLeaseForResident] = useState<Lease | null>(null);
   const [newLeaseName, setNewLeaseName] = useState('');
   const [newLeaseStart, setNewLeaseStart] = useState('');
@@ -394,7 +402,7 @@ export default function ResidentDetailPage() {
 
   const formatUnitNumber = (unitNumber: string) => parseInt(unitNumber, 10).toString();
 
-  const handleCreateNewVerification = async (leaseId: string) => {
+  const handleStartVerification = async (leaseId: string) => {
     if (!tenancyData) return;
     
     // Only show confirmation if there's an existing in-progress verification
@@ -413,6 +421,17 @@ export default function ResidentDetailPage() {
             const data = await res.json();
             throw new Error(data.error || 'Failed to start new verification');
         }
+
+        const newVerification = await res.json();
+        
+        // Set up dialog data and open it
+        setUploadDialogData({
+          verificationId: newVerification.id,
+          leaseName: lease?.name || 'Unknown Lease',
+          residents: lease?.residents.map(r => ({ id: r.id, name: r.name })) || [],
+          hasExistingDocuments: false
+        });
+        setUploadDialogOpen(true);
 
         fetchTenancyData(false); // This will refetch the data and update the UI
     } catch (err: unknown) {
@@ -601,24 +620,7 @@ export default function ResidentDetailPage() {
     }
   };
 
-  const handleStartVerification = async (leaseId: string) => {
-    if (!tenancyData) return;
-    
-    try {
-      const res = await fetch(`/api/leases/${leaseId}/verifications`, {
-        method: 'POST',
-      });
 
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to start verification');
-      }
-
-      fetchTenancyData(false);
-    } catch (err: unknown) {
-      alert(`Error: ${err instanceof Error ? err.message : 'An unexpected error occurred'}`);
-    }
-  };
 
   const leasePeriods = createLeasePeriods();
 
@@ -887,7 +889,15 @@ export default function ResidentDetailPage() {
                           {period.status === 'in_progress' && period.verification && (
                             <>
                               <button 
-                                onClick={() => {/* TODO: Open verification details modal */}}
+                                onClick={() => {
+                                  setUploadDialogData({
+                                    verificationId: period.verification!.id,
+                                    leaseName: period.name,
+                                    residents: period.residents.map(r => ({ id: r.id, name: r.name })),
+                                    hasExistingDocuments: !!period.verification?.incomeDocuments?.length
+                                  });
+                                  setUploadDialogOpen(true);
+                                }}
                                 className="text-blue-600 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded-md transition-colors block w-full text-left"
                               >
                                 Continue Verification
@@ -930,21 +940,7 @@ export default function ResidentDetailPage() {
                         </div>
                       </td>
                     </tr>
-                    {period.status === 'in_progress' && (
-                      <tr>
-                        <td colSpan={4} className="p-0 bg-white">
-                          <div className="p-6 bg-blue-50 border-y-2 border-blue-100">
-                            <h4 className="font-semibold text-gray-700 mb-3">Upload Documents for This Verification Period</h4>
-                            <IncomeVerificationDocumentUploadForm
-                              verificationId={period.verification.id}
-                              residents={period.residents.map(r => ({ id: r.id, name: r.name }))}
-                              onUploadComplete={() => fetchTenancyData(false)}
-                              hasExistingDocuments={!!period.verification?.incomeDocuments?.length}
-                            />
-                          </div>
-                        </td>
-                      </tr>
-                    )}
+
                   </Fragment>
                 ))}
               </tbody>
@@ -1064,6 +1060,18 @@ export default function ResidentDetailPage() {
             tenancyData.unit.leases.find(l => l.tenancy && l.leaseStartDate)
               ?.residents || []
           }
+        />
+      )}
+
+      {uploadDialogData && (
+        <IncomeVerificationUploadDialog
+          isOpen={isUploadDialogOpen}
+          onClose={() => setUploadDialogOpen(false)}
+          verificationId={uploadDialogData.verificationId}
+          onUploadComplete={() => fetchTenancyData(false)}
+          residents={uploadDialogData.residents}
+          hasExistingDocuments={uploadDialogData.hasExistingDocuments}
+          leaseName={uploadDialogData.leaseName}
         />
       )}
     </div>
