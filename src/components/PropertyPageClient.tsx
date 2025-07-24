@@ -653,11 +653,21 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       }
     }
 
-    // Calculate verified income units
-    const verifiedIncomeUnits = processedTenancies.filter(unit => 
-      unit.verificationStatus === 'Verified'
-    ).length;
-    const verifiedIncomePercentage = totalUnits > 0 ? (verifiedIncomeUnits / totalUnits * 100) : 0;
+    // Calculate verified income units by bucket (excluding vacants)
+    const verifiedIncomeByBucket: { [key: string]: { verified: number; total: number; percentage: number } } = {};
+    
+    Object.keys(bucketCounts).forEach(bucket => {
+      if (bucket === 'Vacant') return; // Skip vacant units
+      
+      const unitsInBucket = processedTenancies.filter(unit => unit.complianceBucket === bucket);
+      const verifiedInBucket = unitsInBucket.filter(unit => unit.verificationStatus === 'Verified');
+      
+      verifiedIncomeByBucket[bucket] = {
+        verified: verifiedInBucket.length,
+        total: unitsInBucket.length,
+        percentage: unitsInBucket.length > 0 ? (verifiedInBucket.length / unitsInBucket.length * 100) : 0
+      };
+    });
 
     return { 
       totalUnits, 
@@ -665,8 +675,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       targets, 
       bucketCounts, 
       bucketCountsWithVacants, 
-      verifiedIncomeUnits, 
-      verifiedIncomePercentage 
+      verifiedIncomeByBucket 
     };
   };
 
@@ -854,7 +863,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                             {overUnder >= 0 ? '+' : ''}{overUnder.toFixed(1)}%
                           </td>
                           <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">
-                            {index === 0 ? `${stats.verifiedIncomePercentage.toFixed(1)}%` : '-'}
+                            {stats.verifiedIncomeByBucket[bucket] ? `${stats.verifiedIncomeByBucket[bucket].percentage.toFixed(1)}%` : '-'}
                           </td>
                         </tr>
                       );
@@ -899,7 +908,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                             {overUnderUnits >= 0 ? '+' : ''}{overUnderUnits}
                           </td>
                           <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">
-                            {index === 0 ? stats.verifiedIncomeUnits : '-'}
+                            {stats.verifiedIncomeByBucket[bucket] ? stats.verifiedIncomeByBucket[bucket].verified : '-'}
                           </td>
                         </tr>
                       );
