@@ -450,7 +450,14 @@ export default function ResidentDetailPage() {
         throw new Error(data.error || 'Failed to create lease');
       }
 
+      const newLease = await res.json();
+      
       setCreateLeaseDialogOpen(false);
+      
+      // Automatically open the "Add Resident" dialog for the newly created lease
+      setSelectedLeaseForResident(newLease);
+      setInitialAddResidentDialogOpen(true);
+      
       fetchTenancyData(false);
     } catch (err: unknown) {
       alert(`Error creating lease: ${err instanceof Error ? err.message : 'An unexpected error occurred'}`);
