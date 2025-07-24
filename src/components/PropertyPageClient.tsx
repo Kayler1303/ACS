@@ -841,15 +841,15 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
         <div className="px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <span className="text-sm font-medium text-gray-700">Actions:</span>
+              <span className="text-base font-bold text-gray-700">Actions:</span>
               <a
                 href={`/property/${property.id}/update-compliance`}
-                className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-blue transition-colors"
+                className="inline-flex items-center px-4 py-2 text-base font-bold text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-blue transition-colors"
               >
                 📁 Update Compliance Data
               </a>
             </div>
-            <div className="text-xs text-gray-500">
+            <div className="text-sm text-gray-500">
               Upload new resident & rent roll data to refresh analysis
             </div>
           </div>
