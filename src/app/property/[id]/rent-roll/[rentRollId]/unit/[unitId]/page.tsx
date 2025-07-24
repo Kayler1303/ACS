@@ -252,6 +252,9 @@ export default function ResidentDetailPage() {
     residents: Array<{ id: string; name: string }>;
     hasExistingDocuments: boolean;
   } | null>(null);
+
+  // AMI bucket calculation state
+  const [amiBucketData, setAmiBucketData] = useState<Record<string, any>>({});
   const [selectedLeaseForResident, setSelectedLeaseForResident] = useState<Lease | null>(null);
   const [isNewLeaseWorkflow, setIsNewLeaseWorkflow] = useState(false);
   const [newLeaseName, setNewLeaseName] = useState('');
@@ -629,6 +632,19 @@ export default function ResidentDetailPage() {
     }
   }, [tenancyData, fetchTenancyData]);
 
+  // Function to fetch AMI bucket data for a completed lease
+  const fetchAmiBucketData = async (leaseId: string) => {
+    try {
+      const response = await fetch(`/api/leases/${leaseId}/ami-bucket`);
+      if (response.ok) {
+        const data = await response.json();
+        setAmiBucketData(prev => ({ ...prev, [leaseId]: data }));
+      }
+    } catch (error) {
+      console.error('Error fetching AMI bucket data:', error);
+    }
+  };
+
   // New function to create lease periods based on tenancy data
   const createLeasePeriods = () => {
     if (!tenancyData) return [];
@@ -644,15 +660,24 @@ export default function ResidentDetailPage() {
       const currentDate = new Date();
 
       const verification = lease.incomeVerifications.find(v => v.status === 'IN_PROGRESS') || lease.incomeVerifications.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+      const status = getPeriodStatus({ verification });
+
+      const isProvisional = !lease.tenancy;
+      
+      // Fetch AMI bucket data for completed provisional leases
+      if (status === 'completed' && isProvisional && !amiBucketData[lease.id]) {
+        fetchAmiBucketData(lease.id);
+      }
 
       return {
         ...lease,
         periodStart: leaseStart,
         periodEnd: leaseEnd,
         isCurrentPeriod: leaseStart && leaseEnd && currentDate >= leaseStart && currentDate <= leaseEnd,
-        status: getPeriodStatus({ verification }),
+        status,
         verification,
         isProvisional: !lease.tenancy,
+        amiBucketInfo: amiBucketData[lease.id],
       };
     }).sort((a, b) => {
       // Leases without a start date should be treated as newest and appear first
@@ -823,6 +848,9 @@ export default function ResidentDetailPage() {
                     Status
                   </th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    AMI Qualification
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Action
                   </th>
                 </tr>
@@ -943,6 +971,43 @@ export default function ResidentDetailPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {getStatusBadge(period.status)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        {period.status === 'completed' && period.isProvisional && period.amiBucketInfo ? (
+                          <div className="space-y-1">
+                            <div className="flex items-center space-x-2">
+                              <span className="text-xs font-medium text-gray-700">AMI Bucket:</span>
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                period.amiBucketInfo.actualBucket === '50% AMI' ? 'bg-green-100 text-green-800' :
+                                period.amiBucketInfo.actualBucket === '60% AMI' ? 'bg-blue-100 text-blue-800' :
+                                period.amiBucketInfo.actualBucket === '80% AMI' ? 'bg-purple-100 text-purple-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                {period.amiBucketInfo.actualBucket}
+                              </span>
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {period.amiBucketInfo.amiPercentage?.toFixed(1)}% AMI
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {period.amiBucketInfo.householdSize} {period.amiBucketInfo.householdSize === 1 ? 'person' : 'people'}, 
+                              {' '}{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(period.amiBucketInfo.householdIncome)}
+                            </div>
+                            {period.amiBucketInfo.hudDataYear && (
+                              <div className="text-xs text-gray-400">
+                                {period.amiBucketInfo.hudDataYear} HUD Limits
+                              </div>
+                            )}
+                          </div>
+                        ) : period.status === 'completed' && period.isProvisional ? (
+                          <div className="text-xs text-gray-400 italic">
+                            Calculating...
+                          </div>
+                        ) : (
+                          <div className="text-xs text-gray-400">
+                            -
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex flex-col space-y-2">
