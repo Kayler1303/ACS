@@ -30,6 +30,7 @@ interface ProvisionalLease {
   leaseEndDate?: string;
   leaseRent?: number;
   unitId: string;
+  isVerificationFinalized: boolean;
 }
 
 interface ProcessedUnit {
@@ -491,6 +492,12 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
 
   // Handle provisional lease checkbox changes
   const handleProvisionalLeaseToggle = (leaseId: string) => {
+    // Find the lease to check if verification is finalized
+    const lease = provisionalLeases.find(l => l.id === leaseId);
+    if (!lease?.isVerificationFinalized) {
+      return; // Don't allow toggle if verification isn't finalized
+    }
+
     setSelectedProvisionalLeases(prev => {
       const newSet = new Set(prev);
       if (newSet.has(leaseId)) {
@@ -1029,11 +1036,19 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                                  id={`lease-${lease.id}`}
                                  checked={selectedProvisionalLeases.has(lease.id)}
                                  onChange={() => handleProvisionalLeaseToggle(lease.id)}
-                                 className="h-4 w-4 text-brand-blue focus:ring-brand-blue border-gray-300 rounded"
+                                 disabled={!lease.isVerificationFinalized}
+                                 className={`h-4 w-4 text-brand-blue focus:ring-brand-blue border-gray-300 rounded ${
+                                   !lease.isVerificationFinalized ? 'opacity-50 cursor-not-allowed' : ''
+                                 }`}
                                />
                                <label
                                  htmlFor={`lease-${lease.id}`}
-                                 className="text-sm text-gray-700 cursor-pointer"
+                                 className={`text-sm cursor-pointer ${
+                                   lease.isVerificationFinalized 
+                                     ? 'text-gray-700' 
+                                     : 'text-gray-400 cursor-not-allowed'
+                                 }`}
+                                 title={!lease.isVerificationFinalized ? 'Income verification must be finalized first' : ''}
                                >
                                  {lease.name}
                                </label>

@@ -5,14 +5,14 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const propertyId = params.id;
+  const { id: propertyId } = await params;
 
   try {
     const provisionalLeases = await prisma.lease.findMany({
@@ -24,10 +24,23 @@ export async function GET(
       },
       include: {
         unit: true,
+        incomeVerifications: {
+          orderBy: {
+            createdAt: 'desc'
+          },
+          take: 1
+        }
       },
     });
 
-    return NextResponse.json(provisionalLeases, { status: 200 });
+    // Add verification status to each lease
+    const leasesWithVerificationStatus = provisionalLeases.map(lease => ({
+      ...lease,
+      isVerificationFinalized: lease.incomeVerifications.length > 0 && 
+        lease.incomeVerifications[0].status === 'FINALIZED'
+    }));
+
+    return NextResponse.json(leasesWithVerificationStatus, { status: 200 });
   } catch (error) {
     console.error('Error fetching provisional leases:', error);
     return NextResponse.json(
