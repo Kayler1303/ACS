@@ -314,14 +314,24 @@ export default function ResidentDetailPage() {
       }
 
       toast.success('Resident added successfully.');
-      fetchTenancyData(false); // Refetch data to update the UI
       
       // If this was a new lease workflow, automatically start income verification
       if (isNewLeaseWorkflow && selectedLeaseForResident) {
+        // Fetch fresh data to get all current residents
+        await fetchTenancyData(false);
+        
+        // Get current residents for the lease (including the one we just added)
+        const res = await fetch(`/api/properties/${propertyId}/rent-roll/${rentRollId}/unit/${unitId}`);
+        const freshData = await res.json();
+        const currentLease = freshData.unit.leases.find((l: any) => l.id === selectedLeaseForResident.id);
+        const currentResidents = currentLease?.residents?.map((r: any) => ({ id: r.id, name: r.name })) || [];
+        
         setTimeout(() => {
-          handleStartVerification(selectedLeaseForResident.id);
-        }, 1000); // Small delay to ensure data has refreshed
+          handleStartVerification(selectedLeaseForResident.id, currentResidents);
+        }, 200); // Small delay to ensure everything is ready
         setIsNewLeaseWorkflow(false); // Reset the flag
+      } else {
+        fetchTenancyData(false); // Refetch data to update the UI
       }
     } catch (error: unknown) {
       console.error('Error adding resident:', error);
@@ -384,14 +394,23 @@ export default function ResidentDetailPage() {
         toast.success(`Successfully added ${newResidents.length} new residents.`);
       }
 
-      fetchTenancyData(false);
-      
       // If this was a new lease workflow, automatically start income verification
       if (isNewLeaseWorkflow && selectedLeaseForResident) {
+        // Fetch fresh data to get all current residents
+        await fetchTenancyData(false);
+        
+        // Get current residents for the lease
+        const res = await fetch(`/api/properties/${propertyId}/rent-roll/${rentRollId}/unit/${unitId}`);
+        const freshData = await res.json();
+        const currentLease = freshData.unit.leases.find((l: any) => l.id === selectedLeaseForResident.id);
+        const currentResidents = currentLease?.residents?.map((r: any) => ({ id: r.id, name: r.name })) || [];
+        
         setTimeout(() => {
-          handleStartVerification(selectedLeaseForResident.id);
-        }, 1000); // Small delay to ensure data has refreshed
+          handleStartVerification(selectedLeaseForResident.id, currentResidents);
+        }, 200); // Small delay to ensure everything is ready
         setIsNewLeaseWorkflow(false); // Reset the flag
+      } else {
+        fetchTenancyData(false);
       }
     } catch (error: unknown) {
       console.error('Error adding residents:', error);
@@ -425,7 +444,7 @@ export default function ResidentDetailPage() {
 
   const formatUnitNumber = (unitNumber: string) => parseInt(unitNumber, 10).toString();
 
-  const handleStartVerification = async (leaseId: string) => {
+  const handleStartVerification = async (leaseId: string, overrideResidents?: Array<{ id: string; name: string }>) => {
     if (!tenancyData) return;
     
     // Only show confirmation if there's an existing in-progress verification
@@ -447,16 +466,33 @@ export default function ResidentDetailPage() {
 
         const newVerification = await res.json();
         
-        // Set up dialog data and open it
-        setUploadDialogData({
-          verificationId: newVerification.id,
-          leaseName: lease?.name || 'Unknown Lease',
-          residents: lease?.residents.map(r => ({ id: r.id, name: r.name })) || [],
-          hasExistingDocuments: false
-        });
-        setUploadDialogOpen(true);
-
-        fetchTenancyData(false); // This will refetch the data and update the UI
+        // If we have override residents (from fresh addition), use those
+        // Otherwise, refresh data and get current residents from state
+        if (overrideResidents) {
+          setUploadDialogData({
+            verificationId: newVerification.id,
+            leaseName: lease?.name || 'Unknown Lease',
+            residents: overrideResidents,
+            hasExistingDocuments: false
+          });
+          setUploadDialogOpen(true);
+          fetchTenancyData(false); // Refresh data in background
+        } else {
+          // Refresh data and then set up dialog with current residents
+          await fetchTenancyData(false);
+          
+          // Use setTimeout to ensure React state has updated after fetchTenancyData
+          setTimeout(() => {
+            const currentLease = tenancyData?.unit.leases.find(l => l.id === leaseId);
+            setUploadDialogData({
+              verificationId: newVerification.id,
+              leaseName: currentLease?.name || 'Unknown Lease',
+              residents: currentLease?.residents.map(r => ({ id: r.id, name: r.name })) || [],
+              hasExistingDocuments: false
+            });
+            setUploadDialogOpen(true);
+          }, 100); // Small delay to ensure state update
+        }
     } catch (err: unknown) {
         alert(`Error: ${err instanceof Error ? err.message : 'An unexpected error occurred'}`);
     }
