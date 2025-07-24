@@ -90,6 +90,11 @@ interface TenancyData {
   rentRoll: RentRoll;
 }
 
+interface NewResident {
+  name: string;
+  annualizedIncome: string;
+}
+
 // --- NEW VerificationRow Component ---
 
 function VerificationRow({ verification, lease, onActionComplete }: { verification: IncomeVerification, lease: Lease, onActionComplete: () => void }) {
@@ -303,30 +308,64 @@ export default function ResidentDetailPage() {
     }
   };
 
-  const handleCopyResidents = async (residentIds: string[]) => {
+  const handleCopyResidents = async (residentIds: string[], newResidents: NewResident[] = []) => {
     if (!selectedLeaseForResident) {
       toast.error('No lease selected to add residents to.');
       return;
     }
-    try {
-      const response = await fetch(`/api/leases/${selectedLeaseForResident.id}/copy-residents`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ residentIds }),
-      });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to copy residents');
+    try {
+      // Copy existing residents if any are selected
+      if (residentIds.length > 0) {
+        const copyResponse = await fetch(`/api/leases/${selectedLeaseForResident.id}/copy-residents`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ residentIds }),
+        });
+
+        if (!copyResponse.ok) {
+          const errorData = await copyResponse.json();
+          throw new Error(errorData.error || 'Failed to copy existing residents');
+        }
       }
 
-      toast.success('Residents copied successfully.');
+      // Add new residents if any are provided
+      if (newResidents.length > 0) {
+        for (const newResident of newResidents) {
+          const addResponse = await fetch(`/api/leases/${selectedLeaseForResident.id}/residents`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+              name: newResident.name, 
+              annualizedIncome: newResident.annualizedIncome 
+            }),
+          });
+
+          if (!addResponse.ok) {
+            const errorData = await addResponse.json();
+            throw new Error(errorData.error || `Failed to add new resident: ${newResident.name}`);
+          }
+        }
+      }
+
+      // Show appropriate success message
+      const totalResidents = residentIds.length + newResidents.length;
+      if (residentIds.length > 0 && newResidents.length > 0) {
+        toast.success(`Successfully added ${residentIds.length} existing and ${newResidents.length} new residents.`);
+      } else if (residentIds.length > 0) {
+        toast.success(`Successfully copied ${residentIds.length} existing residents.`);
+      } else if (newResidents.length > 0) {
+        toast.success(`Successfully added ${newResidents.length} new residents.`);
+      }
+
       fetchTenancyData(false);
     } catch (error: unknown) {
-      console.error('Error copying residents:', error);
-      toast.error((error instanceof Error ? error.message : 'An error occurred while copying residents.'));
+      console.error('Error adding residents:', error);
+      toast.error((error instanceof Error ? error.message : 'An error occurred while adding residents.'));
       throw error;
     }
   };
