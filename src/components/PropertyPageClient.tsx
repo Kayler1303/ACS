@@ -1044,7 +1044,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                                                   <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Target</th>
                                                   <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Actual</th>
                                                   <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance</th>
-                                                  <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance With Vacants</th>
+                                                  <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Adjust Compliance with Vacants</th>
                                                   <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Over/(Under)</th>
                                                   <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Verified Income Units</th>
                                                 </tr>
@@ -1054,7 +1054,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                       const actual = ((stats.bucketCounts[bucket] || 0) / stats.totalUnits * 100);
                       const compliance = actual; // Compliance column shows percentage of total units in this bucket
                       const withVacants = ((stats.bucketCountsWithVacants[bucket] || 0) / stats.totalUnits * 100);
-                                                  const overUnder = actual - target;
+                                                  const overUnder = withVacants - target;
                       
                       return (
                         <tr key={bucket}>
@@ -1088,7 +1088,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                                                   <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Target</th>
                                                   <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Actual</th>
                                                   <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance</th>
-                                                  <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance With Vacants</th>
+                                                  <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Adjust Compliance with Vacants</th>
                                                   <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Over/(Under)</th>
                                                   <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Verified Income Units</th>
                                                 </tr>
@@ -1099,7 +1099,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                       const actualUnits = stats.bucketCounts[bucket] || 0;
                       const complianceUnits = actualUnits;
                       const withVacantsUnits = stats.bucketCountsWithVacants[bucket] || 0;
-                      const overUnderUnits = actualUnits - targetUnits;
+                      const overUnderUnits = withVacantsUnits - targetUnits;
                       
                       return (
                         <tr key={bucket}>
@@ -1147,7 +1147,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                       <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Target</th>
                       <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Projected</th>
                       <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance</th>
-                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance With Vacants</th>
+                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Adjust Compliance with Vacants</th>
                       <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Over/(Under)</th>
                       <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Verified Income Units</th>
                     </tr>
@@ -1157,7 +1157,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                       const projected = ((projectedStats.bucketCounts[bucket] || 0) / projectedStats.totalUnits * 100);
                       const compliance = projected; // Compliance column shows percentage of total units in this bucket
                       const withVacants = ((projectedStats.bucketCountsWithVacants[bucket] || 0) / projectedStats.totalUnits * 100);
-                      const overUnder = projected - target;
+                      const overUnder = withVacants - target;
                       const current = ((stats.bucketCounts[bucket] || 0) / stats.totalUnits * 100);
                       const change = projected - current;
                       
@@ -1204,7 +1204,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                       <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Target</th>
                       <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Projected</th>
                       <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance</th>
-                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance With Vacants</th>
+                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Adjust Compliance with Vacants</th>
                       <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Over/(Under)</th>
                       <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Verified Income Units</th>
                     </tr>
@@ -1215,7 +1215,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                       const projectedUnits = projectedStats.bucketCounts[bucket] || 0;
                       const complianceUnits = projectedUnits;
                       const withVacantsUnits = projectedStats.bucketCountsWithVacants[bucket] || 0;
-                      const overUnderUnits = projectedUnits - targetUnits;
+                      const overUnderUnits = withVacantsUnits - targetUnits;
                       const currentUnits = stats.bucketCounts[bucket] || 0;
                       const changeUnits = projectedUnits - currentUnits;
                       
