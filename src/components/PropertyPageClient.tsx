@@ -695,6 +695,25 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       }
     }
 
+    // NEW: Cascade excess units from lower buckets to higher buckets
+    // This ensures units over target in lower buckets count toward higher bucket targets
+    const allBuckets = ['50% AMI', '60% AMI', '80% AMI', 'Market'];
+    
+    for (let i = 0; i < allBuckets.length - 1; i++) {
+      const currentBucket = allBuckets[i];
+      const nextBucket = allBuckets[i + 1];
+      
+      const targetCount = targetCounts[currentBucket] || 0;
+      const currentCount = bucketCountsWithVacants[currentBucket] || 0;
+      
+      if (currentCount > targetCount && targetCount > 0) {
+        // Move excess units to next bucket
+        const excess = currentCount - targetCount;
+        bucketCountsWithVacants[currentBucket] = targetCount;
+        bucketCountsWithVacants[nextBucket] = (bucketCountsWithVacants[nextBucket] || 0) + excess;
+      }
+    }
+
     // Calculate verified income units by bucket (excluding vacants)
     const verifiedIncomeByBucket: { [key: string]: { verified: number; total: number; percentage: number } } = {};
     
@@ -790,6 +809,25 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       // Put any remaining vacant units in the market bucket
       if (remainingVacantUnits > 0) {
         bucketCountsWithVacants['Market'] = (bucketCountsWithVacants['Market'] || 0) + remainingVacantUnits;
+      }
+    }
+
+    // NEW: Cascade excess units from lower buckets to higher buckets
+    // This ensures units over target in lower buckets count toward higher bucket targets
+    const allBuckets = ['50% AMI', '60% AMI', '80% AMI', 'Market'];
+    
+    for (let i = 0; i < allBuckets.length - 1; i++) {
+      const currentBucket = allBuckets[i];
+      const nextBucket = allBuckets[i + 1];
+      
+      const targetCount = targetCounts[currentBucket] || 0;
+      const currentCount = bucketCountsWithVacants[currentBucket] || 0;
+      
+      if (currentCount > targetCount && targetCount > 0) {
+        // Move excess units to next bucket
+        const excess = currentCount - targetCount;
+        bucketCountsWithVacants[currentBucket] = targetCount;
+        bucketCountsWithVacants[nextBucket] = (bucketCountsWithVacants[nextBucket] || 0) + excess;
       }
     }
 
