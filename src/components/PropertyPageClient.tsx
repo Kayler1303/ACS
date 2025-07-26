@@ -1371,6 +1371,43 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
             <p>No compliance data available. Please upload a rent roll to see the analysis.</p>
           </div>
           
+          {/* Floor Plan Summary */}
+          {property.units && property.units.length > 0 && (
+            <div className="border-t border-gray-200 bg-blue-50">
+              <div className="px-6 py-4">
+                <h3 className="text-lg font-medium text-gray-900 mb-3">Floor Plan Summary</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                  {Object.entries(
+                    property.units.reduce((acc: { [key: string]: number }, unit: Unit) => {
+                      const sqft = unit.squareFootage || 0;
+                      const key = sqft > 0 ? sqft.toString() : 'Unknown';
+                      acc[key] = (acc[key] || 0) + 1;
+                      return acc;
+                    }, {})
+                  )
+                    .sort(([a], [b]) => {
+                      if (a === 'Unknown') return 1;
+                      if (b === 'Unknown') return -1;
+                      return parseInt(a) - parseInt(b);
+                    })
+                    .map(([sqft, count]) => (
+                      <div key={sqft} className="bg-white rounded-lg p-3 text-center shadow-sm border">
+                        <div className="text-lg font-semibold text-gray-900">
+                          {sqft === 'Unknown' ? 'Unknown' : `${parseInt(sqft).toLocaleString()}`}
+                        </div>
+                        <div className="text-xs text-gray-500 mb-1">
+                          {sqft === 'Unknown' ? 'sq ft' : 'sq ft'}
+                        </div>
+                        <div className="text-sm font-medium text-blue-600">
+                          {count} unit{count === 1 ? '' : 's'}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            </div>
+          )}
+          
           {/* Show unit data even without compliance data */}
           {property.units && property.units.length > 0 && (
             <div className="border-t border-gray-200">
