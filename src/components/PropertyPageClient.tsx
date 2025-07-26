@@ -1371,9 +1371,9 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
             <p className="text-red-600 font-medium mb-4">No compliance data available. Please upload a rent roll to see the analysis.</p>
             <a
               href={`/property/${property.id}/update-compliance`}
-              className="inline-flex items-center px-6 py-3 text-base font-medium text-white bg-red-600 border border-transparent rounded-md shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+              className="inline-flex items-center px-4 py-2 text-base font-bold text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-blue transition-colors"
             >
-              📊 Update Compliance Data
+              📁 Update Compliance Data
             </a>
           </div>
           

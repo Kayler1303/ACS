@@ -96,6 +96,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       }
 
       // Prepare bulk data for batch inserts
+      const leasesData: any[] = [];
       const tenanciesData: any[] = [];
       const residentsData: any[] = [];
       
@@ -108,12 +109,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           throw new Error(`Lease start and end dates are required for unit ${rows[0].unit}.`);
         }
         
-        // Create tenancy data
+        // Create lease data
         const timestamp = Date.now().toString();
+        const leaseId = `lease_${timestamp}_${unitId}`;
         const tenancyId = `tenancy_${timestamp}_${unitId}`;
-        tenanciesData.push({
-          id: tenancyId,
-          rentRollId: newRentRoll.id,
+        
+        leasesData.push({
+          id: leaseId,
+          name: `Lease from ${new Date(leaseStartDate).toLocaleDateString()} to ${new Date(leaseEndDate).toLocaleDateString()}`,
           unitId: unitId,
           leaseRent: rentValue,
           leaseStartDate: new Date(leaseStartDate),
@@ -122,14 +125,23 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           updatedAt: new Date(),
         });
         
-        // Create residents data for this tenancy
+        // Create tenancy data (links lease to rent roll)
+        tenanciesData.push({
+          id: tenancyId,
+          rentRollId: newRentRoll.id,
+          leaseId: leaseId,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+        
+        // Create residents data for this lease
         for (const row of rows) {
           const timestamp = Date.now().toString();
           const randomSuffix = Math.random().toString(36).substr(2, 9);
           
           residentsData.push({
             id: `resident_${timestamp}_${randomSuffix}`,
-            tenancyId: tenancyId,
+            leaseId: leaseId, // Updated to reference lease instead of tenancy
             name: row.resident,
             annualizedIncome: Number(row.totalIncome) || 0,
             createdAt: new Date(),
@@ -138,7 +150,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         }
       }
 
-      // Perform batch inserts
+      // Perform batch inserts (order is important due to foreign key relationships)
+      if (leasesData.length > 0) {
+        await tx.lease.createMany({
+          data: leasesData
+        });
+      }
+      
       if (tenanciesData.length > 0) {
         await tx.tenancy.createMany({
           data: tenanciesData
