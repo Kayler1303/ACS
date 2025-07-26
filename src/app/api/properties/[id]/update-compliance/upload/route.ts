@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
-import ExcelJS from 'exceljs';
+import * as xlsx from 'node-xlsx';
 import { IndividualResidentData } from '@/types/compliance';
 
 // This function now intelligently finds the header row before parsing.
@@ -152,23 +152,26 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
     
     // Read the raw rows from the excel file first
-    const buffer = await file.arrayBuffer();
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer);
-    const worksheet = workbook.worksheets[0];
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
     
-    const rawRows: any[][] = [];
-    worksheet.eachRow((row, rowNumber) => {
-      const rowValues: any[] = [];
-      row.eachCell((cell, colNumber) => {
-        rowValues[colNumber - 1] = cell.value;
-      });
-      rawRows.push(rowValues);
-    });
+    // node-xlsx supports both .xls and .xlsx formats
+    const workSheets = xlsx.parse(buffer);
+    
+    if (!workSheets || workSheets.length === 0 || !workSheets[0].data || workSheets[0].data.length === 0) {
+      return NextResponse.json({ 
+        error: 'No data found in the Excel file. Please ensure the file contains data.' 
+      }, { status: 400 });
+    }
+    
+    // Get the first worksheet data
+    const processedRows: any[][] = workSheets[0].data.map((row: any[]) => 
+      row.map((cell: any) => cell === null || cell === undefined ? '' : cell)
+    );
 
     // Now, intelligently find the headers and parse the data
     const unitKeywords = ['unit', 'units', 'unit number', 'unit #', 'unit no', 'bldg/unit', 'unit id', 'contact #', 'apartment', 'apartments'];
-    const rawData = await findAndParse(rawRows, unitKeywords);
+    const rawData = await findAndParse(processedRows, unitKeywords);
     
     if (rawData.length === 0) {
         return NextResponse.json({ error: "Could not find a valid header row containing a 'Unit' column in the first 15 rows of the file." }, { status: 400 });

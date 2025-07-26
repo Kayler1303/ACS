@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import Papa from 'papaparse';
-import ExcelJS from 'exceljs';
+import * as xlsx from 'node-xlsx';
 
 const HEADER_KEYWORDS = {
   unitNumber: ['unitnumber', 'unit number', 'unit', 'units', 'bldg/unit', 'apartment', 'apartments'],
@@ -97,44 +97,27 @@ export async function POST(
       file.name.toLowerCase().endsWith('.xls')
     ) {
       try {
-        const workbook = new ExcelJS.Workbook();
+        // Convert ArrayBuffer to Buffer for node-xlsx
+        const buffer = Buffer.from(fileBuffer);
         
-        // Try to load as .xlsx first
-        if (file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || 
-            file.name.toLowerCase().endsWith('.xlsx')) {
-          await workbook.xlsx.load(fileBuffer);
-        } else {
-          // For .xls files, ExcelJS doesn't support them directly
-          // We'll need to handle this case or suggest conversion
+        // node-xlsx supports both .xls and .xlsx formats
+        const workSheets = xlsx.parse(buffer);
+        
+        if (!workSheets || workSheets.length === 0 || !workSheets[0].data || workSheets[0].data.length === 0) {
           return NextResponse.json({ 
-            error: 'Excel .xls files are not supported. Please save your file as .xlsx format or upload as CSV.' 
+            error: 'No data found in the Excel file. Please ensure the file contains data.' 
           }, { status: 400 });
         }
         
-        const worksheet = workbook.worksheets[0];
-        
-        if (!worksheet) {
-          return NextResponse.json({ 
-            error: 'No worksheet found in the Excel file. Please ensure the file contains data.' 
-          }, { status: 400 });
-        }
-        
-        rows = [];
-        worksheet.eachRow((row, rowNumber) => {
-          const rowValues: any[] = [];
-          row.eachCell((cell, colNumber) => {
-            rowValues[colNumber - 1] = cell.value;
-          });
-          // Only add non-empty rows
-          if (rowValues.some(val => val !== null && val !== undefined && val !== '')) {
-            rows.push(rowValues);
-          }
-        });
+        // Get the first worksheet data
+        rows = workSheets[0].data.map((row: any[]) => 
+          row.map((cell: any) => cell === null || cell === undefined ? '' : cell)
+        );
         
       } catch (excelError) {
         console.error('Excel parsing error:', excelError);
         return NextResponse.json({ 
-          error: `Failed to parse Excel file. Please ensure it's a valid .xlsx file or try converting to CSV format. Error: ${excelError instanceof Error ? excelError.message : 'Unknown error'}` 
+          error: `Failed to parse Excel file. Please ensure it's a valid Excel file (.xls or .xlsx) or try converting to CSV format. Error: ${excelError instanceof Error ? excelError.message : 'Unknown error'}` 
         }, { status: 400 });
       }
     } else {
