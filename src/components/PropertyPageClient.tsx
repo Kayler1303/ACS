@@ -1367,8 +1367,14 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       {/* Show message if no data */}
       {processedTenancies.length === 0 && hudIncomeLimits && (
         <div className="mb-8 bg-white rounded-lg shadow-md overflow-hidden">
-          <div className="p-8 text-center text-gray-500">
-            <p>No compliance data available. Please upload a rent roll to see the analysis.</p>
+          <div className="p-8 text-center">
+            <p className="text-red-600 font-medium mb-4">No compliance data available. Please upload a rent roll to see the analysis.</p>
+            <a
+              href={`/property/${property.id}/update-compliance`}
+              className="inline-flex items-center px-6 py-3 text-base font-medium text-white bg-red-600 border border-transparent rounded-md shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
+            >
+              📊 Update Compliance Data
+            </a>
           </div>
           
           {/* Floor Plan Summary */}
