@@ -1385,13 +1385,13 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Unit Number
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Bedrooms
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Square Footage
                       </th>
                     </tr>
@@ -1407,14 +1407,24 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                       })
                       .map((unit: Unit) => (
                         <tr key={unit.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                            {unit.unitNumber}
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <span className="text-sm font-medium text-gray-900">
+                              {formatUnitNumber(unit.unitNumber)}
+                            </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {unit.bedroomCount}
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <EditableCell
+                              value={unit.bedroomCount}
+                              onSave={(value) => handleUpdateUnit(unit.id, 'bedroomCount', value)}
+                              className="text-sm text-gray-900 text-center"
+                            />
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {unit.squareFootage ? unit.squareFootage.toLocaleString() : '-'}
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <EditableCell
+                              value={unit.squareFootage ?? null}
+                              onSave={(value) => handleUpdateUnit(unit.id, 'squareFootage', value)}
+                              className="text-sm text-gray-900 text-center"
+                            />
                           </td>
                         </tr>
                       ))}
