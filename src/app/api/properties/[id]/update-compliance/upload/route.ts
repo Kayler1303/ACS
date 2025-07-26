@@ -123,9 +123,8 @@ function mapAndProcessData(data: any[], fileType: 'resident' | 'rentRoll'): Indi
   }).filter(row => row.unit);
 }
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  // Workaround for Next.js 15 params bug
-  const propertyId = req.nextUrl.pathname.split('/')[3];
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id: propertyId } = await params;
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
