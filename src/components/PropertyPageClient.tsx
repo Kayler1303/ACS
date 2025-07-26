@@ -1370,6 +1370,59 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
           <div className="p-8 text-center text-gray-500">
             <p>No compliance data available. Please upload a rent roll to see the analysis.</p>
           </div>
+          
+          {/* Show unit data even without compliance data */}
+          {property.units && property.units.length > 0 && (
+            <div className="border-t border-gray-200">
+              <div className="bg-gray-50 px-6 py-4">
+                <h3 className="text-lg font-medium text-gray-900">Unit Information</h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  {property.units.length} units configured for this property
+                </p>
+              </div>
+              
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Unit Number
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Bedrooms
+                      </th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Square Footage
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {property.units
+                      .sort((a: Unit, b: Unit) => {
+                        // Sort by unit number (handle both numeric and alphanumeric)
+                        const aNum = parseInt(a.unitNumber) || 0;
+                        const bNum = parseInt(b.unitNumber) || 0;
+                        if (aNum !== bNum) return aNum - bNum;
+                        return a.unitNumber.localeCompare(b.unitNumber);
+                      })
+                      .map((unit: Unit) => (
+                        <tr key={unit.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {unit.unitNumber}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {unit.bedroomCount}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {unit.squareFootage ? unit.squareFootage.toLocaleString() : '-'}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
