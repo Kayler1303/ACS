@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
-import * as xlsx from 'xlsx';
+import ExcelJS from 'exceljs';
 import { IndividualResidentData } from '@/types/compliance';
 
 // This function now intelligently finds the header row before parsing.
@@ -154,10 +154,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     
     // Read the raw rows from the excel file first
     const buffer = await file.arrayBuffer();
-    const workbook = xlsx.read(buffer, { type: 'buffer' });
-    const sheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[sheetName];
-    const rawRows: any[][] = xlsx.utils.sheet_to_json(worksheet, { header: 1, defval: null });
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+    const worksheet = workbook.worksheets[0];
+    
+    const rawRows: any[][] = [];
+    worksheet.eachRow((row, rowNumber) => {
+      const rowValues: any[] = [];
+      row.eachCell((cell, colNumber) => {
+        rowValues[colNumber - 1] = cell.value;
+      });
+      rawRows.push(rowValues);
+    });
 
     // Now, intelligently find the headers and parse the data
     const unitKeywords = ['unit', 'units', 'unit number', 'unit #', 'unit no', 'bldg/unit', 'unit id', 'contact #', 'apartment', 'apartments'];

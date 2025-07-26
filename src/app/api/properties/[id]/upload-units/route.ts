@@ -4,7 +4,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import Papa from 'papaparse';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 
 const HEADER_KEYWORDS = {
   unitNumber: ['unitnumber', 'unit number', 'unit', 'units', 'bldg/unit', 'apartment', 'apartments'],
@@ -94,9 +94,18 @@ export async function POST(
       file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
       file.type === 'application/vnd.ms-excel'
     ) {
-      const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
-      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false });
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(fileBuffer);
+      const worksheet = workbook.worksheets[0];
+      
+      rows = [];
+      worksheet.eachRow((row, rowNumber) => {
+        const rowValues: any[] = [];
+        row.eachCell((cell, colNumber) => {
+          rowValues[colNumber - 1] = cell.value;
+        });
+        rows.push(rowValues);
+      });
     } else {
       return NextResponse.json({ error: 'Unsupported file type. Please upload a CSV or Excel file.' }, { status: 400 });
     }
