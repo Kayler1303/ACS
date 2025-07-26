@@ -697,11 +697,21 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
 
     // NEW: Cascade excess units from lower buckets to higher buckets
     // This ensures units over target in lower buckets count toward higher bucket targets
-    const allBuckets = ['50% AMI', '60% AMI', '80% AMI', 'Market'];
+    // Get buckets that actually have targets for this compliance standard
+    const targetBuckets = Object.keys(targetCounts).filter(bucket => targetCounts[bucket] > 0);
+    const bucketPriority = ['50% AMI', '60% AMI', '80% AMI', 'Market'];
+    const sortedTargetBuckets = targetBuckets.sort((a, b) => {
+      const aIndex = bucketPriority.indexOf(a);
+      const bIndex = bucketPriority.indexOf(b);
+      if (aIndex === -1) return 1;
+      if (bIndex === -1) return -1;
+      return aIndex - bIndex;
+    });
     
-    for (let i = 0; i < allBuckets.length - 1; i++) {
-      const currentBucket = allBuckets[i];
-      const nextBucket = allBuckets[i + 1];
+    // Cascade excess units through the actual target buckets (lowest AMI to highest)
+    for (let i = 0; i < sortedTargetBuckets.length - 1; i++) {
+      const currentBucket = sortedTargetBuckets[i];
+      const nextBucket = sortedTargetBuckets[i + 1];
       
       const targetCount = targetCounts[currentBucket] || 0;
       const currentCount = bucketCountsWithVacants[currentBucket] || 0;
@@ -814,11 +824,21 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
 
     // NEW: Cascade excess units from lower buckets to higher buckets
     // This ensures units over target in lower buckets count toward higher bucket targets
-    const allBuckets = ['50% AMI', '60% AMI', '80% AMI', 'Market'];
+    // Get buckets that actually have targets for this compliance standard
+    const targetBuckets = Object.keys(targetCounts).filter(bucket => targetCounts[bucket] > 0);
+    const bucketPriority = ['50% AMI', '60% AMI', '80% AMI', 'Market'];
+    const sortedTargetBuckets = targetBuckets.sort((a, b) => {
+      const aIndex = bucketPriority.indexOf(a);
+      const bIndex = bucketPriority.indexOf(b);
+      if (aIndex === -1) return 1;
+      if (bIndex === -1) return -1;
+      return aIndex - bIndex;
+    });
     
-    for (let i = 0; i < allBuckets.length - 1; i++) {
-      const currentBucket = allBuckets[i];
-      const nextBucket = allBuckets[i + 1];
+    // Cascade excess units through the actual target buckets (lowest AMI to highest)
+    for (let i = 0; i < sortedTargetBuckets.length - 1; i++) {
+      const currentBucket = sortedTargetBuckets[i];
+      const nextBucket = sortedTargetBuckets[i + 1];
       
       const targetCount = targetCounts[currentBucket] || 0;
       const currentCount = bucketCountsWithVacants[currentBucket] || 0;
