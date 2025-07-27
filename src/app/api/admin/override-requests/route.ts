@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
-    // Fetch all override requests with related data
+    // Fetch all override requests with comprehensive related data
     const requests = await (prisma as any).overrideRequest.findMany({
       include: {
         requester: {
@@ -45,6 +45,149 @@ export async function GET(request: NextRequest) {
       ]
     });
 
+    // Enhance each request with contextual data
+    const enhancedRequests = await Promise.all(requests.map(async (request: any) => {
+      let contextualData: any = {};
+
+      // For property deletion requests
+      if (request.type === 'PROPERTY_DELETION' && request.propertyId) {
+        const property = await prisma.property.findUnique({
+          where: { id: request.propertyId },
+          select: { 
+            id: true, 
+            name: true, 
+            address: true,
+            numberOfUnits: true,
+            county: true,
+            state: true
+          }
+        });
+        contextualData.property = property;
+      }
+
+      // For all request types, fetch unit and resident info if available
+      if (request.unitId) {
+        const unit = await prisma.unit.findUnique({
+          where: { id: request.unitId },
+          include: {
+            property: {
+              select: { id: true, name: true, address: true }
+            },
+            leases: {
+              include: {
+                residents: {
+                  select: { id: true, name: true, annualizedIncome: true, verifiedIncome: true }
+                },
+                incomeVerifications: {
+                  include: {
+                    incomeDocuments: {
+                      include: {
+                        resident: { select: { id: true, name: true } }
+                      }
+                    }
+                  },
+                  orderBy: { createdAt: 'desc' },
+                  take: 1
+                }
+              },
+              orderBy: { createdAt: 'desc' }
+            }
+          }
+        });
+        contextualData.unit = unit;
+      }
+
+      // For specific resident requests
+      if (request.residentId) {
+        const resident = await prisma.resident.findUnique({
+          where: { id: request.residentId },
+          include: {
+            lease: {
+              include: {
+                unit: {
+                  include: {
+                    property: { select: { id: true, name: true, address: true } }
+                  }
+                }
+              }
+            }
+          }
+        });
+        contextualData.resident = resident;
+      }
+
+      // For verification-specific requests
+      if (request.verificationId) {
+        const verification = await prisma.incomeVerification.findUnique({
+          where: { id: request.verificationId },
+          include: {
+            incomeDocuments: {
+              include: {
+                resident: { select: { id: true, name: true } }
+              }
+            },
+            lease: {
+              include: {
+                unit: {
+                  include: {
+                    property: { select: { id: true, name: true, address: true } }
+                  }
+                },
+                residents: true
+              }
+            }
+          }
+        });
+        contextualData.verification = verification;
+      }
+
+      // For document-specific requests (DOCUMENT_REVIEW)
+      if (request.documentId) {
+        const document = await prisma.incomeDocument.findUnique({
+          where: { id: request.documentId },
+          include: {
+            resident: { select: { id: true, name: true } },
+            verification: {
+              include: {
+                lease: {
+                  include: {
+                    unit: {
+                      include: {
+                        property: { select: { id: true, name: true, address: true } }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        });
+        contextualData.document = document;
+      }
+
+      // Calculate income discrepancy details for INCOME_DISCREPANCY requests
+      if (request.type === 'INCOME_DISCREPANCY' && contextualData.unit) {
+        const lease = contextualData.unit.leases[0]; // Most recent lease
+        if (lease) {
+          const complianceIncome = lease.residents.reduce((sum: number, r: any) => sum + (r.annualizedIncome || 0), 0);
+          const verifiedIncome = lease.residents.reduce((sum: number, r: any) => sum + (r.verifiedIncome || 0), 0);
+          const discrepancy = Math.abs(complianceIncome - verifiedIncome);
+          
+          contextualData.incomeAnalysis = {
+            complianceIncome,
+            verifiedIncome,
+            discrepancy,
+            percentage: complianceIncome > 0 ? ((discrepancy / complianceIncome) * 100) : 0
+          };
+        }
+      }
+
+      return {
+        ...request,
+        contextualData
+      };
+    }));
+
     // Calculate statistics
     const stats = {
       total: requests.length,
@@ -54,7 +197,7 @@ export async function GET(request: NextRequest) {
     };
 
     return NextResponse.json({
-      requests,
+      requests: enhancedRequests,
       stats
     });
 

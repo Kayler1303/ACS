@@ -136,12 +136,22 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
   const [includeUtilityAllowances, setIncludeUtilityAllowances] = useState<boolean>(false);
   const [showUtilityModal, setShowUtilityModal] = useState<boolean>(false);
   const [utilityAllowances, setUtilityAllowances] = useState<{[bedroomCount: number]: number}>({});
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [isRequestingDeletion, setIsRequestingDeletion] = useState(false);
+  const [showDeletionModal, setShowDeletionModal] = useState(false);
+  const [deletionReason, setDeletionReason] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [verificationData, setVerificationData] = useState<PropertyVerificationSummary | null>(null);
   const [verificationLoading, setVerificationLoading] = useState(false);
   const [provisionalLeases, setProvisionalLeases] = useState<ProvisionalLease[]>([]);
   const [selectedProvisionalLeases, setSelectedProvisionalLeases] = useState<Set<string>>(new Set());
+  const [utilityCategory, setUtilityCategory] = useState<string>('');
+  const [utilityAllowance, setUtilityAllowance] = useState<number>(0);
+  const [utilitySelection, setUtilitySelection] = useState<string>('NO');
+  const [uploadingCompliance, setUploadingCompliance] = useState(false);
+  const [verificationStatuses, setVerificationStatuses] = useState<VerificationStatus[]>([]);
+  const [checkedProvisionalLeases, setCheckedProvisionalLeases] = useState<{ [unitId: string]: boolean }>({});
+  const [projectedData, setProjectedData] = useState<any>(null);
+  const [loadingProjected, setLoadingProjected] = useState(false);
 
 
   // Fetch HUD income limits
@@ -571,27 +581,48 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     }
   };
 
-  const handleDeleteProperty = async () => {
-    if (!confirm('Are you sure you want to delete this property? This action cannot be undone.')) {
+
+
+  const handleRequestDeletion = () => {
+    setShowDeletionModal(true);
+  };
+
+  const handleSubmitDeletionRequest = async () => {
+    if (!deletionReason.trim()) {
+      alert('Please provide a reason for requesting property deletion.');
       return;
     }
 
-    setIsDeleting(true);
+    setIsRequestingDeletion(true);
     try {
-      const res = await fetch(`/api/properties/${property.id}`, {
-        method: 'DELETE',
+      const res = await fetch(`/api/properties/${property.id}/request-deletion`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ reason: deletionReason }),
       });
 
+      const data = await res.json();
+
       if (!res.ok) {
-        throw new Error('Failed to delete property');
+        throw new Error(data.error || 'Failed to submit deletion request');
       }
 
-      window.location.href = '/dashboard';
+      alert(data.message);
+      setShowDeletionModal(false);
+      setDeletionReason('');
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : 'An unexpected error occurred');
     } finally {
-      setIsDeleting(false);
+      setIsRequestingDeletion(false);
     }
+  };
+
+  const handleCloseDeletionModal = () => {
+    setShowDeletionModal(false);
+    setDeletionReason('');
+    setIsRequestingDeletion(false);
   };
 
 
@@ -1555,17 +1586,17 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                 <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />                                                              </svg>
             </div>
             <div className="ml-3 flex-1">
-              <h3 className="text-sm font-medium text-red-800">Danger Zone</h3>
+                            <h3 className="text-sm font-medium text-red-800">Request Property Deletion</h3>
               <div className="mt-2 text-sm text-red-700">
-                <p>Once you delete a property, there is no going back. Please be certain.</p>
+                <p>Submit a request to delete this property. An administrator will review your request before any action is taken.</p>
               </div>
               <div className="mt-4">
                 <button
-                  onClick={handleDeleteProperty}
-                  disabled={isDeleting}
+                  onClick={handleRequestDeletion}
+                  disabled={isRequestingDeletion}
                   className="bg-red-600 border border-transparent rounded-md py-2 px-4 inline-flex justify-center text-sm font-medium text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
-                                                                        >
-                  {isDeleting ? 'Deleting...' : 'Delete Property'}
+                >
+                  {isRequestingDeletion ? 'Submitting...' : 'Request Property Deletion'}
                 </button>
               </div>
             </div>
@@ -1634,6 +1665,43 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
         </div>
       )}
 
+      {/* Deletion Confirmation Modal */}
+      {showDeletionModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+                             <h3 className="text-lg font-medium text-gray-900 mb-4">Request Property Deletion</h3>
+               <p className="text-sm text-gray-600 mb-4">
+                 Please provide a reason for requesting property deletion. An administrator will review your request.
+               </p>
+
+              <textarea
+                value={deletionReason}
+                onChange={(e) => setDeletionReason(e.target.value)}
+                placeholder="Enter your reason here..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-brand-blue focus:border-brand-blue"
+                                 rows={4}
+              ></textarea>
+
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={handleCloseDeletionModal}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200"
+                                            >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSubmitDeletionRequest}
+                  disabled={isRequestingDeletion}
+                  className="bg-red-600 border border-transparent rounded-md py-2 px-4 inline-flex justify-center text-sm font-medium text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
+                                                                        >
+                  {isRequestingDeletion ? 'Submitting...' : 'Submit Deletion Request'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

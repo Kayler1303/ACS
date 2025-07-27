@@ -71,9 +71,40 @@ export async function PATCH(
             name: true,
             email: true,
           }
+        },
+        property: {
+          select: {
+            id: true,
+            name: true,
+            address: true
+          }
         }
       }
     });
+
+    // Handle property deletion if approved
+    if (action === 'approve' && existingRequest.type === 'PROPERTY_DELETION' && updatedRequest.property) {
+      try {
+        await prisma.property.delete({
+          where: { id: updatedRequest.property.id }
+        });
+        console.log(`Property ${updatedRequest.property.name} (${updatedRequest.property.id}) deleted by admin ${session.user.id}`);
+      } catch (deleteError) {
+        console.error('Error deleting property:', deleteError);
+        // Revert the override request status if deletion fails
+        await (prisma as any).overrideRequest.update({
+          where: { id: requestId },
+          data: {
+            status: 'PENDING',
+            adminNotes: `${adminNotes.trim()}\n\nERROR: Property deletion failed. Please try again or contact support.`,
+            reviewedAt: null,
+          }
+        });
+        return NextResponse.json({ 
+          error: 'Failed to delete property. The request has been reverted to pending status.' 
+        }, { status: 500 });
+      }
+    }
 
     // TODO: In the future, we might want to:
     // 1. Send email notification to the requester

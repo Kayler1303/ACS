@@ -23,6 +23,8 @@ model User {
   verificationTokens VerificationToken[]
   overrideRequests   OverrideRequest[]   @relation("UserOverrideRequests")
   adminReviews       OverrideRequest[]   @relation("AdminOverrideReviews")
+  adminMessages      AdminMessage[]      @relation("AdminMessages")
+  receivedMessages   AdminMessage[]      @relation("ReceivedMessages")
 }
 
 model Property {
@@ -38,6 +40,7 @@ model Property {
   owner         User       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   rentRolls     RentRoll[]
   units         Unit[]
+  overrideRequests OverrideRequest[]
 }
 
 model Unit {
@@ -47,11 +50,15 @@ model Unit {
   bedroomCount  Int?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-  propertyId    String
-  property      Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  leases        Lease[]
 
-  @@unique([propertyId, unitNumber])
+  // Relationships
+  property      Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  propertyId    String
+  leases        Lease[]
+  overrideRequests OverrideRequest[]
+
+  @@index([propertyId])
+  @@index([unitNumber])
 }
 
 model RentRoll {
@@ -97,15 +104,18 @@ model Tenancy {
 }
 
 model Resident {
-  id               String           @id @default(cuid())
+  id               String    @id @default(cuid())
   name             String
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  annualizedIncome Decimal?  @db.Decimal(10, 2)
+  verifiedIncome   Decimal?  @db.Decimal(10, 2)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  // Relationships
+  lease            Lease     @relation(fields: [leaseId], references: [id], onDelete: Cascade)
   leaseId          String
-  verifiedIncome   Float?
-  annualizedIncome Float
   incomeDocuments  IncomeDocument[]
-  lease            Lease            @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+  overrideRequests OverrideRequest[]
 
   @@index([leaseId])
 }
@@ -120,54 +130,72 @@ model VerificationToken {
 }
 
 model IncomeVerification {
-  id                       String             @id @default(cuid())
-  status                   VerificationStatus @default(IN_PROGRESS)
-  createdAt                DateTime           @default(now())
-  updatedAt                DateTime           @updatedAt
-  finalizedAt              DateTime?
-  calculatedVerifiedIncome Float?
-  leaseId                  String
-  associatedLeaseEnd       DateTime?
-  associatedLeaseStart     DateTime?
-  dueDate                  DateTime
-  leaseYear                Int?
-  reason                   VerificationReason @default(ANNUAL_RECERTIFICATION)
-  reminderSentAt           DateTime?
-  verificationPeriodEnd    DateTime
-  verificationPeriodStart  DateTime
-  incomeDocuments          IncomeDocument[]
-  lease                    Lease              @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+  id                         String             @id @default(cuid())
+  status                     VerificationStatus @default(IN_PROGRESS)
+  createdAt                  DateTime           @default(now())
+  updatedAt                  DateTime           @updatedAt
+  finalizedAt                DateTime?
+  calculatedVerifiedIncome   Decimal?           @db.Decimal(10, 2)
+
+  // Lease association  
+  lease                      Lease              @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+  leaseId                    String
+
+  // Verification period
+  verificationPeriodStart    DateTime?
+  verificationPeriodEnd      DateTime?
+  
+  // Associated lease period (what lease period this verification covers)
+  associatedLeaseStart       DateTime?
+  associatedLeaseEnd         DateTime?
+  
+  // Due date and metadata
+  dueDate                    DateTime?
+  leaseYear                  Int?
+  reason                     VerificationReason?
+  reminderSentAt            DateTime?
+
+  // Related documents
+  incomeDocuments            IncomeDocument[]
+  overrideRequests          OverrideRequest[]
 
   @@index([leaseId])
-  @@index([dueDate])
   @@index([status])
 }
 
 model IncomeDocument {
-  id             String         @id @default(cuid())
-  documentType   DocumentType
-  documentDate   DateTime
-  uploadDate     DateTime       @default(now())
-  status         DocumentStatus @default(UPLOADED)
-  filePath       String
-  box1_wages     Float?
-  box3_ss_wages  Float?
-  box5_med_wages Float?
-  employeeName   String?
-  employerName   String?
-  taxYear        Int?
-  calculatedAnnualizedIncome Float?
-  payPeriodStartDate DateTime?
-  payPeriodEndDate   DateTime?
-  grossPayAmount     Float?
-  payFrequency       String?
-  verificationId String
-  residentId     String
-  resident       Resident       @relation(fields: [residentId], references: [id], onDelete: Cascade)
-  verification   IncomeVerification @relation(fields: [verificationId], references: [id], onDelete: Cascade)
+  id                        String         @id @default(cuid())
+  documentType              DocumentType
+  documentDate              DateTime
+  uploadDate                DateTime       @default(now())
+  status                    DocumentStatus @default(PROCESSING)
+  filePath                  String
+
+  // W2 fields
+  box1_wages                Decimal?       @db.Decimal(10, 2)
+  box3_ss_wages            Decimal?       @db.Decimal(10, 2)
+  box5_med_wages           Decimal?       @db.Decimal(10, 2)
+  employeeName             String?
+  employerName             String?
+  taxYear                  Int?
+
+  // Paystub fields
+  calculatedAnnualizedIncome Decimal?     @db.Decimal(10, 2)
+  payPeriodStartDate        DateTime?
+  payPeriodEndDate          DateTime?
+  grossPayAmount            Decimal?     @db.Decimal(10, 2)
+  payFrequency              String?
+
+  // Relationships
+  verification              IncomeVerification @relation(fields: [verificationId], references: [id], onDelete: Cascade)
+  verificationId            String
+  resident                  Resident     @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  residentId                String
+  overrideRequests         OverrideRequest[]
 
   @@index([verificationId])
   @@index([residentId])
+  @@index([status])
 }
 
 enum DocumentType {
@@ -208,6 +236,7 @@ enum OverrideRequestType {
   VALIDATION_EXCEPTION    // Need fewer docs than required
   INCOME_DISCREPANCY     // Use verified vs compliance income
   DOCUMENT_REVIEW        // Manual entry for failed OCR
+  PROPERTY_DELETION      // Request to delete entire property
 }
 
 enum OverrideRequestStatus {
@@ -218,34 +247,47 @@ enum OverrideRequestStatus {
 }
 
 model OverrideRequest {
-  id               String                @id @default(cuid())
-  type             OverrideRequestType
-  status           OverrideRequestStatus @default(PENDING)
+  id                String                 @id @default(cuid())
+  type              OverrideRequestType
+  status            OverrideRequestStatus  @default(PENDING)
+  userExplanation   String?
+  adminNotes        String?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  reviewedAt        DateTime?
   
-  // Request details
-  userExplanation  String                // User's justification
-  adminNotes       String?               // Admin's decision notes
+  // References
+  propertyId        String?
+  property          Property?              @relation(fields: [propertyId], references: [id])
+  unitId            String?
+  unit              Unit?                  @relation(fields: [unitId], references: [id])
+  residentId        String?
+  resident          Resident?              @relation(fields: [residentId], references: [id])
+  verificationId    String?
+  verification      IncomeVerification?    @relation(fields: [verificationId], references: [id])
+  documentId        String?
+  document          IncomeDocument?        @relation(fields: [documentId], references: [id])
   
-  // Context (what needs override)
-  unitId           String?
-  residentId       String?
-  verificationId   String?
-  documentId       String?
+  requesterId       String
+  requester         User                   @relation("UserOverrideRequests", fields: [requesterId], references: [id])
+  reviewerId        String?
+  reviewer          User?                  @relation("AdminOverrideReviews", fields: [reviewerId], references: [id])
   
-  // Users involved
-  requesterId      String                // User who requested
-  reviewerId       String?               // Admin who reviewed
+  // Admin messages
+  adminMessages     AdminMessage[]
+}
+
+model AdminMessage {
+  id                String                 @id @default(cuid())
+  subject           String
+  message           String
+  sentAt            DateTime               @default(now())
   
-  // Timestamps
-  createdAt        DateTime              @default(now())
-  reviewedAt       DateTime?
-  appliedAt        DateTime?
-  
-  // Relations
-  requester        User                  @relation("UserOverrideRequests", fields: [requesterId], references: [id])
-  reviewer         User?                 @relation("AdminOverrideReviews", fields: [reviewerId], references: [id])
-  
-  @@index([status])
-  @@index([type])
-  @@index([requesterId])
+  // References
+  overrideRequestId String
+  overrideRequest   OverrideRequest        @relation(fields: [overrideRequestId], references: [id], onDelete: Cascade)
+  adminId           String
+  admin             User                   @relation("AdminMessages", fields: [adminId], references: [id])
+  recipientId       String
+  recipient         User                   @relation("ReceivedMessages", fields: [recipientId], references: [id])
 }
