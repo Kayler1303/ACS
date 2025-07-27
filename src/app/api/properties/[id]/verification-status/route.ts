@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { getUnitVerificationStatus, PropertyVerificationSummary, UnitVerificationData } from '@/services/verification';
+import { createAutoOverrideRequest } from '@/services/override';
 
 export async function GET(
   req: NextRequest,
@@ -77,6 +78,20 @@ export async function GET(
     // Process each unit
     for (const unit of property.units) {
       const verificationStatus = getUnitVerificationStatus(unit, latestRentRollDate);
+      
+      // Automatically create override request for "Needs Investigation" status
+      if (verificationStatus === 'Needs Investigation') {
+        try {
+          await createAutoOverrideRequest({
+            type: 'INCOME_DISCREPANCY',
+            unitId: unit.id,
+            userId: session.user.id,
+            systemExplanation: `System detected income discrepancy for Unit ${unit.unitNumber}. Verified income does not match compliance income. Admin review required to resolve discrepancy.`
+          });
+        } catch (overrideError) {
+          console.error('Failed to create auto-override request for income discrepancy:', overrideError);
+        }
+      }
       
       // Find the active lease (with tenancy)
       const activeLease = unit.leases

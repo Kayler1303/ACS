@@ -76,7 +76,7 @@ export default function IncomeVerificationUploadDialog({
         <div className="space-y-4">
           <IncomeVerificationDocumentUploadForm
             verificationId={verificationId}
-            onUploadComplete={handleUploadComplete}
+            onUploadComplete={onUploadComplete}
             residents={residents}
             hasExistingDocuments={hasExistingDocuments}
           />

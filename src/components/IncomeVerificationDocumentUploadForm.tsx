@@ -118,9 +118,10 @@ export default function IncomeVerificationDocumentUploadForm({
           >
             <option value="" disabled>Select a document type</option>
             <option value="W2">W-2</option>
-            <option value="PAY_STUB">Pay Stub</option>
+            <option value="PAYSTUB">Pay Stub</option>
             <option value="BANK_STATEMENT">Bank Statement</option>
-            <option value="OTHER">Other</option>
+            <option value="OFFER_LETTER">Offer Letter</option>
+            <option value="SOCIAL_SECURITY">Social Security</option>
           </select>
         </div>
       </div>

@@ -101,9 +101,12 @@ export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Da
     .reduce((acc, d) => acc + (d.box1_wages || 0), 0);
   
   // Sum paystub income (use calculatedAnnualizedIncome when available)
-  const paystubIncome = verifiedDocuments
-    .filter(d => d.documentType === DocumentType.PAYSTUB && d.calculatedAnnualizedIncome)
-    .reduce((acc, d) => acc + d.calculatedAnnualizedIncome!, 0);
+  // For paystubs, take the average since each represents the full annualized amount
+  const paystubDocuments = verifiedDocuments
+    .filter(d => d.documentType === DocumentType.PAYSTUB && d.calculatedAnnualizedIncome);
+  const paystubIncome = paystubDocuments.length > 0
+    ? paystubDocuments.reduce((acc, d) => acc + d.calculatedAnnualizedIncome!, 0) / paystubDocuments.length
+    : 0;
     
   // Sum other document types if they have calculatedAnnualizedIncome
   const otherIncome = verifiedDocuments
@@ -135,11 +138,55 @@ export interface UnitVerificationData {
 
 export interface PropertyVerificationSummary {
   propertyId: string;
-  units: UnitVerificationData[];
-  summary: {
-    verified: number;
-    needsInvestigation: number;
-    outOfDate: number;
-    vacant: number;
-  };
+  totalUnits: number;
+  verifiedCount: number;
+  needsInvestigationCount: number;
+  outOfDateCount: number;
+  vacantCount: number;
+}
+
+/**
+ * Helper function to detect income discrepancies and create auto-override requests
+ * Called during resident or verification finalization
+ */
+export async function checkAndCreateIncomeDiscrepancyOverride(params: {
+  unitId: string;
+  verificationId?: string;
+  residentId?: string;
+  totalUploadedIncome: number;
+  totalVerifiedIncome: number;
+  userId: string;
+}) {
+  const { unitId, verificationId, residentId, totalUploadedIncome, totalVerifiedIncome, userId } = params;
+  
+  // Check if there's an income discrepancy (same logic as verification status)
+  const incomeDifference = Math.abs(totalUploadedIncome - totalVerifiedIncome);
+  
+  if (incomeDifference > 1.00) {
+    // Import the override service
+    const { createAutoOverrideRequest } = await import('@/services/override');
+    
+    const systemExplanation = `Income discrepancy detected: Rent roll shows $${totalUploadedIncome.toLocaleString()} but verified documents total $${totalVerifiedIncome.toLocaleString()} (difference: $${incomeDifference.toFixed(2)})`;
+    
+    console.log(`Creating auto-override request for income discrepancy: ${systemExplanation}`);
+    
+    try {
+      const overrideRequest = await createAutoOverrideRequest({
+        type: 'INCOME_DISCREPANCY',
+        unitId,
+        verificationId,
+        residentId,
+        userId,
+        systemExplanation
+      });
+      
+      console.log(`Auto-override request created for income discrepancy: ${overrideRequest.id}`);
+      return overrideRequest;
+    } catch (error) {
+      console.error('Failed to create auto-override request for income discrepancy:', error);
+      throw error;
+    }
+  }
+  
+  return null;
 } 

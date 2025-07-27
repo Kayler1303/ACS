@@ -3,6 +3,24 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 
+// Helper function to format pay frequency for display
+const formatPayFrequency = (frequency: string): string => {
+  switch (frequency) {
+    case 'BI_WEEKLY':
+      return 'Bi-Weekly';
+    case 'WEEKLY':
+      return 'Weekly';
+    case 'SEMI_MONTHLY':
+      return 'Semi-Monthly';
+    case 'MONTHLY':
+      return 'Monthly';
+    case 'UNKNOWN':
+      return 'Unknown';
+    default:
+      return frequency;
+  }
+};
+
 interface IncomeDocument {
   id: string;
   documentType: string;
@@ -14,6 +32,10 @@ interface IncomeDocument {
   employerName?: string;
   box1_wages?: number;
   residentId?: string;
+  calculatedAnnualizedIncome?: number; // Added for PAYSTUB
+  payPeriodStartDate?: string; // Added for PAYSTUB
+  payPeriodEndDate?: string; // Added for PAYSTUB
+  payFrequency?: string; // Added for PAYSTUB
 }
 
 interface IncomeVerification {
@@ -55,17 +77,35 @@ export default function VerificationFinalizationDialog({
 
   // Calculate total verified income from completed documents
   const completedDocuments = verification.incomeDocuments.filter(
-    doc => doc.status === 'COMPLETED' && doc.box1_wages
+    doc => doc.status === 'COMPLETED' && (doc.box1_wages || doc.calculatedAnnualizedIncome)
   );
 
-  const totalVerifiedIncome = completedDocuments.reduce(
-    (sum, doc) => sum + (doc.box1_wages || 0), 0
-  );
+  // Helper function to calculate verified income correctly for different document types
+  const calculateVerifiedIncome = (documents: IncomeDocument[]) => {
+    const w2Documents = documents.filter(doc => doc.documentType === 'W2');
+    const paystubDocuments = documents.filter(doc => doc.documentType === 'PAYSTUB');
+    const otherDocuments = documents.filter(doc => doc.documentType !== 'W2' && doc.documentType !== 'PAYSTUB');
+
+    // Sum W2 wages
+    const w2Income = w2Documents.reduce((sum, doc) => sum + (doc.box1_wages || 0), 0);
+    
+    // For paystubs, take the average of calculated annualized income (they should all be the same)
+    const paystubIncome = paystubDocuments.length > 0 
+      ? paystubDocuments.reduce((sum, doc) => sum + (doc.calculatedAnnualizedIncome || 0), 0) / paystubDocuments.length
+      : 0;
+    
+    // Sum other document types
+    const otherIncome = otherDocuments.reduce((sum, doc) => sum + (doc.calculatedAnnualizedIncome || 0), 0);
+
+    return w2Income + paystubIncome + otherIncome;
+  };
+
+  const totalVerifiedIncome = calculateVerifiedIncome(completedDocuments);
 
   // Group documents by resident
   const documentsByResident = residents.map(resident => {
     const residentDocs = completedDocuments.filter(doc => doc.residentId === resident.id);
-    const residentVerifiedIncome = residentDocs.reduce((sum, doc) => sum + (doc.box1_wages || 0), 0);
+    const residentVerifiedIncome = calculateVerifiedIncome(residentDocs);
     
     return {
       resident,
@@ -74,16 +114,90 @@ export default function VerificationFinalizationDialog({
     };
   });
 
+  // Enhanced validation logic for sufficient documents
+  const validationResults = residents.map(resident => {
+    const residentDocs = completedDocuments.filter(doc => doc.residentId === resident.id);
+    
+    if (residentDocs.length === 0) {
+      return {
+        resident,
+        isValid: false,
+        message: `${resident.name} has no completed income documents.`
+      };
+    }
+
+    // Check if resident has only paystubs
+    const paystubs = residentDocs.filter(doc => doc.documentType === 'PAYSTUB');
+    const nonPaystubs = residentDocs.filter(doc => doc.documentType !== 'PAYSTUB');
+    
+    // If they have non-paystub documents (W2, etc.), they're good
+    if (nonPaystubs.length > 0) {
+      return {
+        resident,
+        isValid: true,
+        message: null
+      };
+    }
+    
+    // If they only have paystubs, check if there are enough
+    if (paystubs.length > 0) {
+      const payFrequency = paystubs[0]?.payFrequency;
+      
+      if (!payFrequency) {
+        return {
+          resident,
+          isValid: false,
+          message: `${resident.name} has paystubs but pay frequency could not be determined.`
+        };
+      }
+      
+      // Calculate required paystubs based on pay frequency (same logic as status indicator)
+      const payPeriodDays: Record<string, number> = {
+        'BI_WEEKLY': 14,
+        'WEEKLY': 7,
+        'SEMI_MONTHLY': 15,
+        'MONTHLY': 30,
+        'UNKNOWN': 14
+      };
+      const days = payPeriodDays[payFrequency] || 14;
+      const requiredStubs = Math.ceil(30 / days);
+      
+      if (paystubs.length < requiredStubs) {
+        return {
+          resident,
+          isValid: false,
+          message: `${resident.name} needs ${requiredStubs - paystubs.length} more paystub${requiredStubs - paystubs.length !== 1 ? 's' : ''} for ${formatPayFrequency(payFrequency).toLowerCase()} pay (${paystubs.length}/${requiredStubs} uploaded).`
+        };
+      }
+      
+      // Check if paystubs have calculated income
+      if (!paystubs.some(stub => stub.calculatedAnnualizedIncome)) {
+        return {
+          resident,
+          isValid: false,
+          message: `${resident.name}'s paystubs are still being processed for income calculation.`
+        };
+      }
+    }
+    
+    return {
+      resident,
+      isValid: true,
+      message: null
+    };
+  });
+
   // Check if verification is ready to finalize
   const hasCompletedDocuments = completedDocuments.length > 0;
-  const allResidentsHaveDocuments = residents.every(resident => 
-    verification.incomeDocuments.some(doc => 
-      doc.residentId === resident.id && doc.status === 'COMPLETED'
-    )
-  );
+  const allResidentsValid = validationResults.every(result => result.isValid);
+  const invalidResidents = validationResults.filter(result => !result.isValid);
+  
+  const canFinalize = hasCompletedDocuments && allResidentsValid;
 
   const handleFinalize = async () => {
-    // Allow finalization even with no documents
+    // Only allow finalization when all validation passes
+    if (!canFinalize) return;
+    
     setIsSubmitting(true);
     try {
       await onConfirm(totalVerifiedIncome);
@@ -153,10 +267,25 @@ export default function VerificationFinalizationDialog({
           <div className="mb-6">
             <h4 className="text-md font-semibold text-gray-800 mb-3">Verified Income by Resident</h4>
             <div className="space-y-4">
-              {documentsByResident.map(({ resident, documents, verifiedIncome }) => (
+              {documentsByResident.map(({ resident, documents, verifiedIncome }) => {
+                // Find validation result for this resident
+                const validationResult = validationResults.find(result => result.resident.id === resident.id);
+                
+                return (
                 <div key={resident.id} className="border rounded-lg p-4">
                   <div className="flex justify-between items-center mb-3">
-                    <h5 className="font-medium text-gray-900">{resident.name}</h5>
+                    <div className="flex items-center space-x-2">
+                      <h5 className="font-medium text-gray-900">{resident.name}</h5>
+                      {validationResult && (
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          validationResult.isValid 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {validationResult.isValid ? '✓ Ready' : '⚠ Insufficient'}
+                        </span>
+                      )}
+                    </div>
                     <div className="text-right">
                       <div className="text-sm text-gray-500">Original Income</div>
                       <div className="font-medium">
@@ -165,19 +294,44 @@ export default function VerificationFinalizationDialog({
                     </div>
                   </div>
                   
+                  {/* Show validation message for invalid residents */}
+                  {validationResult && !validationResult.isValid && (
+                    <div className="mb-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
+                      {validationResult.message}
+                    </div>
+                  )}
+                  
                   {documents.length > 0 ? (
                     <div className="space-y-2">
-                      {documents.map(doc => (
-                        <div key={doc.id} className="flex justify-between items-center text-sm">
-                          <span className="text-gray-600">
-                            {doc.documentType} {doc.taxYear ? `(${doc.taxYear})` : ''}
-                            {doc.employerName && ` - ${doc.employerName}`}
-                          </span>
-                          <span className="font-medium text-green-600">
-                            {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(doc.box1_wages || 0)}
-                          </span>
-                        </div>
-                      ))}
+                      {documents.map(doc => {
+                        // Calculate the verified income amount based on document type
+                        let verifiedAmount = 0;
+                        let displayText = doc.documentType;
+                        
+                        if (doc.documentType === 'W2') {
+                          verifiedAmount = doc.box1_wages || 0;
+                          displayText = `${doc.documentType} ${doc.taxYear ? `(${doc.taxYear})` : ''}`;
+                        } else if (doc.documentType === 'PAYSTUB') {
+                          verifiedAmount = doc.calculatedAnnualizedIncome || 0;
+                          if (doc.payPeriodStartDate && doc.payPeriodEndDate) {
+                            const startDate = new Date(doc.payPeriodStartDate);
+                            const endDate = new Date(doc.payPeriodEndDate);
+                            displayText = `${doc.documentType} (${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`;
+                          }
+                        }
+
+                        return (
+                          <div key={doc.id} className="flex justify-between items-center text-sm">
+                            <span className="text-gray-600">
+                              {displayText}
+                              {doc.employerName && ` - ${doc.employerName}`}
+                            </span>
+                            <span className="font-medium text-green-600">
+                              {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(verifiedAmount)}
+                            </span>
+                          </div>
+                        );
+                      })}
                       <div className="border-t pt-2 flex justify-between items-center font-semibold">
                         <span>Verified Income:</span>
                         <span className="text-green-600">
@@ -191,7 +345,8 @@ export default function VerificationFinalizationDialog({
                     </div>
                   )}
                 </div>
-              ))}
+              );
+            })}
             </div>
           </div>
 
@@ -206,17 +361,19 @@ export default function VerificationFinalizationDialog({
           </div>
 
           {/* Warnings */}
-          {!allResidentsHaveDocuments && (
+          {!allResidentsValid && (
             <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
               <div className="flex">
                 <svg className="w-5 h-5 text-yellow-400 mr-2 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                 </svg>
                 <div>
-                  <h4 className="text-yellow-800 font-medium">Incomplete Verification</h4>
-                  <p className="text-yellow-700 text-sm">
-                    Not all residents have completed documents. You can still finalize, but this may affect compliance calculations.
-                  </p>
+                  <h4 className="text-yellow-800 font-medium">Insufficient Documentation</h4>
+                  <div className="text-yellow-700 text-sm space-y-1 mt-1">
+                    {invalidResidents.map(result => (
+                      <p key={result.resident.id}>• {result.message}</p>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
@@ -248,12 +405,13 @@ export default function VerificationFinalizationDialog({
             </button>
             <button
               onClick={handleFinalize}
-              disabled={isSubmitting}
+              disabled={isSubmitting || !canFinalize}
               className={`px-4 py-2 text-sm font-medium text-white rounded-md ${
-                !isSubmitting
+                !isSubmitting && canFinalize
                   ? 'bg-green-600 hover:bg-green-700'
                   : 'bg-gray-400 cursor-not-allowed'
               }`}
+              title={!canFinalize ? 'Please resolve the issues above before finalizing' : ''}
             >
               {isSubmitting ? 'Finalizing...' : 'Finalize Verification'}
             </button>

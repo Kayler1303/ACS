@@ -10,6 +10,7 @@ import CreateLeaseDialog from '@/components/CreateLeaseDialog';
 import AddResidentDialog from '@/components/AddResidentDialog';
 import RenewalDialog from '@/components/RenewalDialog';
 import InitialAddResidentDialog from '@/components/InitialAddResidentDialog';
+import ResidentFinalizationDialog from '@/components/ResidentFinalizationDialog';
 import { format } from 'date-fns';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -29,6 +30,11 @@ interface IncomeDocument {
   box3_ss_wages?: number;
   box5_med_wages?: number;
   residentId?: string; // Add residentId to the interface
+  payPeriodStartDate?: string;
+  payPeriodEndDate?: string;
+  grossPayAmount?: number;
+  payFrequency?: string;
+  calculatedAnnualizedIncome?: number;
 }
 
 interface IncomeVerification {
@@ -94,6 +100,24 @@ interface TenancyData {
 interface NewResident {
   name: string;
 }
+
+// Helper function to format pay frequency for display
+const formatPayFrequency = (frequency: string): string => {
+  switch (frequency) {
+    case 'BI_WEEKLY':
+      return 'Bi-Weekly';
+    case 'WEEKLY':
+      return 'Weekly';
+    case 'SEMI_MONTHLY':
+      return 'Semi-Monthly';
+    case 'MONTHLY':
+      return 'Monthly';
+    case 'UNKNOWN':
+      return 'Unknown';
+    default:
+      return frequency;
+  }
+};
 
 // --- NEW VerificationRow Component ---
 
@@ -190,6 +214,26 @@ function VerificationRow({ verification, lease, onActionComplete }: { verificati
                   </div>
                 </div>
               )}
+              {doc.documentType === 'PAYSTUB' && doc.status === 'COMPLETED' && (
+                <div className="mt-2 pt-2 border-t border-gray-200 text-xs text-gray-600 space-y-1">
+                  <p><strong>Employee:</strong> {doc.employeeName || 'N/A'}</p>
+                  <p><strong>Employer:</strong> {doc.employerName || 'N/A'}</p>
+                  {doc.payPeriodStartDate && doc.payPeriodEndDate && (
+                    <p><strong>Pay Period:</strong> {format(new Date(doc.payPeriodStartDate), 'MMM d')} - {format(new Date(doc.payPeriodEndDate), 'MMM d, yyyy')}</p>
+                  )}
+                  <div className="grid grid-cols-2 gap-x-4 pt-1">
+                    <p><strong>Gross Pay:</strong> {doc.grossPayAmount ? `$${doc.grossPayAmount.toLocaleString()}` : 'N/A'}</p>
+                    {doc.payFrequency && (
+                      <p><strong>Pay Frequency:</strong> {formatPayFrequency(doc.payFrequency)}</p>
+                    )}
+                  </div>
+                  {doc.calculatedAnnualizedIncome && (
+                    <p className="pt-1 font-medium text-green-700">
+                      <strong>Calculated Annual Income:</strong> ${doc.calculatedAnnualizedIncome.toLocaleString()}
+                    </p>
+                  )}
+                </div>
+              )}
             </li>
           ))}
         </ul>
@@ -201,32 +245,7 @@ function VerificationRow({ verification, lease, onActionComplete }: { verificati
 }
 
 
-// --- UPDATED ResidentRow Component ---
 
-function ResidentRow({ resident, totalIncome }: { resident: Resident, totalIncome: number }) {
-  const residentIncome = resident.annualizedIncome || 0;
-  const incomePercentage = totalIncome > 0 ? (residentIncome / totalIncome) * 100 : 0;
-  
-  return (
-    <tr key={resident.id}>
-      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-          {resident.name}
-      </td>
-      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-        {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(residentIncome)}
-      </td>
-        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-        {resident.verifiedIncome 
-          ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(resident.verifiedIncome)
-          : <span className="text-gray-400">N/A</span>
-        }
-      </td>
-      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-        {incomePercentage.toFixed(1)}%
-      </td>
-    </tr>
-  );
-}
 
 // --- UPDATED ResidentDetailPage Component & Polling Logic ---
 
@@ -261,6 +280,14 @@ export default function ResidentDetailPage() {
   const [newLeaseStart, setNewLeaseStart] = useState('');
   const [newLeaseEnd, setNewLeaseEnd] = useState('');
   const [newLeaseRent, setNewLeaseRent] = useState('');
+
+  // New state for resident-specific finalization
+  const [residentFinalizationDialog, setResidentFinalizationDialog] = useState<{
+    isOpen: boolean;
+    verification: IncomeVerification | null;
+    resident: Resident | null;
+    leaseName: string;
+  }>({ isOpen: false, verification: null, resident: null, leaseName: '' });
 
   // Helper function to clean up new lease workflow state
   const resetNewLeaseWorkflow = () => {
@@ -453,7 +480,10 @@ export default function ResidentDetailPage() {
     }
   };
 
-  const formatUnitNumber = (unitNumber: string) => parseInt(unitNumber, 10).toString();
+  const formatUnitNumber = (unitNumber: string): string => {
+    // Remove leading zeros from unit numbers like "0101" -> "101"
+    return unitNumber.replace(/^0+/, '') || '0';
+  };
 
   const handleStartVerification = async (leaseId: string, overrideResidents?: Array<{ id: string; name: string }>) => {
     if (!tenancyData) return;
@@ -559,6 +589,72 @@ export default function ResidentDetailPage() {
       console.error('Finalization error:', err);
       toast.error(err instanceof Error ? err.message : 'An unexpected error occurred');
       // We don't need to re-throw. The toast will show the error.
+    }
+  };
+
+  // New handlers for resident-specific finalization
+  const handleOpenResidentFinalizationDialog = (verification: IncomeVerification, resident: Resident, leaseName: string) => {
+    setResidentFinalizationDialog({ 
+      isOpen: true, 
+      verification, 
+      resident, 
+      leaseName 
+    });
+  };
+
+  const handleCloseResidentFinalizationDialog = () => {
+    setResidentFinalizationDialog({ 
+      isOpen: false, 
+      verification: null, 
+      resident: null, 
+      leaseName: '' 
+    });
+  };
+
+  const handleFinalizeResidentVerification = async (calculatedIncome: number) => {
+    if (!residentFinalizationDialog.verification || !residentFinalizationDialog.resident) return;
+    
+    const { verification, resident } = residentFinalizationDialog;
+    const leaseId = verification.leaseId;
+    const verificationId = verification.id;
+    const residentId = resident.id;
+    
+    try {
+      const res = await fetch(`/api/leases/${leaseId}/verifications/${verificationId}/residents/${residentId}/finalize`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          calculatedVerifiedIncome: calculatedIncome,
+        }),
+      });
+
+      if (!res.ok) {
+        let errorMsg = 'Failed to finalize resident verification';
+        try {
+          const data = await res.json();
+          errorMsg = data.error || errorMsg;
+        } catch (e) {
+          console.error("Could not parse error response as JSON", res.status, res.statusText);
+        }
+        throw new Error(errorMsg);
+      }
+
+      const result = await res.json();
+      
+      // Close dialog and refresh data
+      handleCloseResidentFinalizationDialog();
+      fetchTenancyData(false);
+      
+      if (result.verificationFinalized) {
+        toast.success(`${resident.name}'s income finalized! All residents verified - lease verification complete!`);
+      } else {
+        toast.success(`${resident.name}'s income finalized successfully!`);
+      }
+    } catch (error: unknown) {
+      console.error('Error finalizing resident verification:', error);
+      toast.error((error instanceof Error ? error.message : 'An error occurred while finalizing the resident verification.'));
     }
   };
 
@@ -757,12 +853,7 @@ export default function ResidentDetailPage() {
     );
   }
 
-  const totalIncome = tenancyData?.lease.residents.reduce((sum, resident) => 
-    sum + (resident.annualizedIncome || 0), 0
-  ) || 0;
 
-  const inProgressVerification = tenancyData?.lease.incomeVerifications.find(v => v.status === 'IN_PROGRESS');
-  const finalizedVerifications = tenancyData?.lease.incomeVerifications.filter(v => v.status !== 'IN_PROGRESS');
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -820,7 +911,7 @@ export default function ResidentDetailPage() {
 
        <div className="bg-white p-6 rounded-lg shadow-md mb-8">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-2xl font-semibold text-brand-blue">Lease Period Income Verification</h2>
+          <h2 className="text-2xl font-semibold text-brand-blue">Resident Income Verification by Lease</h2>
           <button
             onClick={() => setCreateLeaseDialogOpen(true)}
             className="px-4 py-2 bg-brand-blue text-white rounded-md hover:bg-blue-700"
@@ -834,221 +925,75 @@ export default function ResidentDetailPage() {
             <p className="text-gray-500">No lease periods found.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Lease Period
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Verification Details
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    AMI Qualification
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Action
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {leasePeriods.map((period) => (
-                  <Fragment key={period.id}>
-                    <tr className={period.isCurrentPeriod ? 'bg-blue-50' : ''}>
-                      <td className="px-6 py-4">
-                        <div className="text-sm font-medium text-gray-900">
-                          {period.name}
-                        </div>
-                        <div className="text-xs text-gray-500 mt-1">
+          <div className="space-y-6">
+            {leasePeriods.map((period) => {
+              const verification = period.verification;
+              const isInProgress = verification?.status === 'IN_PROGRESS';
+              const isCompleted = verification?.status === 'FINALIZED';
+              
+              return (
+                <div key={period.id} className={`border rounded-lg overflow-hidden ${period.isCurrentPeriod ? 'border-blue-300 bg-blue-50' : 'border-gray-200'}`}>
+                  {/* Lease Header */}
+                  <div className="bg-gray-50 px-6 py-4 border-b">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900">{period.name}</h3>
+                        <div className="text-sm text-gray-600 mt-1">
                           {period.periodStart && period.periodEnd ? (
                             `${format(period.periodStart, 'MMM d, yyyy')} - ${format(period.periodEnd, 'MMM d, yyyy')}`
                           ) : (
                             'Lease Term Not Defined'
                           )}
+                          {period.isCurrentPeriod && (
+                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">Current Period</span>
+                          )}
                         </div>
-                        <div className="text-xs text-gray-600 mt-1">
+                        <div className="text-sm text-gray-500 mt-1">
                           {period.residents.length} {period.residents.length === 1 ? 'resident' : 'residents'}
                         </div>
-                        {period.isCurrentPeriod && (
-                          <span className="ml-2 text-blue-600 font-semibold">Current Period</span>
-                        )}
-                        {period.verification?.dueDate && (
-                          <div className="text-xs text-red-600 mt-1 font-medium">
-                            Due: {format(new Date(period.verification.dueDate), 'MMM d, yyyy')}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4">
-                        {period.verification ? (
-                          <div className="space-y-2">
-                            <div className="text-xs text-gray-500">
-                              <div>Started: {format(new Date(period.verification.createdAt), 'MMM d, yyyy')}</div>
-                              {period.verification.reason && (
-                                <div className="capitalize">
-                                  Reason: {period.verification.reason.replace('_', ' ').toLowerCase()}
-                                </div>
-                              )}
-                            </div>
-                            {period.verification.incomeDocuments && period.verification.incomeDocuments.length > 0 ? (
-                              <div className="space-y-2">
-                                <div className="text-xs font-medium text-gray-700">Documents ({period.verification.incomeDocuments.length}):</div>
-                                <div className="space-y-1 max-h-32 overflow-y-auto">
-                                  {period.verification.incomeDocuments.map((doc) => {
-                                    // Find the resident for this document
-                                    const resident = tenancyData?.unit.leases.find(l => l.id === period.id)?.residents.find(r => r.id === doc.residentId);
-                                    return (
-                                      <div key={doc.id} className="text-xs border rounded p-2 bg-gray-50">
-                                        <div className="flex items-center justify-between mb-1">
-                                          <div className="flex items-center space-x-2">
-                                            <span className="font-medium text-gray-700">{doc.documentType}</span>
-                                            {resident && (
-                                              <span className="text-xs text-blue-600 font-medium">({resident.name})</span>
-                                            )}
-                                          </div>
-                                          <div className="flex items-center space-x-2">
-                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                              doc.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
-                                              doc.status === 'PROCESSING' ? 'bg-yellow-100 text-yellow-800' :
-                                              'bg-red-100 text-red-800'
-                                            }`}>
-                                              {doc.status}
-                                            </span>
-                                            <button
-                                              onClick={() => {
-                                                handleDeleteDocument(doc.id);
-                                              }}
-                                              className="text-red-500 hover:text-red-700 ml-4"
-                                              aria-label={`Delete document ${doc.documentType}`}
-                                            >
-                                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                              </svg>
-                                            </button>
-                                          </div>
-                                        </div>
-                                        {doc.documentType === 'W2' && doc.status === 'COMPLETED' && (
-                                          <div className="mt-1 text-gray-600 space-y-1">
-                                            {doc.taxYear && <div>Tax Year: {doc.taxYear}</div>}
-                                            {doc.employerName && <div>Employer: {doc.employerName}</div>}
-                                            {doc.box1_wages && (
-                                              <div className="font-medium text-green-700">
-                                                Wages: {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(doc.box1_wages)}
-                                              </div>
-                                            )}
-                                            {doc.box3_ss_wages && (
-                                              <div className="text-sm">
-                                                Social Security Wages: {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(doc.box3_ss_wages)}
-                                              </div>
-                                            )}
-                                            {doc.box5_med_wages && (
-                                              <div className="text-sm">
-                                                Medicare Wages: {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(doc.box5_med_wages)}
-                                              </div>
-                                            )}
-                                          </div>
-                                        )}
-                                        {doc.uploadDate && (
-                                          <div className="text-gray-400 mt-1">
-                                            Uploaded: {format(new Date(doc.uploadDate), 'MMM d, yyyy')}
-                                          </div>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="text-xs text-gray-500 italic">No documents uploaded yet</div>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="text-xs text-gray-500 italic">No verification started</div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {getStatusBadge(period.status)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        {period.status === 'completed' && period.isProvisional && period.amiBucketInfo ? (
-                          <div className="space-y-1">
-                            <div className="flex items-center space-x-2">
-                              <span className="text-xs font-medium text-gray-700">AMI Bucket:</span>
-                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                period.amiBucketInfo.actualBucket === '50% AMI' ? 'bg-green-100 text-green-800' :
-                                period.amiBucketInfo.actualBucket === '60% AMI' ? 'bg-blue-100 text-blue-800' :
-                                period.amiBucketInfo.actualBucket === '80% AMI' ? 'bg-purple-100 text-purple-800' :
-                                'bg-gray-100 text-gray-800'
-                              }`}>
-                                {period.amiBucketInfo.actualBucket}
-                              </span>
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {period.amiBucketInfo.amiPercentage?.toFixed(1)}% AMI
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {period.amiBucketInfo.householdSize} {period.amiBucketInfo.householdSize === 1 ? 'person' : 'people'}, 
-                              {' '}{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(period.amiBucketInfo.householdIncome)}
-                            </div>
-                            {period.amiBucketInfo.hudDataYear && (
-                              <div className="text-xs text-gray-400">
-                                {period.amiBucketInfo.hudDataYear} HUD Limits
-                              </div>
-                            )}
-                          </div>
-                        ) : period.status === 'completed' && period.isProvisional ? (
-                          <div className="text-xs text-gray-400 italic">
-                            Calculating...
-                          </div>
-                        ) : (
-                          <div className="text-xs text-gray-400">
-                            -
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex flex-col space-y-2">
-                          {period.status === 'needs_verification' && (
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        {/* Overall Lease Status */}
+                        <div className="text-right">
+                          {isCompleted ? (
+                            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                              ✓ All Residents Verified
+                            </span>
+                          ) : isInProgress ? (
+                            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                              📝 Verification In Progress
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
+                              📋 Needs Verification
+                            </span>
+                          )}
+                        </div>
+                        
+                        {/* Lease Actions */}
+                        <div className="flex flex-col space-y-1">
+                          {!verification && (
                             <button 
                               onClick={() => handleStartVerification(period.id)}
-                              className="text-brand-blue hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded-md transition-colors"
+                              className="text-xs text-brand-blue hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded transition-colors"
                             >
-                              Verify Income
+                              Start Verification
                             </button>
                           )}
-                          {period.status === 'in_progress' && period.verification && (
-                            <>
-                              <button 
-                                onClick={() => {
-                                  setUploadDialogData({
-                                    verificationId: period.verification!.id,
-                                    leaseName: period.name,
-                                    residents: period.residents.map(r => ({ id: r.id, name: r.name })),
-                                    hasExistingDocuments: !!period.verification?.incomeDocuments?.length
-                                  });
-                                  setUploadDialogOpen(true);
-                                }}
-                                className="text-blue-600 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded-md transition-colors block w-full text-left"
-                              >
-                                Continue Verification
-                              </button>
-                              <button 
-                                onClick={() => handleOpenFinalizationDialog(period.verification!)}
-                                className="text-green-600 hover:text-green-900 bg-green-50 hover:bg-green-100 px-3 py-1 rounded-md transition-colors block w-full text-left"
-                              >
-                                Finalize Verification
-                              </button>
-                            </>
-                          )}
-                          {period.status === 'completed' && period.verification && (
+                          {isInProgress && (
                             <button 
-                              onClick={() => {/* TODO: View verification details */}}
-                              className="text-green-600 hover:text-green-900 bg-green-50 hover:bg-green-100 px-3 py-1 rounded-md transition-colors"
+                              onClick={() => {
+                                setUploadDialogData({
+                                  verificationId: verification.id,
+                                  leaseName: period.name,
+                                  residents: period.residents.map(r => ({ id: r.id, name: r.name })),
+                                  hasExistingDocuments: !!verification.incomeDocuments?.length
+                                });
+                                setUploadDialogOpen(true);
+                              }}
+                              className="text-xs text-blue-600 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded transition-colors"
                             >
-                              View Details
+                              Upload Documents
                             </button>
                           )}
                           {period.isProvisional && (
@@ -1058,91 +1003,174 @@ export default function ResidentDetailPage() {
                                   setSelectedLeaseForResident(period);
                                   setInitialAddResidentDialogOpen(true);
                                 }}
-                                className="text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-3 py-1 rounded-md transition-colors block w-full text-left"
+                                className="text-xs text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded transition-colors"
                               >
                                 Add Resident
                               </button>
                               <button
                                 onClick={() => handleDeleteLease(period.id)}
-                                className="text-red-600 hover:text-red-900 bg-red-50 hover:bg-red-100 px-3 py-1 rounded-md transition-colors block w-full text-left"
+                                className="text-xs text-red-600 hover:text-red-900 bg-red-50 hover:bg-red-100 px-2 py-1 rounded transition-colors"
                               >
                                 Delete Lease
                               </button>
                             </>
                           )}
                         </div>
-                      </td>
-                    </tr>
+                      </div>
+                    </div>
+                  </div>
 
-                  </Fragment>
-                ))}
-              </tbody>
-            </table>
+                  {/* Residents List */}
+                  {period.residents.length > 0 ? (
+                    <div className="divide-y divide-gray-200">
+                      {period.residents.map((resident) => {
+                        // Filter documents for this resident
+                        const residentDocuments = verification?.incomeDocuments?.filter(
+                          doc => doc.residentId === resident.id && doc.status === 'COMPLETED' && (doc.box1_wages || doc.calculatedAnnualizedIncome)
+                        ) || [];
+                        
+                        // Calculate verified income correctly for different document types
+                        const w2Documents = residentDocuments.filter(doc => doc.documentType === 'W2');
+                        const paystubDocuments = residentDocuments.filter(doc => doc.documentType === 'PAYSTUB');
+                        const otherDocuments = residentDocuments.filter(doc => doc.documentType !== 'W2' && doc.documentType !== 'PAYSTUB');
+
+                        // Sum W2 wages
+                        const w2Income = w2Documents.reduce((sum, doc) => sum + (doc.box1_wages || 0), 0);
+                        
+                        // For paystubs, take the average of calculated annualized income (they should all be the same)
+                        const paystubIncome = paystubDocuments.length > 0 
+                          ? paystubDocuments.reduce((sum, doc) => sum + (doc.calculatedAnnualizedIncome || 0), 0) / paystubDocuments.length
+                          : 0;
+                        
+                        // Sum other document types
+                        const otherIncome = otherDocuments.reduce((sum, doc) => sum + (doc.calculatedAnnualizedIncome || 0), 0);
+
+                        const residentVerifiedIncome = w2Income + paystubIncome + otherIncome;
+
+                        const isResidentVerified = resident.verifiedIncome !== null && resident.verifiedIncome > 0;
+                        const hasCompletedDocuments = residentDocuments.length > 0;
+                        
+                        // Validation logic for this resident
+                        const canFinalizeResident = hasCompletedDocuments && residentVerifiedIncome > 0;
+
+                        return (
+                          <div key={resident.id} className="px-6 py-4">
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1">
+                                <div className="flex items-center space-x-3 mb-2">
+                                  <h4 className="text-md font-medium text-gray-900">{resident.name}</h4>
+                                  <div className="flex items-center space-x-2">
+                                    {isResidentVerified ? (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                        ✓ Verified
+                                      </span>
+                                    ) : hasCompletedDocuments ? (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                        📋 Ready to Finalize
+                                      </span>
+                                    ) : isInProgress ? (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                        📝 Documents Needed
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                        ⏸️ Not Started
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                
+                                <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
+                                  <div>
+                                    <span className="font-medium">Original Income:</span> {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(resident.annualizedIncome)}
+                                  </div>
+                                  <div>
+                                    <span className="font-medium">Verified Income:</span> {
+                                      isResidentVerified 
+                                        ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(resident.verifiedIncome!)
+                                        : hasCompletedDocuments
+                                          ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(residentVerifiedIncome)
+                                          : 'N/A'
+                                    }
+                                  </div>
+                                </div>
+
+                                {/* Show documents if any */}
+                                {hasCompletedDocuments && (
+                                  <div className="mt-3">
+                                    <div className="text-xs font-medium text-gray-500 mb-2">Documents ({residentDocuments.length}):</div>
+                                    <div className="flex flex-wrap gap-2">
+                                      {residentDocuments.map(doc => (
+                                        <span key={doc.id} className="inline-flex items-center px-2 py-1 rounded-md text-xs bg-green-50 text-green-700 border border-green-200">
+                                          {doc.documentType}
+                                          {doc.documentType === 'W2' && doc.taxYear && ` (${doc.taxYear})`}
+                                          {doc.documentType === 'PAYSTUB' && doc.payPeriodStartDate && doc.payPeriodEndDate && (
+                                            ` (${format(new Date(doc.payPeriodStartDate), 'MMM d')} - ${format(new Date(doc.payPeriodEndDate), 'MMM d')})`
+                                          )}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Resident Actions */}
+                              <div className="ml-4 flex flex-col space-y-2">
+                                {!isResidentVerified && canFinalizeResident && (
+                                  <button
+                                    onClick={() => handleOpenResidentFinalizationDialog(verification!, resident, period.name)}
+                                    className="px-3 py-1 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                                  >
+                                    Finalize {resident.name}
+                                  </button>
+                                )}
+                                {isResidentVerified && (
+                                  <span className="px-3 py-1 text-sm bg-green-100 text-green-800 rounded-md text-center">
+                                    Finalized ✓
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="px-6 py-4 text-center text-gray-500">
+                      No residents added to this lease yet.
+                    </div>
+                  )}
+
+                  {/* AMI Qualification for completed provisional leases */}
+                  {period.status === 'completed' && period.isProvisional && period.amiBucketInfo && (
+                    <div className="bg-gray-50 px-6 py-3 border-t">
+                      <div className="text-sm">
+                        <span className="font-medium text-gray-700">AMI Qualification: </span>
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          period.amiBucketInfo.actualBucket === '50% AMI' ? 'bg-green-100 text-green-800' :
+                          period.amiBucketInfo.actualBucket === '60% AMI' ? 'bg-blue-100 text-blue-800' :
+                          period.amiBucketInfo.actualBucket === '80% AMI' ? 'bg-purple-100 text-purple-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {period.amiBucketInfo.actualBucket}
+                        </span>
+                        <span className="ml-2 text-gray-500">
+                          ({period.amiBucketInfo.amiPercentage?.toFixed(1)}% AMI, {period.amiBucketInfo.householdSize} {period.amiBucketInfo.householdSize === 1 ? 'person' : 'people'})
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
+
         )}
 
         {/* The upload form is now rendered within the table for the corresponding lease period. */}
       </div>
 
-      <div className="bg-white p-6 rounded-lg shadow-md">
-         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-semibold text-brand-blue">Resident Information</h2>
-          <p className="text-sm text-gray-500">
-            As of: <span className="font-medium">{new Date(tenancyData.rentRoll.date).toLocaleDateString('en-US', { 
-              year: 'numeric', 
-              month: 'long', 
-              day: 'numeric' 
-            })}</span>
-          </p>
-        </div>
-        
-        {tenancyData.lease.residents.length === 0 ? (
-          <div className="text-center py-8">
-            <p className="text-gray-500">No residents found for this unit in the selected rent roll.</p>
-          </div>
-        ) : (
-          <>
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-4">
-                <p className="text-lg font-medium text-gray-700">
-                  Total Residents: <span className="font-semibold">{tenancyData.lease.residents.length}</span>
-                </p>
-                <p className="text-lg font-medium text-gray-700">
-                  Total Household Income: <span className="font-semibold text-green-600">
-                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(totalIncome)}
-                  </span>
-                </p>
-              </div>
-            </div>
 
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Resident Name
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Annualized Income
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Verified Income
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      % of Total Income
-                    </th>
-                  </tr>
-                </thead>
-                 <tbody className="bg-white divide-y divide-gray-200">
-                  {tenancyData.lease.residents.map((resident) => (
-                    <ResidentRow key={resident.id} resident={resident} totalIncome={totalIncome} />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
-      </div>
 
       {/* Finalization Dialog */}
       {finalizationDialog.verification && (
@@ -1152,6 +1180,18 @@ export default function ResidentDetailPage() {
           onConfirm={handleFinalizeVerification}
           verification={finalizationDialog.verification}
           residents={tenancyData?.unit.leases.find(l => l.id === finalizationDialog.verification?.leaseId)?.residents || []}
+        />
+      )}
+
+      {/* Resident Finalization Dialog */}
+      {residentFinalizationDialog.verification && residentFinalizationDialog.resident && (
+        <ResidentFinalizationDialog
+          isOpen={residentFinalizationDialog.isOpen}
+          onClose={handleCloseResidentFinalizationDialog}
+          onConfirm={handleFinalizeResidentVerification}
+          verification={residentFinalizationDialog.verification}
+          resident={residentFinalizationDialog.resident}
+          leaseName={residentFinalizationDialog.leaseName}
         />
       )}
       <CreateLeaseDialog

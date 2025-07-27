@@ -16,10 +16,13 @@ model User {
   password           String
   name               String?
   company            String
+  role               UserRole            @default(USER)
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
   properties         Property[]
   verificationTokens VerificationToken[]
+  overrideRequests   OverrideRequest[]   @relation("UserOverrideRequests")
+  adminReviews       OverrideRequest[]   @relation("AdminOverrideReviews")
 }
 
 model Property {
@@ -194,4 +197,55 @@ enum VerificationReason {
   LEASE_RENEWAL
   INCOME_CHANGE
   COMPLIANCE_AUDIT
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum OverrideRequestType {
+  VALIDATION_EXCEPTION    // Need fewer docs than required
+  INCOME_DISCREPANCY     // Use verified vs compliance income
+  DOCUMENT_REVIEW        // Manual entry for failed OCR
+}
+
+enum OverrideRequestStatus {
+  PENDING
+  APPROVED  
+  DENIED
+  APPLIED
+}
+
+model OverrideRequest {
+  id               String                @id @default(cuid())
+  type             OverrideRequestType
+  status           OverrideRequestStatus @default(PENDING)
+  
+  // Request details
+  userExplanation  String                // User's justification
+  adminNotes       String?               // Admin's decision notes
+  
+  // Context (what needs override)
+  unitId           String?
+  residentId       String?
+  verificationId   String?
+  documentId       String?
+  
+  // Users involved
+  requesterId      String                // User who requested
+  reviewerId       String?               // Admin who reviewed
+  
+  // Timestamps
+  createdAt        DateTime              @default(now())
+  reviewedAt       DateTime?
+  appliedAt        DateTime?
+  
+  // Relations
+  requester        User                  @relation("UserOverrideRequests", fields: [requesterId], references: [id])
+  reviewer         User?                 @relation("AdminOverrideReviews", fields: [reviewerId], references: [id])
+  
+  @@index([status])
+  @@index([type])
+  @@index([requesterId])
 }

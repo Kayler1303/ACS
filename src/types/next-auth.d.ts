@@ -9,6 +9,8 @@ declare module 'next-auth' {
     user: {
       /** The user's id. */
       id: string;
+      /** The user's role. */
+      role: string;
     } & DefaultSession['user'];
   }
 }
@@ -19,5 +21,6 @@ declare module 'next-auth/jwt' {
     /** OpenID ID Token */
     sub: string;
     id: string;
+    role: string;
   }
 } 

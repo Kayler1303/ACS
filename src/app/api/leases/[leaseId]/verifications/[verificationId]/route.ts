@@ -1,8 +1,9 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getServerSession } from 'next-auth';
+import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { IncomeDocument } from '@prisma/client';
+import { checkAndCreateIncomeDiscrepancyOverride } from '@/services/verification';
 
 export async function PATCH(
   req: Request,
@@ -75,7 +76,31 @@ export async function PATCH(
         finalizedAt: new Date(),
         calculatedVerifiedIncome: totalVerifiedIncome,
       },
+      include: {
+        lease: {
+          include: {
+            residents: true,
+            unit: true
+          }
+        }
+      }
     });
+
+    // Check for income discrepancy and create auto-override if needed
+    const totalUploadedIncome = updatedVerification.lease.residents.reduce((acc, r) => acc + (r.annualizedIncome || 0), 0);
+    
+    try {
+      await checkAndCreateIncomeDiscrepancyOverride({
+        unitId: updatedVerification.lease.unit.id,
+        verificationId: updatedVerification.id,
+        totalUploadedIncome,
+        totalVerifiedIncome,
+        userId: session.user.id
+      });
+    } catch (error) {
+      console.error('Failed to create auto-override request for income discrepancy:', error);
+      // Don't fail the finalization, just log the error
+    }
 
     return NextResponse.json(updatedVerification);
   } catch (error) {

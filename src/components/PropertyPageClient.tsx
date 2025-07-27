@@ -143,6 +143,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
   const [provisionalLeases, setProvisionalLeases] = useState<ProvisionalLease[]>([]);
   const [selectedProvisionalLeases, setSelectedProvisionalLeases] = useState<Set<string>>(new Set());
 
+
   // Fetch HUD income limits
   useEffect(() => {
     const fetchIncomeLimits = async () => {
@@ -593,6 +594,8 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     }
   };
 
+
+
   // Calculate target unit counts with proper rounding
   const getTargetCounts = (complianceOption: string, totalUnits: number): { [key: string]: number } => {
     switch (complianceOption) {
@@ -878,8 +881,8 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
   };
 
   const stats = calculateSummaryStats();
-  const projectedStats = calculateProjectedSummaryStats();
-  const hasSelectedProvisionalLeases = selectedProvisionalLeases.size > 0;
+      const projectedStats = calculateProjectedSummaryStats();
+    const hasSelectedProvisionalLeases = selectedProvisionalLeases.size > 0;
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -1630,6 +1633,8 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
           </div>
         </div>
       )}
+
+
     </div>
   );
 } 

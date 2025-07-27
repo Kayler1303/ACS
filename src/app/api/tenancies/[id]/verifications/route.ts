@@ -180,6 +180,12 @@ export async function PATCH(
             include: {
               resident: true
             }
+          },
+          lease: {
+            include: {
+              residents: true,
+              unit: true
+            }
           }
         }
       });

@@ -54,6 +54,11 @@ const Header = () => {
                             <Link href="/dashboard" className={`text-2xl hover:text-gray-600 ${pathname === '/dashboard' ? 'text-brand-accent' : 'text-brand-blue'}`}>
                                 Dashboard
                             </Link>
+                            {session.user.role === 'ADMIN' && (
+                                <Link href="/admin" className={`text-2xl hover:text-gray-600 ${pathname === '/admin' ? 'text-brand-accent' : 'text-brand-blue'}`}>
+                                    Admin
+                                </Link>
+                            )}
                             <button onClick={() => signOut()} className="text-2xl hover:text-gray-600 text-brand-blue">
                                 Logout
                             </button>
@@ -85,6 +90,11 @@ const Header = () => {
                             <Link href="/dashboard" onClick={() => setIsMenuOpen(false)} className={`block py-2 text-center text-lg ${pathname === '/dashboard' ? 'text-brand-accent' : 'text-brand-blue'}`}>
                                 Dashboard
                             </Link>
+                            {session.user.role === 'ADMIN' && (
+                                <Link href="/admin" onClick={() => setIsMenuOpen(false)} className={`block py-2 text-center text-lg ${pathname === '/admin' ? 'text-brand-accent' : 'text-brand-blue'}`}>
+                                    Admin
+                                </Link>
+                            )}
                             <button onClick={() => { signOut(); setIsMenuOpen(false); }} className="block py-2 text-center text-lg text-brand-blue w-full">
                                 Logout
                             </button>

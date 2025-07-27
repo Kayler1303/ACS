@@ -9,7 +9,8 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@azure/ai-form-recognizer": "^5.1.0",
+    "@azure-rest/ai-document-intelligence": "^1.1.0",
+    "@azure/core-auth": "^1.10.0",
     "@azure/identity": "^4.10.2",
     "@azure/storage-blob": "^12.27.0",
     "@google-cloud/documentai": "^9.3.0",
