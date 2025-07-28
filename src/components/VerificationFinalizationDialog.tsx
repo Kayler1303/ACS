@@ -54,6 +54,9 @@ interface Resident {
   name: string;
   annualizedIncome: number;
   verifiedIncome: number | null;
+  calculatedAnnualizedIncome?: number; // Phase 2: Add resident-level calculated income
+  incomeFinalized?: boolean;
+  finalizedAt?: string | null;
 }
 
 interface VerificationFinalizationDialogProps {
@@ -75,9 +78,9 @@ export default function VerificationFinalizationDialog({
 
   if (!isOpen) return null;
 
-  // Calculate total verified income from completed documents
+  // Calculate total verified income from completed documents (Phase 2: Check status only)
   const completedDocuments = verification.incomeDocuments.filter(
-    doc => doc.status === 'COMPLETED' && (doc.box1_wages || doc.calculatedAnnualizedIncome)
+    doc => doc.status === 'COMPLETED'
   );
 
   // Helper function to calculate verified income correctly for different document types
@@ -100,12 +103,17 @@ export default function VerificationFinalizationDialog({
     return w2Income + paystubIncome + otherIncome;
   };
 
-  const totalVerifiedIncome = calculateVerifiedIncome(completedDocuments);
+  // Calculate total verified income (Phase 2: Sum resident-level calculated incomes)
+  const totalVerifiedIncome = residents.reduce((sum, resident) => {
+    return sum + (resident.calculatedAnnualizedIncome || 0);
+  }, 0) || calculateVerifiedIncome(completedDocuments); // Fallback to document-level if no resident data
 
-  // Group documents by resident
+  // Group documents by resident (Phase 2: Use resident-level calculated income)
   const documentsByResident = residents.map(resident => {
     const residentDocs = completedDocuments.filter(doc => doc.residentId === resident.id);
-    const residentVerifiedIncome = calculateVerifiedIncome(residentDocs);
+    
+    // Use resident-level calculatedAnnualizedIncome if available, otherwise fall back to document-level calculation
+    const residentVerifiedIncome = resident.calculatedAnnualizedIncome || calculateVerifiedIncome(residentDocs);
     
     return {
       resident,
@@ -170,14 +178,9 @@ export default function VerificationFinalizationDialog({
         };
       }
       
-      // Check if paystubs have calculated income
-      if (!paystubs.some(stub => stub.calculatedAnnualizedIncome)) {
-        return {
-          resident,
-          isValid: false,
-          message: `${resident.name}'s paystubs are still being processed for income calculation.`
-        };
-      }
+      // Phase 2: Remove document-level calculatedAnnualizedIncome check
+      // If we have the required number of completed paystubs, we can proceed
+      // (The resident-level income calculation is handled separately)
     }
     
     return {

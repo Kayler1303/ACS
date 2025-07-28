@@ -292,10 +292,53 @@ export default function ResidentDetailPage() {
     leaseName: string;
   }>({ isOpen: false, verification: null, resident: null, leaseName: '' });
 
+  // New state for resident selection during lease verification
+  const [residentSelectionDialog, setResidentSelectionDialog] = useState<{
+    isOpen: boolean;
+    verificationId: string | null;
+    leaseName: string;
+    residents: Array<{ id: string; name: string }>;
+  }>({ isOpen: false, verificationId: null, leaseName: '', residents: [] });
+
   // Helper function to clean up new lease workflow state
   const resetNewLeaseWorkflow = () => {
     setIsNewLeaseWorkflow(false);
     setSelectedLeaseForResident(null);
+  };
+
+  // Handler for when a resident is selected from the resident selection dialog
+  const handleResidentSelected = (residentId: string) => {
+    const { verificationId, leaseName, residents } = residentSelectionDialog;
+    const selectedResident = residents.find(r => r.id === residentId);
+    
+    if (!verificationId || !selectedResident) return;
+    
+    // Close resident selection dialog
+    setResidentSelectionDialog({ 
+      isOpen: false, 
+      verificationId: null, 
+      leaseName: '', 
+      residents: [] 
+    });
+    
+    // Open upload dialog for selected resident
+    setUploadDialogData({
+      verificationId: verificationId,
+      leaseName: leaseName,
+      residents: [selectedResident], // Only the selected resident
+      hasExistingDocuments: false
+    });
+    setUploadDialogOpen(true);
+  };
+
+  // Handler to close resident selection dialog
+  const handleCloseResidentSelection = () => {
+    setResidentSelectionDialog({ 
+      isOpen: false, 
+      verificationId: null, 
+      leaseName: '', 
+      residents: [] 
+    });
   };
 
   const handleDeleteLease = async (leaseId: string) => {
@@ -522,19 +565,20 @@ export default function ResidentDetailPage() {
           setUploadDialogOpen(true);
           fetchTenancyData(false); // Refresh data in background
         } else {
-          // Refresh data and then set up dialog with current residents
+          // Refresh data and then open resident selection dialog  
           await fetchTenancyData(false);
           
           // Use setTimeout to ensure React state has updated after fetchTenancyData
           setTimeout(() => {
             const currentLease = tenancyData?.unit.leases.find(l => l.id === leaseId);
-            setUploadDialogData({
+            const residents = currentLease?.residents.map(r => ({ id: r.id, name: r.name })) || [];
+            
+            setResidentSelectionDialog({
+              isOpen: true,
               verificationId: newVerification.id,
               leaseName: currentLease?.name || 'Unknown Lease',
-              residents: currentLease?.residents.map(r => ({ id: r.id, name: r.name })) || [],
-              hasExistingDocuments: false
+              residents: residents
             });
-            setUploadDialogOpen(true);
           }, 100); // Small delay to ensure state update
         }
     } catch (err: unknown) {
@@ -964,7 +1008,7 @@ export default function ResidentDetailPage() {
                             </span>
                           ) : isInProgress ? (
                             <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-                              📝 Verification In Progress
+                              📝 In Progress - Finalize to Process
                             </span>
                           ) : (
                             <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
@@ -978,9 +1022,9 @@ export default function ResidentDetailPage() {
                           {!verification && (
                             <button 
                               onClick={() => handleStartVerification(period.id)}
-                              className="text-xs text-brand-blue hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded transition-colors"
+                              className="text-sm font-semibold text-white bg-red-600 hover:bg-red-700 px-4 py-2 rounded-md shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
                             >
-                              Start Verification
+                              🔍 Verify Lease Income
                             </button>
                           )}
                           {period.isProvisional && (
@@ -1016,9 +1060,9 @@ export default function ResidentDetailPage() {
                           doc => doc.residentId === resident.id
                         ) || [];
                         
-                        // Calculate verified income only from COMPLETED documents for calculation purposes
+                        // Calculate completed documents (status COMPLETED, regardless of calculated income)
                         const completedResidentDocuments = residentDocuments.filter(
-                          doc => doc.status === 'COMPLETED' && (doc.box1_wages || doc.calculatedAnnualizedIncome)
+                          doc => doc.status === 'COMPLETED'
                         );
                         
                         // Use resident-level calculated income instead of manual document aggregation
@@ -1026,6 +1070,9 @@ export default function ResidentDetailPage() {
 
                         const isResidentFinalized = resident.incomeFinalized || false;
                         const hasCompletedDocuments = completedResidentDocuments.length > 0;
+                        
+                        // Show documents if ANY documents exist (not just completed ones with calculated income)
+                        const hasAnyDocuments = residentDocuments.length > 0;
                         
                         // Validation logic for this resident
                         const canFinalizeResident = hasCompletedDocuments && residentVerifiedIncome > 0 && !isResidentFinalized;
@@ -1048,6 +1095,10 @@ export default function ResidentDetailPage() {
                                     ) : hasCompletedDocuments ? (
                                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
                                         ⚠️ Review Required
+                                      </span>
+                                    ) : hasAnyDocuments ? (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                        📄 Documents Uploaded
                                       </span>
                                     ) : isInProgress ? (
                                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
@@ -1077,7 +1128,7 @@ export default function ResidentDetailPage() {
                                 </div>
 
                                 {/* Show documents if any */}
-                                {hasCompletedDocuments && (
+                                {hasAnyDocuments && (
                                   <div className="mt-3">
                                     <div className="text-xs font-medium text-gray-500 mb-2">Documents ({residentDocuments.length}):</div>
                                     <div className="space-y-2">
@@ -1351,6 +1402,49 @@ export default function ResidentDetailPage() {
           hasExistingDocuments={uploadDialogData.hasExistingDocuments}
           leaseName={uploadDialogData.leaseName}
         />
+      )}
+
+      {/* Resident Selection Dialog */}
+      {residentSelectionDialog.isOpen && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">
+                  Select Resident for Income Verification
+                </h3>
+                <button
+                  onClick={handleCloseResidentSelection}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <span className="sr-only">Close</span>
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              
+              <p className="text-sm text-gray-600 mb-4">
+                Choose which resident you'd like to upload income documents for in <strong>{residentSelectionDialog.leaseName}</strong>:
+              </p>
+              
+              <div className="space-y-2">
+                {residentSelectionDialog.residents.map((resident) => (
+                  <button
+                    key={resident.id}
+                    onClick={() => handleResidentSelected(resident.id)}
+                    className="w-full text-left px-4 py-3 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                  >
+                    <div className="flex items-center">
+                      <span className="text-blue-600">👤</span>
+                      <span className="ml-3 font-medium text-gray-900">{resident.name}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

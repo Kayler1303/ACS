@@ -40,6 +40,11 @@ export async function GET(
                     },
                   },
                 },
+                incomeVerifications: {
+                  orderBy: {
+                    createdAt: 'desc',
+                  },
+                },
                 tenancy: {
                   include: {
                     rentRoll: true,
@@ -73,11 +78,34 @@ export async function GET(
       needsInvestigation: 0,
       outOfDate: 0,
       vacant: 0,
+      verificationInProgress: 0,
     };
 
     // Process each unit
     for (const unit of property.units) {
-      const verificationStatus = getUnitVerificationStatus(unit, latestRentRollDate);
+      // Find the active lease (with tenancy)
+      const currentLease = unit.leases
+        .filter(l => l.tenancy !== null)
+        .sort((a, b) => new Date(b.tenancy!.createdAt).getTime() - new Date(a.tenancy!.createdAt).getTime())[0];
+
+      let verificationStatus: any;
+
+      // Check if there's an active income verification in progress
+      if (currentLease && currentLease.incomeVerifications.length > 0) {
+        const latestVerification = currentLease.incomeVerifications[0]; // Already sorted by createdAt desc
+        
+        if (latestVerification.status === 'IN_PROGRESS') {
+          verificationStatus = 'In Progress - Finalize to Process';
+        } else if (latestVerification.status === 'FINALIZED') {
+          // Only check for discrepancies if verification is finalized
+          verificationStatus = getUnitVerificationStatus(unit, latestRentRollDate);
+        } else {
+          verificationStatus = getUnitVerificationStatus(unit, latestRentRollDate);
+        }
+      } else {
+        // No verification process started yet
+        verificationStatus = getUnitVerificationStatus(unit, latestRentRollDate);
+      }
       
       // Automatically create override request for "Needs Investigation" status
       if (verificationStatus === 'Needs Investigation') {
@@ -179,6 +207,9 @@ export async function GET(
           break;
         case 'Vacant':
           summary.vacant++;
+          break;
+        case 'In Progress - Finalize to Process':
+          summary.verificationInProgress++;
           break;
       }
     }

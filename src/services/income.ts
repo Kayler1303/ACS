@@ -29,13 +29,20 @@ type PaystubDocument = IncomeDocument & {
   grossPayAmount: number;
 };
 
+// Helper type for documents that might have paystub fields
+type PotentialPaystubDocument = IncomeDocument & {
+  payPeriodStartDate?: Date | null;
+  payPeriodEndDate?: Date | null;
+  grossPayAmount?: any; // Could be Decimal or number
+};
+
 /**
  * Analyzes a list of paystub documents to determine pay frequency and calculate annualized income.
  *
  * @param paystubs - A list of IncomeDocument objects of type PAYSTUB.
  * @returns An object containing the annualized income or an error message.
  */
-export function analyzePaystubs(paystubs: IncomeDocument[]): PaystubAnalysisResult {
+export function analyzePaystubs(paystubs: PotentialPaystubDocument[]): PaystubAnalysisResult {
   if (paystubs.length === 0) {
     return { annualizedIncome: null, error: 'No paystubs provided.' };
   }
@@ -43,7 +50,10 @@ export function analyzePaystubs(paystubs: IncomeDocument[]): PaystubAnalysisResu
   // Ensure all documents are paystubs and have the necessary information
   const processedPaystubs = paystubs
     .map((p): PaystubDocument | null => {
-        if (!p.payPeriodStartDate || !p.payPeriodEndDate || typeof p.grossPayAmount !== 'number') {
+        // Handle both Prisma Decimal and number types for grossPayAmount
+        const grossPayAmount = p.grossPayAmount ? Number(p.grossPayAmount) : null;
+        
+        if (!p.payPeriodStartDate || !p.payPeriodEndDate || !grossPayAmount || grossPayAmount <= 0) {
             return null;
         }
 
@@ -51,7 +61,7 @@ export function analyzePaystubs(paystubs: IncomeDocument[]): PaystubAnalysisResu
             ...p,
             payPeriodStartDate: p.payPeriodStartDate,
             payPeriodEndDate: p.payPeriodEndDate,
-            grossPayAmount: p.grossPayAmount,
+            grossPayAmount: grossPayAmount,
         };
     })
     .filter((p): p is PaystubDocument => p !== null)

@@ -17,7 +17,7 @@ type FullUnit = Unit & {
   })[];
 };
 
-export type VerificationStatus = "Verified" | "Needs Investigation" | "Out of Date Income Documents" | "Vacant";
+export type VerificationStatus = "Verified" | "Needs Investigation" | "Out of Date Income Documents" | "Vacant" | "In Progress - Finalize to Process";
 
 /**
  * Determines the income verification status for a single unit based on its lease, residents, and documents.
@@ -125,11 +125,14 @@ export interface UnitVerificationData {
 
 export interface PropertyVerificationSummary {
   propertyId: string;
-  totalUnits: number;
-  verifiedCount: number;
-  needsInvestigationCount: number;
-  outOfDateCount: number;
-  vacantCount: number;
+  units: UnitVerificationData[];
+  summary: {
+    verified: number;
+    needsInvestigation: number;
+    outOfDate: number;
+    vacant: number;
+    verificationInProgress: number;
+  };
 }
 
 /**

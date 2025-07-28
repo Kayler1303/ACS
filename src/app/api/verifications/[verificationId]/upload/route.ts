@@ -286,6 +286,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                         })
                     );
                     await Promise.all(updatePromises);
+
+                    // PHASE 2 ARCHITECTURE: Also update resident-level calculated income
+                    await prisma.$executeRaw`
+                      UPDATE "Resident" 
+                      SET "calculatedAnnualizedIncome" = ${Number(analysisResult.annualizedIncome)}::numeric
+                      WHERE "id" = ${document.residentId}
+                    `;
+                    
+                    console.log(`Updated resident ${document.residentId} with calculated annualized income: $${analysisResult.annualizedIncome}`);
                   }
                 }
             } else {
@@ -388,6 +397,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 })
             );
             await Promise.all(updatePromises);
+
+            // PHASE 2 ARCHITECTURE: Also update resident-level calculated income
+            await prisma.$executeRaw`
+              UPDATE "Resident" 
+              SET "calculatedAnnualizedIncome" = ${Number(analysisResult.annualizedIncome)}::numeric
+              WHERE "id" = ${residentId}
+            `;
+            
+            console.log(`Updated resident ${residentId} with calculated annualized income: $${analysisResult.annualizedIncome}`);
         }
     }
 

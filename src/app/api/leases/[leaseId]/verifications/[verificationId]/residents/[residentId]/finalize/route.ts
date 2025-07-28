@@ -62,10 +62,10 @@ export async function PATCH(
     await prisma.$executeRaw`
       UPDATE "Resident" 
       SET 
-        "calculatedAnnualizedIncome" = ${calculatedVerifiedIncome},
+        "calculatedAnnualizedIncome" = ${Number(calculatedVerifiedIncome)}::numeric,
         "incomeFinalized" = true,
         "finalizedAt" = NOW(),
-        "verifiedIncome" = ${calculatedVerifiedIncome}
+        "verifiedIncome" = ${Number(calculatedVerifiedIncome)}::numeric
       WHERE "id" = ${residentId}
     `;
 

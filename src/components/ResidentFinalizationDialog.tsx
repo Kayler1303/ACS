@@ -81,9 +81,9 @@ export default function ResidentFinalizationDialog({
 
   if (!isOpen) return null;
 
-  // Filter documents for this specific resident
+  // Filter documents for this specific resident (Phase 2: No longer check document-level calculatedAnnualizedIncome)
   const residentDocuments = verification.incomeDocuments.filter(
-    doc => doc.residentId === resident.id && doc.status === 'COMPLETED' && (doc.box1_wages || doc.calculatedAnnualizedIncome)
+    doc => doc.residentId === resident.id && doc.status === 'COMPLETED'
   );
 
   // Use resident-level calculated income instead of manual document aggregation
@@ -120,9 +120,9 @@ export default function ResidentFinalizationDialog({
       if (paystubs.length < requiredStubs) {
         canFinalize = false;
         validationMessage = `${resident.name} needs ${requiredStubs - paystubs.length} more paystub${requiredStubs - paystubs.length !== 1 ? 's' : ''} for ${formatPayFrequency(payFrequency).toLowerCase()} pay (${paystubs.length}/${requiredStubs} uploaded).`;
-      } else if (!paystubs.some(stub => stub.calculatedAnnualizedIncome)) {
+      } else if (!residentVerifiedIncome || residentVerifiedIncome <= 0) {
         canFinalize = false;
-        validationMessage = `${resident.name}'s paystubs are still being processed for income calculation.`;
+        validationMessage = `${resident.name}'s income calculation is still being processed.`;
       }
     }
   }
