@@ -57,14 +57,20 @@ export async function PATCH(
       return NextResponse.json({ error: 'Resident not found in this lease' }, { status: 404 });
     }
 
-    // Update the resident's verified income
-    await prisma.resident.update({
-      where: { id: residentId },
-      data: { verifiedIncome: calculatedVerifiedIncome }
-    });
+    // Update the resident's finalized income using the new architecture
+    // Temporary workaround: Use prisma.$executeRaw to update new fields until client is updated
+    await prisma.$executeRaw`
+      UPDATE "Resident" 
+      SET 
+        "calculatedAnnualizedIncome" = ${calculatedVerifiedIncome},
+        "incomeFinalized" = true,
+        "finalizedAt" = NOW(),
+        "verifiedIncome" = ${calculatedVerifiedIncome}
+      WHERE "id" = ${residentId}
+    `;
 
     // Get the total uploaded income for discrepancy check
-    const totalUploadedIncome = verification.lease.residents.reduce((acc, r) => acc + (r.annualizedIncome || 0), 0);
+    const totalUploadedIncome = verification.lease.residents.reduce((acc, r) => acc + (Number(r.annualizedIncome) || 0), 0);
     
     // Check for income discrepancy and create auto-override if needed
     try {
@@ -81,21 +87,23 @@ export async function PATCH(
       // Don't fail the finalization, just log the error
     }
 
-    // Check if all residents in the lease now have verified income
+    // Check if all residents in the lease now have finalized income
     const allResidents = verification.lease.residents;
-    const residentsWithVerifiedIncome = await prisma.resident.findMany({
-      where: {
-        leaseId: leaseId,
-        verifiedIncome: { not: null }
-      }
-    });
+    const residentsWithFinalizedIncomeCount = await prisma.$queryRaw<{count: number}[]>`
+      SELECT COUNT(*) as count 
+      FROM "Resident" 
+      WHERE "leaseId" = ${leaseId} AND "incomeFinalized" = true
+    `;
 
     // If all residents are now verified, finalize the entire verification
-    if (residentsWithVerifiedIncome.length === allResidents.length) {
-      const totalVerifiedIncome = residentsWithVerifiedIncome.reduce(
-        (sum, resident) => sum + (resident.verifiedIncome || 0), 
-        0
-      );
+    if (residentsWithFinalizedIncomeCount[0].count === allResidents.length) {
+      const totalVerifiedIncomeResult = await prisma.$queryRaw<{total: number}[]>`
+        SELECT SUM("calculatedAnnualizedIncome") as total
+        FROM "Resident" 
+        WHERE "leaseId" = ${leaseId} AND "incomeFinalized" = true
+      `;
+      
+      const totalVerifiedIncome = totalVerifiedIncomeResult[0].total || 0;
 
       // Check for income discrepancy at verification level too
       try {

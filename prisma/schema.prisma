@@ -104,18 +104,24 @@ model Tenancy {
 }
 
 model Resident {
-  id               String    @id @default(cuid())
-  name             String
-  annualizedIncome Decimal?  @db.Decimal(10, 2)
-  verifiedIncome   Decimal?  @db.Decimal(10, 2)
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id                        String    @id @default(cuid())
+  name                      String
+  annualizedIncome          Decimal?  @db.Decimal(10, 2)
+  verifiedIncome            Decimal?  @db.Decimal(10, 2)
+  
+  // New resident-level income calculation fields
+  calculatedAnnualizedIncome Decimal?  @db.Decimal(10, 2)
+  incomeFinalized           Boolean   @default(false)
+  finalizedAt               DateTime?
+  
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
 
   // Relationships
-  lease            Lease     @relation(fields: [leaseId], references: [id], onDelete: Cascade)
-  leaseId          String
-  incomeDocuments  IncomeDocument[]
-  overrideRequests OverrideRequest[]
+  lease                     Lease     @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+  leaseId                   String
+  incomeDocuments           IncomeDocument[]
+  overrideRequests          OverrideRequest[]
 
   @@index([leaseId])
 }

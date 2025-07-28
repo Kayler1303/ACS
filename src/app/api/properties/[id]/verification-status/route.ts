@@ -114,10 +114,11 @@ export async function GET(
           .filter(d => d.documentType === 'W2')
           .reduce((acc, d) => acc + (d.box1_wages || 0), 0);
         
-        // Sum paystub income
-        const paystubIncome = verifiedDocuments
-          .filter(d => d.documentType === 'PAYSTUB' && d.calculatedAnnualizedIncome)
-          .reduce((acc, d) => acc + d.calculatedAnnualizedIncome!, 0);
+        // Sum paystub income - take just one annualized amount since they should all be the same for a resident
+        const paystubDocuments = verifiedDocuments.filter(d => d.documentType === 'PAYSTUB');
+        const paystubIncome = paystubDocuments.length > 0 && paystubDocuments[0].calculatedAnnualizedIncome
+          ? paystubDocuments[0].calculatedAnnualizedIncome
+          : 0;
           
         // Sum other income types
         const otherIncome = verifiedDocuments
@@ -125,6 +126,16 @@ export async function GET(
           .reduce((acc, d) => acc + d.calculatedAnnualizedIncome!, 0);
 
         totalVerifiedIncome = w2Income + paystubIncome + otherIncome;
+        
+        // Debug logging for Unit 0101
+        if (unit.unitNumber === '0101') {
+          console.log(`[DEBUG Unit 0101] Total uploaded income: $${totalUploadedIncome}`);
+          console.log(`[DEBUG Unit 0101] Total verified income: $${totalVerifiedIncome}`);
+          console.log(`[DEBUG Unit 0101] Paystub documents: ${paystubDocuments.length}`);
+          console.log(`[DEBUG Unit 0101] Paystub income: $${paystubIncome}`);
+          console.log(`[DEBUG Unit 0101] Discrepancy: $${Math.abs(totalUploadedIncome - totalVerifiedIncome)}`);
+          console.log(`[DEBUG Unit 0101] Verification status: ${verificationStatus}`);
+        }
       }
 
       // Count documents

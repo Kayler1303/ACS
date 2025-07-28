@@ -56,6 +56,7 @@ interface Resident {
   name: string;
   annualizedIncome: number;
   verifiedIncome: number | null;
+  calculatedAnnualizedIncome?: number | null;
 }
 
 interface ResidentFinalizationDialogProps {
@@ -85,23 +86,8 @@ export default function ResidentFinalizationDialog({
     doc => doc.residentId === resident.id && doc.status === 'COMPLETED' && (doc.box1_wages || doc.calculatedAnnualizedIncome)
   );
 
-  // Calculate verified income correctly for different document types
-  const w2Documents = residentDocuments.filter(doc => doc.documentType === 'W2');
-  const paystubDocuments = residentDocuments.filter(doc => doc.documentType === 'PAYSTUB');
-  const otherDocuments = residentDocuments.filter(doc => doc.documentType !== 'W2' && doc.documentType !== 'PAYSTUB');
-
-  // Sum W2 wages
-  const w2Income = w2Documents.reduce((sum, doc) => sum + (doc.box1_wages || 0), 0);
-  
-  // For paystubs, take the average of calculated annualized income (they should all be the same)
-  const paystubIncome = paystubDocuments.length > 0 
-    ? paystubDocuments.reduce((sum, doc) => sum + (doc.calculatedAnnualizedIncome || 0), 0) / paystubDocuments.length
-    : 0;
-  
-  // Sum other document types
-  const otherIncome = otherDocuments.reduce((sum, doc) => sum + (doc.calculatedAnnualizedIncome || 0), 0);
-
-  const residentVerifiedIncome = w2Income + paystubIncome + otherIncome;
+  // Use resident-level calculated income instead of manual document aggregation
+  const residentVerifiedIncome = resident.calculatedAnnualizedIncome || 0;
 
   // Enhanced validation logic for this resident
   const paystubs = residentDocuments.filter(doc => doc.documentType === 'PAYSTUB');

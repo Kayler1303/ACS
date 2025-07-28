@@ -1,9 +1,16 @@
 import { Unit, Lease, Resident, IncomeDocument, DocumentType, Tenancy } from '@prisma/client';
 import { getYear, isWithinInterval, subMonths } from 'date-fns';
 
+// Extended Resident type with new income fields
+type ExtendedResident = Resident & {
+  calculatedAnnualizedIncome?: number | null;
+  incomeFinalized?: boolean;
+  finalizedAt?: Date | null;
+};
+
 type FullUnit = Unit & {
   leases: (Lease & {
-    residents: (Resident & {
+    residents: (ExtendedResident & {
       incomeDocuments: IncomeDocument[];
     })[];
     tenancy: Tenancy | null;
@@ -90,30 +97,10 @@ export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Da
   }
 
   // Check if total uploaded income matches total verified income
-  const totalUploadedIncome = allResidents.reduce((acc, r) => acc + (r.annualizedIncome || 0), 0);
+  const totalUploadedIncome = allResidents.reduce((acc, r) => acc + (Number(r.annualizedIncome) || 0), 0);
   
-  // Calculate total verified income from all document types
-  let totalVerifiedIncome = 0;
-  
-  // Sum W2 income (use box1_wages)
-  const w2Income = verifiedDocuments
-    .filter(d => d.documentType === DocumentType.W2)
-    .reduce((acc, d) => acc + (d.box1_wages || 0), 0);
-  
-  // Sum paystub income (use calculatedAnnualizedIncome when available)
-  // For paystubs, take the average since each represents the full annualized amount
-  const paystubDocuments = verifiedDocuments
-    .filter(d => d.documentType === DocumentType.PAYSTUB && d.calculatedAnnualizedIncome);
-  const paystubIncome = paystubDocuments.length > 0
-    ? paystubDocuments.reduce((acc, d) => acc + d.calculatedAnnualizedIncome!, 0) / paystubDocuments.length
-    : 0;
-    
-  // Sum other document types if they have calculatedAnnualizedIncome
-  const otherIncome = verifiedDocuments
-    .filter(d => d.documentType !== DocumentType.W2 && d.documentType !== DocumentType.PAYSTUB && d.calculatedAnnualizedIncome)
-    .reduce((acc, d) => acc + d.calculatedAnnualizedIncome!, 0);
-
-  totalVerifiedIncome = w2Income + paystubIncome + otherIncome;
+  // Calculate total verified income from resident-level calculated income
+  const totalVerifiedIncome = allResidents.reduce((acc, r) => acc + (Number(r.calculatedAnnualizedIncome) || 0), 0);
   
   // Compare with tolerance for floating point precision (allowing $1 difference)
   const incomeDifference = Math.abs(totalUploadedIncome - totalVerifiedIncome);

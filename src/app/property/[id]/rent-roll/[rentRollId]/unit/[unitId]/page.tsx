@@ -64,6 +64,9 @@ interface Resident {
   verifiedIncome: number | null;
   createdAt: string;
   updatedAt: string;
+  calculatedAnnualizedIncome?: number; // Add calculatedAnnualizedIncome to Resident interface
+  incomeFinalized?: boolean; // Add incomeFinalized field
+  finalizedAt?: string | null; // Add finalizedAt field
 }
 
 interface Unit {
@@ -202,7 +205,7 @@ function VerificationRow({ verification, lease, onActionComplete }: { verificati
                   </button>
                 </div>
               </div>
-              {doc.documentType === 'W2' && doc.status === 'COMPLETED' && (
+              {doc.documentType === 'W2' && (
                 <div className="mt-2 pt-2 border-t border-gray-200 text-xs text-gray-600 space-y-1">
                   <p><strong>Tax Year:</strong> {doc.taxYear || 'N/A'}</p>
                   <p><strong>Employer:</strong> {doc.employerName || 'N/A'}</p>
@@ -214,7 +217,7 @@ function VerificationRow({ verification, lease, onActionComplete }: { verificati
                   </div>
                 </div>
               )}
-              {doc.documentType === 'PAYSTUB' && doc.status === 'COMPLETED' && (
+              {doc.documentType === 'PAYSTUB' && (
                 <div className="mt-2 pt-2 border-t border-gray-200 text-xs text-gray-600 space-y-1">
                   <p><strong>Employee:</strong> {doc.employeeName || 'N/A'}</p>
                   <p><strong>Employer:</strong> {doc.employerName || 'N/A'}</p>
@@ -980,22 +983,6 @@ export default function ResidentDetailPage() {
                               Start Verification
                             </button>
                           )}
-                          {isInProgress && (
-                            <button 
-                              onClick={() => {
-                                setUploadDialogData({
-                                  verificationId: verification.id,
-                                  leaseName: period.name,
-                                  residents: period.residents.map(r => ({ id: r.id, name: r.name })),
-                                  hasExistingDocuments: !!verification.incomeDocuments?.length
-                                });
-                                setUploadDialogOpen(true);
-                              }}
-                              className="text-xs text-blue-600 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded transition-colors"
-                            >
-                              Upload Documents
-                            </button>
-                          )}
                           {period.isProvisional && (
                             <>
                               <button
@@ -1024,34 +1011,24 @@ export default function ResidentDetailPage() {
                   {period.residents.length > 0 ? (
                     <div className="divide-y divide-gray-200">
                       {period.residents.map((resident) => {
-                        // Filter documents for this resident
+                        // Filter documents for this resident - SHOW ALL DOCUMENTS
                         const residentDocuments = verification?.incomeDocuments?.filter(
-                          doc => doc.residentId === resident.id && doc.status === 'COMPLETED' && (doc.box1_wages || doc.calculatedAnnualizedIncome)
+                          doc => doc.residentId === resident.id
                         ) || [];
                         
-                        // Calculate verified income correctly for different document types
-                        const w2Documents = residentDocuments.filter(doc => doc.documentType === 'W2');
-                        const paystubDocuments = residentDocuments.filter(doc => doc.documentType === 'PAYSTUB');
-                        const otherDocuments = residentDocuments.filter(doc => doc.documentType !== 'W2' && doc.documentType !== 'PAYSTUB');
-
-                        // Sum W2 wages
-                        const w2Income = w2Documents.reduce((sum, doc) => sum + (doc.box1_wages || 0), 0);
+                        // Calculate verified income only from COMPLETED documents for calculation purposes
+                        const completedResidentDocuments = residentDocuments.filter(
+                          doc => doc.status === 'COMPLETED' && (doc.box1_wages || doc.calculatedAnnualizedIncome)
+                        );
                         
-                        // For paystubs, take the average of calculated annualized income (they should all be the same)
-                        const paystubIncome = paystubDocuments.length > 0 
-                          ? paystubDocuments.reduce((sum, doc) => sum + (doc.calculatedAnnualizedIncome || 0), 0) / paystubDocuments.length
-                          : 0;
-                        
-                        // Sum other document types
-                        const otherIncome = otherDocuments.reduce((sum, doc) => sum + (doc.calculatedAnnualizedIncome || 0), 0);
+                        // Use resident-level calculated income instead of manual document aggregation
+                        const residentVerifiedIncome = resident.calculatedAnnualizedIncome || 0;
 
-                        const residentVerifiedIncome = w2Income + paystubIncome + otherIncome;
-
-                        const isResidentVerified = resident.verifiedIncome !== null && resident.verifiedIncome > 0;
-                        const hasCompletedDocuments = residentDocuments.length > 0;
+                        const isResidentFinalized = resident.incomeFinalized || false;
+                        const hasCompletedDocuments = completedResidentDocuments.length > 0;
                         
                         // Validation logic for this resident
-                        const canFinalizeResident = hasCompletedDocuments && residentVerifiedIncome > 0;
+                        const canFinalizeResident = hasCompletedDocuments && residentVerifiedIncome > 0 && !isResidentFinalized;
 
                         return (
                           <div key={resident.id} className="px-6 py-4">
@@ -1060,13 +1037,17 @@ export default function ResidentDetailPage() {
                                 <div className="flex items-center space-x-3 mb-2">
                                   <h4 className="text-md font-medium text-gray-900">{resident.name}</h4>
                                   <div className="flex items-center space-x-2">
-                                    {isResidentVerified ? (
+                                    {isResidentFinalized ? (
                                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                        ✓ Verified
+                                        ✓ Income Finalized
                                       </span>
-                                    ) : hasCompletedDocuments ? (
+                                    ) : hasCompletedDocuments && residentVerifiedIncome > 0 ? (
                                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                                         📋 Ready to Finalize
+                                      </span>
+                                    ) : hasCompletedDocuments ? (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                                        ⚠️ Review Required
                                       </span>
                                     ) : isInProgress ? (
                                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
@@ -1086,8 +1067,8 @@ export default function ResidentDetailPage() {
                                   </div>
                                   <div>
                                     <span className="font-medium">Verified Income:</span> {
-                                      isResidentVerified 
-                                        ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(resident.verifiedIncome!)
+                                      isResidentFinalized 
+                                        ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(residentVerifiedIncome)
                                         : hasCompletedDocuments
                                           ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(residentVerifiedIncome)
                                           : 'N/A'
@@ -1099,16 +1080,105 @@ export default function ResidentDetailPage() {
                                 {hasCompletedDocuments && (
                                   <div className="mt-3">
                                     <div className="text-xs font-medium text-gray-500 mb-2">Documents ({residentDocuments.length}):</div>
-                                    <div className="flex flex-wrap gap-2">
+                                    <div className="space-y-2">
                                       {residentDocuments.map(doc => (
-                                        <span key={doc.id} className="inline-flex items-center px-2 py-1 rounded-md text-xs bg-green-50 text-green-700 border border-green-200">
-                                          {doc.documentType}
-                                          {doc.documentType === 'W2' && doc.taxYear && ` (${doc.taxYear})`}
-                                          {doc.documentType === 'PAYSTUB' && doc.payPeriodStartDate && doc.payPeriodEndDate && (
-                                            ` (${format(new Date(doc.payPeriodStartDate), 'MMM d')} - ${format(new Date(doc.payPeriodEndDate), 'MMM d')})`
+                                        <div key={doc.id} className="p-3 bg-green-50 border border-green-200 rounded-md">
+                                          <div className="flex justify-between items-start mb-2">
+                                            <div className="flex items-center space-x-2">
+                                              <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-green-100 text-green-800">
+                                                {doc.documentType}
+                                              </span>
+                                              {doc.employeeName && (
+                                                <span className="text-xs text-gray-600">
+                                                  {doc.employeeName}
+                                                </span>
+                                              )}
+                                            </div>
+                                            <span className="text-xs text-gray-500">
+                                              {format(new Date(doc.uploadDate), 'MMM d, yyyy')}
+                                            </span>
+                                          </div>
+                                          
+                                          {/* Document-specific details */}
+                                          {doc.documentType === 'PAYSTUB' && (
+                                            <div className="grid grid-cols-2 gap-3 text-xs">
+                                              {doc.payPeriodStartDate && doc.payPeriodEndDate && (
+                                                <div>
+                                                  <span className="font-medium text-gray-700">Pay Period:</span>
+                                                  <div className="text-gray-600">
+                                                    {format(new Date(doc.payPeriodStartDate), 'MMM d')} - {format(new Date(doc.payPeriodEndDate), 'MMM d')}
+                                                  </div>
+                                                </div>
+                                              )}
+                                              {doc.grossPayAmount && (
+                                                <div>
+                                                  <span className="font-medium text-gray-700">Gross Pay:</span>
+                                                  <div className="text-green-700 font-semibold">
+                                                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(doc.grossPayAmount)}
+                                                  </div>
+                                                </div>
+                                              )}
+                                              {doc.payFrequency && (
+                                                <div>
+                                                  <span className="font-medium text-gray-700">Frequency:</span>
+                                                  <div className="text-gray-600">
+                                                    {doc.payFrequency.replace('_', '-')}
+                                                  </div>
+                                                </div>
+                                              )}
+                                              {doc.employerName && (
+                                                <div className="col-span-2">
+                                                  <span className="font-medium text-gray-700">Employer:</span>
+                                                  <div className="text-gray-600">
+                                                    {doc.employerName}
+                                                  </div>
+                                                </div>
+                                              )}
+                                            </div>
                                           )}
-                                        </span>
+                                          
+                                          {doc.documentType === 'W2' && (
+                                            <div className="grid grid-cols-2 gap-3 text-xs">
+                                              {doc.taxYear && (
+                                                <div>
+                                                  <span className="font-medium text-gray-700">Tax Year:</span>
+                                                  <div className="text-gray-600">{doc.taxYear}</div>
+                                                </div>
+                                              )}
+                                              {doc.box1_wages && (
+                                                <div>
+                                                  <span className="font-medium text-gray-700">Box 1 Wages:</span>
+                                                  <div className="text-green-700 font-semibold">
+                                                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(doc.box1_wages)}
+                                                  </div>
+                                                </div>
+                                              )}
+                                              {doc.employerName && (
+                                                <div className="col-span-2">
+                                                  <span className="font-medium text-gray-700">Employer:</span>
+                                                  <div className="text-gray-600">
+                                                    {doc.employerName}
+                                                  </div>
+                                                </div>
+                                              )}
+                                            </div>
+                                          )}
+                                        </div>
                                       ))}
+                                    </div>
+                                    
+                                    {/* Resident Income Summary */}
+                                    <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                                      <h5 className="text-sm font-medium text-blue-800 mb-2">Calculated Annual Income</h5>
+                                      <div className="grid grid-cols-2 gap-3 text-sm">
+                                                                                 {/* Income calculation is now handled at the resident level */}
+                                        <div className="col-span-2 pt-2 border-t border-blue-200">
+                                          <span className="text-gray-700">Total Verified Income:</span>
+                                          <div className="font-bold text-blue-700 text-lg">
+                                            {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(residentVerifiedIncome)}
+                                          </div>
+                                        </div>
+                                      </div>
                                     </div>
                                   </div>
                                 )}
@@ -1116,18 +1186,44 @@ export default function ResidentDetailPage() {
 
                               {/* Resident Actions */}
                               <div className="ml-4 flex flex-col space-y-2">
-                                {!isResidentVerified && canFinalizeResident && (
+                                {/* Upload Documents button for each resident */}
+                                {isInProgress && !isResidentFinalized && (
                                   <button
-                                    onClick={() => handleOpenResidentFinalizationDialog(verification!, resident, period.name)}
-                                    className="px-3 py-1 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                                    onClick={() => {
+                                      setUploadDialogData({
+                                        verificationId: verification.id,
+                                        leaseName: period.name,
+                                        residents: [{ id: resident.id, name: resident.name }], // Only this resident
+                                        hasExistingDocuments: !!verification.incomeDocuments?.some(d => d.residentId === resident.id)
+                                      });
+                                      setUploadDialogOpen(true);
+                                    }}
+                                    className="flex items-center justify-center px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                                    title={`Upload income documents for ${resident.name}`}
                                   >
-                                    Finalize {resident.name}
+                                    📄 Upload Documents
                                   </button>
                                 )}
-                                {isResidentVerified && (
-                                  <span className="px-3 py-1 text-sm bg-green-100 text-green-800 rounded-md text-center">
-                                    Finalized ✓
-                                  </span>
+                                
+                                {/* Finalize button */}
+                                {!isResidentFinalized && canFinalizeResident && (
+                                  <button
+                                    onClick={() => handleOpenResidentFinalizationDialog(verification!, resident, period.name)}
+                                    className="flex items-center justify-center px-3 py-1 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                                    title={`Finalize income verification for ${resident.name}`}
+                                  >
+                                    ✅ Finalize Income
+                                  </button>
+                                )}
+                                {isResidentFinalized && (
+                                  <div className="flex items-center justify-center px-3 py-1 text-sm bg-green-100 text-green-800 rounded-md border border-green-200">
+                                    <span className="font-medium">Finalized ✓</span>
+                                    {resident.finalizedAt && (
+                                      <span className="ml-2 text-xs text-green-600">
+                                        {format(new Date(resident.finalizedAt), 'MMM d')}
+                                      </span>
+                                    )}
+                                  </div>
                                 )}
                               </div>
                             </div>

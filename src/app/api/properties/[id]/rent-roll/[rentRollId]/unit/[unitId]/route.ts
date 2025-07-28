@@ -68,6 +68,27 @@ export async function GET(req: NextRequest, { params }: { params: { id: string, 
             return NextResponse.json({ error: 'Unit not found' }, { status: 404 });
         }
 
+        // Enhance residents with new fields using raw SQL (temporary workaround)
+        for (const lease of unitWithLeases.leases) {
+            for (let i = 0; i < lease.residents.length; i++) {
+                const residentData = await prisma.$queryRaw<{
+                    calculatedAnnualizedIncome: number | null;
+                    incomeFinalized: boolean;
+                    finalizedAt: Date | null;
+                }[]>`
+                    SELECT "calculatedAnnualizedIncome", "incomeFinalized", "finalizedAt"
+                    FROM "Resident"
+                    WHERE "id" = ${lease.residents[i].id}
+                `;
+                
+                if (residentData.length > 0) {
+                    (lease.residents[i] as any).calculatedAnnualizedIncome = residentData[0].calculatedAnnualizedIncome;
+                    (lease.residents[i] as any).incomeFinalized = residentData[0].incomeFinalized;
+                    (lease.residents[i] as any).finalizedAt = residentData[0].finalizedAt;
+                }
+            }
+        }
+
         // Find the specific tenancy linked to the rent roll
         const tenancyLease = unitWithLeases.leases.find((l: { tenancy: { rentRollId: string; } | null; }) => l.tenancy?.rentRollId === rentRollId);
         const tenancy = tenancyLease ? {
