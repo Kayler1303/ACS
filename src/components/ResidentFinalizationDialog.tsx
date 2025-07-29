@@ -32,6 +32,8 @@ interface IncomeDocument {
   employeeName?: string;
   employerName?: string;
   box1_wages?: number;
+  box3_ss_wages?: number;
+  box5_med_wages?: number;
   residentId?: string;
   calculatedAnnualizedIncome?: number;
   payPeriodStartDate?: string;
@@ -78,16 +80,24 @@ export default function ResidentFinalizationDialog({
 }: ResidentFinalizationDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showOverrideRequest, setShowOverrideRequest] = useState(false);
+  const [manualW2Income, setManualW2Income] = useState<string>('');
+  const [showManualW2Entry, setShowManualW2Entry] = useState(false);
 
   if (!isOpen) return null;
 
-  // Filter documents for this specific resident (Phase 2: No longer check document-level calculatedAnnualizedIncome)
+  // Filter documents for this specific resident - include both COMPLETED and NEEDS_REVIEW
   const residentDocuments = verification.incomeDocuments.filter(
-    doc => doc.residentId === resident.id && doc.status === 'COMPLETED'
+    doc => doc.residentId === resident.id && (doc.status === 'COMPLETED' || doc.status === 'NEEDS_REVIEW')
   );
 
-  // Use resident-level calculated income instead of manual document aggregation
-  const residentVerifiedIncome = resident.calculatedAnnualizedIncome || 0;
+  // Check for W2s that need manual entry (NEEDS_REVIEW with no extracted data)
+  const w2DocumentsNeedingManualEntry = residentDocuments.filter(
+    doc => doc.documentType === 'W2' && doc.status === 'NEEDS_REVIEW' && !doc.box1_wages
+  );
+
+  // Use resident-level calculated income or manual W2 entry
+  const manualW2Value = manualW2Income ? parseFloat(manualW2Income) : 0;
+  const residentVerifiedIncome = resident.calculatedAnnualizedIncome || manualW2Value || 0;
 
   // Enhanced validation logic for this resident
   const paystubs = residentDocuments.filter(doc => doc.documentType === 'PAYSTUB');
@@ -98,7 +108,10 @@ export default function ResidentFinalizationDialog({
   
   if (residentDocuments.length === 0) {
     canFinalize = false;
-    validationMessage = `${resident.name} has no completed income documents.`;
+    validationMessage = `${resident.name} has no income documents.`;
+  } else if (w2DocumentsNeedingManualEntry.length > 0 && !manualW2Income) {
+    canFinalize = false;
+    validationMessage = `W2 data extraction failed. Please enter the annual income manually.`;
   } else if (nonPaystubs.length === 0 && paystubs.length > 0) {
     // Only paystubs - check if sufficient
     const payFrequency = paystubs[0]?.payFrequency;
@@ -132,7 +145,14 @@ export default function ResidentFinalizationDialog({
     
     setIsSubmitting(true);
     try {
-      await onConfirm(residentVerifiedIncome);
+      // If we have manual W2 entry, we need to handle it specially
+      if (w2DocumentsNeedingManualEntry.length > 0 && manualW2Income) {
+        // TODO: Update W2 document with manual income or create override
+        // For now, use the manual income value
+        await onConfirm(manualW2Value);
+      } else {
+        await onConfirm(residentVerifiedIncome);
+      }
     } catch (error) {
       console.error('Failed to finalize resident verification:', error);
     } finally {
@@ -254,6 +274,32 @@ export default function ResidentFinalizationDialog({
               <p className="text-gray-500 italic">No completed documents found for this resident.</p>
             )}
           </div>
+
+          {/* Manual W2 Entry */}
+          {w2DocumentsNeedingManualEntry.length > 0 && (
+            <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+              <h4 className="text-md font-semibold text-orange-800 mb-3">Manual W2 Entry Required</h4>
+              <p className="text-sm text-orange-700 mb-3">
+                The system couldn't automatically extract data from the W2 document. Please enter the annual income (Box 1) manually:
+              </p>
+              <div className="space-y-2">
+                <label htmlFor="manualW2Income" className="block text-sm font-medium text-orange-800">
+                  Annual Income (Box 1 Wages)
+                </label>
+                <input
+                  id="manualW2Income"
+                  type="number"
+                  value={manualW2Income}
+                  onChange={(e) => setManualW2Income(e.target.value)}
+                  placeholder="Enter annual income amount"
+                  className="w-full px-3 py-2 border border-orange-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                />
+                <p className="text-xs text-orange-600">
+                  Enter the amount from Box 1 of the W2 form (e.g., 25000 for $25,000)
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Action Buttons */}
           <div className="flex justify-end space-x-3 pt-4 border-t">

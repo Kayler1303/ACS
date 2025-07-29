@@ -85,10 +85,35 @@ export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Da
       const resident = allResidents.find(r => r.id === doc.residentId);
       if (!resident || !doc.employeeName) return false;
       
-      // Enhanced name matching: check if employee name is contained in resident name (case-insensitive)
-      // This handles cases where resident name might be "John Smith" and employee name is "John A Smith"
       const residentNameLower = resident.name.toLowerCase().trim();
       const employeeNameLower = doc.employeeName.toLowerCase().trim();
+      
+      // Skip validation for extremely short names (likely extraction errors)
+      if (employeeNameLower.length <= 1) {
+        console.log(`⚠️ Name validation skipped for very short employee name: "${doc.employeeName}"`);
+        return true; // Allow very short names to pass (likely OCR errors)
+      }
+      
+      // Enhanced name matching: handles middle initials and variations
+      // Split names into words for flexible matching
+      const residentWords = residentNameLower.split(/\s+/).filter(word => word.length > 0);
+      const employeeWords = employeeNameLower.split(/\s+/).filter(word => word.length > 0);
+      
+      // Check if employee name contains resident's first and last name (allowing middle initials)
+      // Example: "Blanca Soto" should match "Blanca I Soto"
+      if (residentWords.length >= 2 && employeeWords.length >= 2) {
+        const residentFirst = residentWords[0];
+        const residentLast = residentWords[residentWords.length - 1];
+        const employeeFirst = employeeWords[0];
+        const employeeLast = employeeWords[employeeWords.length - 1];
+        
+        // Match if first and last names match (case-insensitive)
+        if (residentFirst === employeeFirst && residentLast === employeeLast) {
+          return true;
+        }
+      }
+      
+      // Fallback to original contains logic
       return residentNameLower.includes(employeeNameLower) || employeeNameLower.includes(residentNameLower);
   });
 

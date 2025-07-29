@@ -14,6 +14,7 @@ import ResidentFinalizationDialog from '@/components/ResidentFinalizationDialog'
 import { format } from 'date-fns';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { getUnitVerificationStatus, type VerificationStatus } from '@/services/verification';
 
 // --- NEW Data Structures ---
 
@@ -67,6 +68,7 @@ interface Resident {
   calculatedAnnualizedIncome?: number; // Add calculatedAnnualizedIncome to Resident interface
   incomeFinalized?: boolean; // Add incomeFinalized field
   finalizedAt?: string | null; // Add finalizedAt field
+  hasNoIncome?: boolean; // Add hasNoIncome field
 }
 
 interface Unit {
@@ -277,6 +279,9 @@ export default function ResidentDetailPage() {
 
   // AMI bucket calculation state
   const [amiBucketData, setAmiBucketData] = useState<Record<string, any>>({});
+  
+  // Unit verification status state
+  const [unitVerificationStatus, setUnitVerificationStatus] = useState<VerificationStatus>('Vacant');
   const [selectedLeaseForResident, setSelectedLeaseForResident] = useState<Lease | null>(null);
   const [isNewLeaseWorkflow, setIsNewLeaseWorkflow] = useState(false);
   const [newLeaseName, setNewLeaseName] = useState('');
@@ -304,6 +309,37 @@ export default function ResidentDetailPage() {
   const resetNewLeaseWorkflow = () => {
     setIsNewLeaseWorkflow(false);
     setSelectedLeaseForResident(null);
+  };
+
+  // Handler for marking a resident as having no income
+  const handleMarkNoIncome = async (leaseId: string, verificationId: string, residentId: string, residentName: string) => {
+    if (!window.confirm(`Mark ${residentName} as having no income? This will finalize their verification with $0 income.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `/api/leases/${leaseId}/verifications/${verificationId}/residents/${residentId}/no-income`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to mark resident as no income');
+      }
+
+      // Refresh the data
+      fetchTenancyData(false);
+      fetchUnitVerificationStatus();
+    } catch (error) {
+      console.error('Error marking resident as no income:', error);
+      alert(error instanceof Error ? error.message : 'Failed to mark resident as no income');
+    }
   };
 
   // Handler for when a resident is selected from the resident selection dialog
@@ -520,6 +556,7 @@ export default function ResidentDetailPage() {
 
       toast.success('Document deleted successfully.');
       fetchTenancyData(false); // Refresh data
+      fetchUnitVerificationStatus(); // Refresh verification status
     } catch (error: unknown) {
       console.error('Error deleting document:', error);
       toast.error((error instanceof Error ? error.message : 'An error occurred while deleting the document.'));
@@ -658,6 +695,8 @@ export default function ResidentDetailPage() {
     });
   };
 
+
+
   const handleFinalizeResidentVerification = async (calculatedIncome: number) => {
     if (!residentFinalizationDialog.verification || !residentFinalizationDialog.resident) return;
     
@@ -693,6 +732,7 @@ export default function ResidentDetailPage() {
       // Close dialog and refresh data
       handleCloseResidentFinalizationDialog();
       fetchTenancyData(false);
+      fetchUnitVerificationStatus();
       
       if (result.verificationFinalized) {
         toast.success(`${resident.name}'s income finalized! All residents verified - lease verification complete!`);
@@ -730,6 +770,7 @@ export default function ResidentDetailPage() {
       setInitialAddResidentDialogOpen(true);
       
       fetchTenancyData(false);
+      fetchUnitVerificationStatus();
     } catch (err: unknown) {
       alert(`Error creating lease: ${err instanceof Error ? err.message : 'An unexpected error occurred'}`);
     }
@@ -759,6 +800,7 @@ export default function ResidentDetailPage() {
 
   useEffect(() => {
     fetchTenancyData();
+    fetchUnitVerificationStatus();
   }, [fetchTenancyData]);
 
   // Updated Effect for polling
@@ -770,6 +812,7 @@ export default function ResidentDetailPage() {
     if (isProcessing) {
       const interval = setInterval(() => {
         fetchTenancyData(false);
+        fetchUnitVerificationStatus();
       }, 3000);
       return () => clearInterval(interval);
     }
@@ -785,6 +828,25 @@ export default function ResidentDetailPage() {
       }
     } catch (error) {
       console.error('Error fetching AMI bucket data:', error);
+    }
+  };
+
+  // Function to fetch verification status for this unit
+  const fetchUnitVerificationStatus = async () => {
+    if (!propertyId || !unitId) return;
+    
+    try {
+      const response = await fetch(`/api/properties/${propertyId}/verification-status`);
+      if (response.ok) {
+        const data = await response.json();
+        // Find this unit's status from the response
+        const unitStatus = data.units?.find((u: any) => u.unitId === unitId);
+        if (unitStatus) {
+          setUnitVerificationStatus(unitStatus.verificationStatus);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching unit verification status:', error);
     }
   };
 
@@ -976,7 +1038,13 @@ export default function ResidentDetailPage() {
             {leasePeriods.map((period) => {
               const verification = period.verification;
               const isInProgress = verification?.status === 'IN_PROGRESS';
-              const isCompleted = verification?.status === 'FINALIZED';
+              
+              // Use the fetched verification status that matches the property table logic
+              const currentVerificationStatus = verification?.status === 'IN_PROGRESS' 
+                ? 'In Progress - Finalize to Process' 
+                : unitVerificationStatus;
+                
+              const isCompleted = currentVerificationStatus === 'Verified';
               
               return (
                 <div key={period.id} className={`border rounded-lg overflow-hidden ${period.isCurrentPeriod ? 'border-blue-300 bg-blue-50' : 'border-gray-200'}`}>
@@ -1002,19 +1070,46 @@ export default function ResidentDetailPage() {
                       <div className="flex items-center space-x-3">
                         {/* Overall Lease Status */}
                         <div className="text-right">
-                          {isCompleted ? (
-                            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
-                              ✓ All Residents Verified
-                            </span>
-                          ) : isInProgress ? (
-                            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-                              📝 In Progress - Finalize to Process
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
-                              📋 Needs Verification
-                            </span>
-                          )}
+                          {(() => {
+                            switch (currentVerificationStatus) {
+                              case 'Verified':
+                                return (
+                                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+                                    ✓ Verified
+                                  </span>
+                                );
+                              case 'In Progress - Finalize to Process':
+                                return (
+                                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                                    📝 In Progress - Finalize to Process
+                                  </span>
+                                );
+                              case 'Needs Investigation':
+                                return (
+                                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
+                                    ⚠️ Needs Investigation
+                                  </span>
+                                );
+                              case 'Out of Date Income Documents':
+                                return (
+                                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800">
+                                    📅 Out of Date Income Documents
+                                  </span>
+                                );
+                              case 'Vacant':
+                                return (
+                                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800">
+                                    🏠 Vacant
+                                  </span>
+                                );
+                              default:
+                                return (
+                                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800">
+                                    📋 Needs Verification
+                                  </span>
+                                );
+                            }
+                          })()}
                         </div>
                         
                         {/* Lease Actions */}
@@ -1074,8 +1169,9 @@ export default function ResidentDetailPage() {
                         // Show documents if ANY documents exist (not just completed ones with calculated income)
                         const hasAnyDocuments = residentDocuments.length > 0;
                         
-                        // Validation logic for this resident
-                        const canFinalizeResident = hasCompletedDocuments && residentVerifiedIncome > 0 && !isResidentFinalized;
+                        // Validation logic for this resident - allow finalization if they have completed documents with income, documents that need review, OR if they're marked as no income
+                        const hasDocumentsNeedingReview = residentDocuments.some(doc => doc.status === 'NEEDS_REVIEW');
+                        const canFinalizeResident = ((hasCompletedDocuments && residentVerifiedIncome > 0) || hasDocumentsNeedingReview || resident.hasNoIncome) && !isResidentFinalized;
 
                         return (
                           <div key={resident.id} className="px-6 py-4">
@@ -1085,12 +1181,22 @@ export default function ResidentDetailPage() {
                                   <h4 className="text-md font-medium text-gray-900">{resident.name}</h4>
                                   <div className="flex items-center space-x-2">
                                     {isResidentFinalized ? (
-                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                        ✓ Income Finalized
-                                      </span>
+                                      resident.hasNoIncome ? (
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                          ❌ No Income
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                          ✓ Income Finalized
+                                        </span>
+                                      )
                                     ) : hasCompletedDocuments && residentVerifiedIncome > 0 ? (
                                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                                         📋 Ready to Finalize
+                                      </span>
+                                    ) : hasDocumentsNeedingReview ? (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                                        ⚠️ Review Required
                                       </span>
                                     ) : hasCompletedDocuments ? (
                                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
@@ -1145,9 +1251,23 @@ export default function ResidentDetailPage() {
                                                 </span>
                                               )}
                                             </div>
-                                            <span className="text-xs text-gray-500">
-                                              {format(new Date(doc.uploadDate), 'MMM d, yyyy')}
-                                            </span>
+                                            <div className="flex items-center space-x-2">
+                                              <span className="text-xs text-gray-500">
+                                                {format(new Date(doc.uploadDate), 'MMM d, yyyy')}
+                                              </span>
+                                              {/* Delete Document Button */}
+                                              {!isResidentFinalized && (
+                                                <button
+                                                  onClick={() => handleDeleteDocument(doc.id)}
+                                                  className="p-1 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition-colors"
+                                                  title={`Delete ${doc.documentType} document`}
+                                                >
+                                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                  </svg>
+                                                </button>
+                                              )}
+                                            </div>
                                           </div>
                                           
                                           {/* Document-specific details */}
@@ -1189,26 +1309,69 @@ export default function ResidentDetailPage() {
                                           )}
                                           
                                           {doc.documentType === 'W2' && (
-                                            <div className="grid grid-cols-2 gap-3 text-xs">
-                                              {doc.taxYear && (
-                                                <div>
-                                                  <span className="font-medium text-gray-700">Tax Year:</span>
-                                                  <div className="text-gray-600">{doc.taxYear}</div>
-                                                </div>
-                                              )}
-                                              {doc.box1_wages && (
-                                                <div>
-                                                  <span className="font-medium text-gray-700">Box 1 Wages:</span>
-                                                  <div className="text-green-700 font-semibold">
-                                                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(doc.box1_wages)}
+                                            <div className="space-y-2">
+                                              {doc.status === 'COMPLETED' && doc.box1_wages ? (
+                                                // Successfully extracted W2 data
+                                                <div className="grid grid-cols-2 gap-3 text-xs">
+                                                  {doc.taxYear && (
+                                                    <div>
+                                                      <span className="font-medium text-gray-700">Tax Year:</span>
+                                                      <div className="text-gray-600">{doc.taxYear}</div>
+                                                    </div>
+                                                  )}
+                                                  <div>
+                                                    <span className="font-medium text-gray-700">Box 1 Wages:</span>
+                                                    <div className="text-green-700 font-semibold">
+                                                      {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(doc.box1_wages)}
+                                                    </div>
                                                   </div>
+                                                  {doc.box3_ss_wages && (
+                                                    <div>
+                                                      <span className="font-medium text-gray-700">Box 3 SS Wages:</span>
+                                                      <div className="text-green-700 font-semibold">
+                                                        {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(doc.box3_ss_wages)}
+                                                      </div>
+                                                    </div>
+                                                  )}
+                                                  {doc.box5_med_wages && (
+                                                    <div>
+                                                      <span className="font-medium text-gray-700">Box 5 Medicare:</span>
+                                                      <div className="text-green-700 font-semibold">
+                                                        {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(doc.box5_med_wages)}
+                                                      </div>
+                                                    </div>
+                                                  )}
+                                                  {doc.employeeName && (
+                                                    <div className="col-span-2">
+                                                      <span className="font-medium text-gray-700">Employee:</span>
+                                                      <div className="text-gray-600">
+                                                        {doc.employeeName}
+                                                      </div>
+                                                    </div>
+                                                  )}
+                                                  {doc.employerName && (
+                                                    <div className="col-span-2">
+                                                      <span className="font-medium text-gray-700">Employer:</span>
+                                                      <div className="text-gray-600">
+                                                        {doc.employerName}
+                                                      </div>
+                                                    </div>
+                                                  )}
                                                 </div>
-                                              )}
-                                              {doc.employerName && (
-                                                <div className="col-span-2">
-                                                  <span className="font-medium text-gray-700">Employer:</span>
-                                                  <div className="text-gray-600">
-                                                    {doc.employerName}
+                                              ) : (
+                                                // Failed extraction - show manual entry needed
+                                                <div className="bg-orange-50 border border-orange-200 rounded-md p-3">
+                                                  <div className="flex items-center mb-2">
+                                                    <svg className="w-4 h-4 text-orange-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                                    </svg>
+                                                    <span className="text-sm font-medium text-orange-800">W2 Data Extraction Failed</span>
+                                                  </div>
+                                                  <p className="text-xs text-orange-700 mb-2">
+                                                    Our system couldn't automatically read the W2 data. Manual review is required.
+                                                  </p>
+                                                  <div className="text-xs text-orange-600">
+                                                    <strong>Next step:</strong> Click "Finalize Income" to manually enter the W2 information.
                                                   </div>
                                                 </div>
                                               )}
@@ -1238,7 +1401,7 @@ export default function ResidentDetailPage() {
                               {/* Resident Actions */}
                               <div className="ml-4 flex flex-col space-y-2">
                                 {/* Upload Documents button for each resident */}
-                                {isInProgress && !isResidentFinalized && (
+                                {isInProgress && !isResidentFinalized && !resident.hasNoIncome && (
                                   <button
                                     onClick={() => {
                                       setUploadDialogData({
@@ -1253,6 +1416,17 @@ export default function ResidentDetailPage() {
                                     title={`Upload income documents for ${resident.name}`}
                                   >
                                     📄 Upload Documents
+                                  </button>
+                                )}
+                                
+                                {/* No Income option for each resident */}
+                                {isInProgress && !isResidentFinalized && !resident.hasNoIncome && !hasAnyDocuments && (
+                                  <button
+                                    onClick={() => handleMarkNoIncome(period.id, verification.id, resident.id, resident.name)}
+                                    className="flex items-center justify-center px-3 py-1 text-sm bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                                    title={`Mark ${resident.name} as having no income`}
+                                  >
+                                    ❌ No Income
                                   </button>
                                 )}
                                 

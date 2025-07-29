@@ -83,6 +83,9 @@ export async function GET(
 
     // Process each unit
     for (const unit of property.units) {
+      // Initialize enhanced unit (will be populated later with resident income data)
+      let enhancedUnit = { ...unit };
+      
       // Find the active lease (with tenancy)
       const currentLease = unit.leases
         .filter(l => l.tenancy !== null)
@@ -98,13 +101,13 @@ export async function GET(
           verificationStatus = 'In Progress - Finalize to Process';
         } else if (latestVerification.status === 'FINALIZED') {
           // Only check for discrepancies if verification is finalized
-          verificationStatus = getUnitVerificationStatus(unit, latestRentRollDate);
+          verificationStatus = getUnitVerificationStatus(enhancedUnit, latestRentRollDate);
         } else {
-          verificationStatus = getUnitVerificationStatus(unit, latestRentRollDate);
+          verificationStatus = getUnitVerificationStatus(enhancedUnit, latestRentRollDate);
         }
       } else {
         // No verification process started yet
-        verificationStatus = getUnitVerificationStatus(unit, latestRentRollDate);
+        verificationStatus = getUnitVerificationStatus(enhancedUnit, latestRentRollDate);
       }
       
       // Automatically create override request for "Needs Investigation" status
@@ -131,39 +134,55 @@ export async function GET(
         ? activeLease.residents.reduce((acc, r) => acc + (r.annualizedIncome || 0), 0)
         : 0;
 
-      // Calculate total verified income
+      // Calculate total verified income using resident-level data and create enhanced unit for verification status
       let totalVerifiedIncome = 0;
+      
       if (activeLease) {
-        const allDocuments = activeLease.residents.flatMap(r => r.incomeDocuments);
-        const verifiedDocuments = allDocuments.filter(d => d.status === 'COMPLETED');
-        
-        // Sum W2 income
-        const w2Income = verifiedDocuments
-          .filter(d => d.documentType === 'W2')
-          .reduce((acc, d) => acc + (d.box1_wages || 0), 0);
-        
-        // Sum paystub income - take just one annualized amount since they should all be the same for a resident
-        const paystubDocuments = verifiedDocuments.filter(d => d.documentType === 'PAYSTUB');
-        const paystubIncome = paystubDocuments.length > 0 && paystubDocuments[0].calculatedAnnualizedIncome
-          ? paystubDocuments[0].calculatedAnnualizedIncome
-          : 0;
-          
-        // Sum other income types
-        const otherIncome = verifiedDocuments
-          .filter(d => d.documentType !== 'W2' && d.documentType !== 'PAYSTUB' && d.calculatedAnnualizedIncome)
-          .reduce((acc, d) => acc + d.calculatedAnnualizedIncome!, 0);
-
-        totalVerifiedIncome = w2Income + paystubIncome + otherIncome;
-        
-        // Debug logging for Unit 0101
-        if (unit.unitNumber === '0101') {
-          console.log(`[DEBUG Unit 0101] Total uploaded income: $${totalUploadedIncome}`);
-          console.log(`[DEBUG Unit 0101] Total verified income: $${totalVerifiedIncome}`);
-          console.log(`[DEBUG Unit 0101] Paystub documents: ${paystubDocuments.length}`);
-          console.log(`[DEBUG Unit 0101] Paystub income: $${paystubIncome}`);
-          console.log(`[DEBUG Unit 0101] Discrepancy: $${Math.abs(totalUploadedIncome - totalVerifiedIncome)}`);
-          console.log(`[DEBUG Unit 0101] Verification status: ${verificationStatus}`);
+        // Fetch resident-level income data using raw SQL (temporary workaround for Prisma client types)
+        const enhancedResidents = [];
+        for (const resident of activeLease.residents) {
+          try {
+            const residentIncomeData = await prisma.$queryRaw<Array<{
+              calculatedAnnualizedIncome: number | null;
+              incomeFinalized: boolean;
+            }>>`
+              SELECT "calculatedAnnualizedIncome", "incomeFinalized"
+              FROM "Resident"
+              WHERE "id" = ${resident.id}
+            `;
+            
+            const enhancedResident = {
+              ...resident,
+              calculatedAnnualizedIncome: residentIncomeData.length > 0 ? residentIncomeData[0].calculatedAnnualizedIncome : null,
+              incomeFinalized: residentIncomeData.length > 0 ? residentIncomeData[0].incomeFinalized : false
+            };
+            enhancedResidents.push(enhancedResident);
+            
+            if (residentIncomeData.length > 0 && residentIncomeData[0].incomeFinalized) {
+              totalVerifiedIncome += Number(residentIncomeData[0].calculatedAnnualizedIncome) || 0;
+            }
+          } catch (error) {
+            console.error(`Error fetching resident income data for ${resident.id}:`, error);
+            enhancedResidents.push(resident); // Fallback to original resident data
+          }
         }
+        
+        // Create enhanced unit with enhanced residents for verification status calculation
+        const enhancedLease = { ...activeLease, residents: enhancedResidents };
+        enhancedUnit = {
+          ...unit,
+          leases: unit.leases.map(lease => 
+            lease.id === activeLease.id ? enhancedLease : lease
+          )
+        };
+      }
+        
+      // Debug logging for Unit 0101
+      if (unit.unitNumber === '0101') {
+        console.log(`[DEBUG Unit 0101] Total uploaded income: $${totalUploadedIncome}`);
+        console.log(`[DEBUG Unit 0101] Total verified income: $${totalVerifiedIncome}`);
+        console.log(`[DEBUG Unit 0101] Discrepancy: $${Math.abs(totalUploadedIncome - totalVerifiedIncome)}`);
+        console.log(`[DEBUG Unit 0101] Verification status: ${verificationStatus}`);
       }
 
       // Count documents

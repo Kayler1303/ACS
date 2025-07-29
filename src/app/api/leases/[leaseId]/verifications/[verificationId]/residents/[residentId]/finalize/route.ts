@@ -59,13 +59,14 @@ export async function PATCH(
 
     // Update the resident's finalized income using the new architecture
     // Temporary workaround: Use prisma.$executeRaw to update new fields until client is updated
+    const numericVerifiedIncome = Number(calculatedVerifiedIncome);
     await prisma.$executeRaw`
       UPDATE "Resident" 
       SET 
-        "calculatedAnnualizedIncome" = ${Number(calculatedVerifiedIncome)}::numeric,
+        "calculatedAnnualizedIncome" = ${numericVerifiedIncome}::numeric,
         "incomeFinalized" = true,
         "finalizedAt" = NOW(),
-        "verifiedIncome" = ${Number(calculatedVerifiedIncome)}::numeric
+        "verifiedIncome" = ${numericVerifiedIncome}::numeric
       WHERE "id" = ${residentId}
     `;
 
@@ -95,10 +96,15 @@ export async function PATCH(
       WHERE "leaseId" = ${leaseId} AND "incomeFinalized" = true
     `;
 
+    const finalizedCount = Number(residentsWithFinalizedIncomeCount[0]?.count || 0);
+    const totalResidents = allResidents.length;
+    
+    console.log(`[DEBUG] Lease ${leaseId}: ${finalizedCount} finalized residents out of ${totalResidents} total`);
+
     // If all residents are now verified, finalize the entire verification
-    if (residentsWithFinalizedIncomeCount[0].count === allResidents.length) {
+    if (finalizedCount === totalResidents) {
       const totalVerifiedIncomeResult = await prisma.$queryRaw<{total: number}[]>`
-        SELECT SUM("calculatedAnnualizedIncome") as total
+        SELECT COALESCE(SUM("calculatedAnnualizedIncome"), 0) as total
         FROM "Resident" 
         WHERE "leaseId" = ${leaseId} AND "incomeFinalized" = true
       `;
@@ -122,11 +128,13 @@ export async function PATCH(
       await prisma.incomeVerification.update({
         where: { id: verificationId },
         data: {
-          status: VerificationStatus.FINALIZED,
+          status: 'FINALIZED',
           finalizedAt: new Date(),
           calculatedVerifiedIncome: totalVerifiedIncome
         }
       });
+
+      console.log(`[DEBUG] Lease verification ${verificationId} finalized with total income: ${totalVerifiedIncome}`);
 
       return NextResponse.json({ 
         success: true, 

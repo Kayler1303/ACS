@@ -111,41 +111,83 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         
         if (documentType === DocumentType.W2) {
             // Handle W2 documents with v4.0 API response structure
-            const wages = fields?.WagesTipsAndOtherCompensation;
-            const wageAmount = wages?.valueNumber || wages?.content ? parseFloat(wages.content) : 0;
+            console.log("🔍 W2 Fields available:", Object.keys(fields || {}));
+            console.log("🔍 Raw W2 fields structure:", JSON.stringify(fields, null, 2));
             
-            const taxYearField = fields?.TaxYear;
-            const taxYearValue = taxYearField?.valueString ? parseInt(taxYearField.valueString, 10) : 
-                                taxYearField?.content ? parseInt(taxYearField.content, 10) : 0;
+            // Helper function to extract numeric values from Azure field objects
+            function extractNumericValue(field: any): number | null {
+              if (!field) return null;
+              
+              // Try different value extraction methods
+              if (typeof field.valueNumber === 'number') return field.valueNumber;
+              if (typeof field.valueCurrency === 'number') return field.valueCurrency;
+              if (typeof field.valueString === 'string') {
+                const parsed = parseFloat(field.valueString.replace(/[,$]/g, ''));
+                return isNaN(parsed) ? null : parsed;
+              }
+              if (typeof field.content === 'string') {
+                const parsed = parseFloat(field.content.replace(/[,$]/g, ''));
+                return isNaN(parsed) ? null : parsed;
+              }
+              
+              return null;
+            }
+            
+            // Try different possible field names for Box 1 wages
+            const box1Field = fields?.WagesTipsAndOtherCompensation || fields?.['W2FormBox1'] || fields?.Box1 || fields?.Wages;
+            const box1Amount = extractNumericValue(box1Field);
+            
+            // Try different possible field names for Box 3 (Social Security wages)
+            const box3Field = fields?.SocialSecurityWages || fields?.['W2FormBox3'] || fields?.Box3;
+            const box3Amount = extractNumericValue(box3Field);
+            
+            // Try different possible field names for Box 5 (Medicare wages)
+            const box5Field = fields?.MedicareWagesAndTips || fields?.['W2FormBox5'] || fields?.Box5 || fields?.MedicareWages;
+            const box5Amount = extractNumericValue(box5Field);
+            
+            const taxYearField = fields?.TaxYear || fields?.Year;
+            const taxYear = extractNumericValue(taxYearField);
 
             const employee = fields?.Employee;
-            const employeeName = employee?.valueString || employee?.content || '';
+            const employeeName = employee?.valueObject?.Name?.valueString || 
+                                employee?.valueString || employee?.content || '';
 
             const employer = fields?.Employer;
-            const employerName = employer?.valueString || employer?.content || '';
-
-            const socialSecurityWagesField = fields?.SocialSecurityWages;
-            const socialSecurityWages = socialSecurityWagesField?.valueNumber || 
-                                      (socialSecurityWagesField?.content ? parseFloat(socialSecurityWagesField.content) : null);
-
-            const medicareWagesField = fields?.MedicareWagesAndTips;
-            const medicareWages = medicareWagesField?.valueNumber || 
-                                (medicareWagesField?.content ? parseFloat(medicareWagesField.content) : null);
+            const employerName = employer?.valueObject?.Name?.valueString || 
+                                employer?.valueString || employer?.content || '';
             
-            if (wageAmount && taxYearValue && employeeName && employerName) {
+            console.log("📊 Extracted W2 values:");
+            console.log("- Box 1 (Wages):", box1Amount);
+            console.log("- Box 3 (SS Wages):", box3Amount);
+            console.log("- Box 5 (Medicare):", box5Amount);
+            console.log("- Tax Year:", taxYear);
+            console.log("- Employee:", employeeName);
+            console.log("- Employer:", employerName);
+            
+            // More lenient validation - require at least Box 1 wages and tax year
+            if (box1Amount && box1Amount > 0 && taxYear) {
                 document = await prisma.incomeDocument.update({
                   where: { id: document.id },
                   data: {
                     status: DocumentStatus.COMPLETED,
-                    box1_wages: wageAmount,
-                    box3_ss_wages: socialSecurityWages,
-                    box5_med_wages: medicareWages,
-                    taxYear: taxYearValue,
-                    employeeName: employeeName,
-                    employerName: employerName,
-                    calculatedAnnualizedIncome: wageAmount,
+                    box1_wages: box1Amount,
+                    box3_ss_wages: box3Amount,
+                    box5_med_wages: box5Amount,
+                    taxYear: taxYear,
+                    employeeName: employeeName || 'Not extracted',
+                    employerName: employerName || 'Not extracted',
+                    calculatedAnnualizedIncome: box1Amount, // Use Box 1 for annualized income
                   },
                 });
+
+                // PHASE 2 ARCHITECTURE: Also update resident-level calculated income for W2
+                await prisma.$executeRaw`
+                  UPDATE "Resident" 
+                  SET "calculatedAnnualizedIncome" = ${Number(box1Amount)}::numeric
+                  WHERE "id" = ${document.residentId}
+                `;
+                
+                console.log(`Updated resident ${document.residentId} with W2 calculated annualized income: $${box1Amount}`);
               } else {
                 console.log("W2 fields not found or empty in Azure response. Document requires manual review.");
                 document = await prisma.incomeDocument.update({

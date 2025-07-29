@@ -75,8 +75,9 @@ export async function GET(req: NextRequest, { params }: { params: { id: string, 
                     calculatedAnnualizedIncome: number | null;
                     incomeFinalized: boolean;
                     finalizedAt: Date | null;
+                    hasNoIncome: boolean;
                 }[]>`
-                    SELECT "calculatedAnnualizedIncome", "incomeFinalized", "finalizedAt"
+                    SELECT "calculatedAnnualizedIncome", "incomeFinalized", "finalizedAt", "hasNoIncome"
                     FROM "Resident"
                     WHERE "id" = ${lease.residents[i].id}
                 `;
@@ -85,6 +86,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string, 
                     (lease.residents[i] as any).calculatedAnnualizedIncome = residentData[0].calculatedAnnualizedIncome;
                     (lease.residents[i] as any).incomeFinalized = residentData[0].incomeFinalized;
                     (lease.residents[i] as any).finalizedAt = residentData[0].finalizedAt;
+                    (lease.residents[i] as any).hasNoIncome = residentData[0].hasNoIncome;
                 }
             }
         }
