@@ -130,7 +130,16 @@ function VerificationRow({ verification, lease, onActionComplete }: { verificati
   
   const getResidentName = (residentId: string) => {
     return lease.residents.find(r => r.id === residentId)?.name || 'Unknown Resident';
-  }
+  };
+
+  // Check if any residents in the lease have finalized income
+  const hasAnyFinalizedResidents = lease.residents.some(resident => resident.incomeFinalized);
+
+  // Only show verified income if residents have been finalized
+  const shouldShowVerifiedIncome = hasAnyFinalizedResidents && verification.calculatedVerifiedIncome;
+
+  const isInProgress = verification.status === 'IN_PROGRESS';
+  const isCompleted = verification.status === 'COMPLETED';
 
   const handleDelete = async (documentId: string) => {
     if (!window.confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
@@ -165,10 +174,10 @@ function VerificationRow({ verification, lease, onActionComplete }: { verificati
         </div>
         <div className="text-right">
           <p className="text-sm font-medium text-gray-500">Calculated Income</p>
-          <p className="font-semibold text-lg text-green-600">
-            {verification.calculatedVerifiedIncome 
-              ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(verification.calculatedVerifiedIncome)
-              : <span className="text-gray-400">N/A</span>
+          <p className="font-semibold text-lg">
+            {shouldShowVerifiedIncome 
+              ? <span className="text-green-600">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(verification.calculatedVerifiedIncome || 0)}</span>
+              : <span className="text-gray-400">Not Finalized</span>
             }
           </p>
         </div>
