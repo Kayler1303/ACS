@@ -68,25 +68,25 @@ export async function GET(req: NextRequest, { params }: { params: { id: string, 
             return NextResponse.json({ error: 'Unit not found' }, { status: 404 });
         }
 
-        // Enhance residents with new fields using raw SQL (temporary workaround)
+        // Enhance residents with income finalization data using Prisma ORM
         for (const lease of unitWithLeases.leases) {
             for (let i = 0; i < lease.residents.length; i++) {
-                const residentData = await prisma.$queryRaw<{
-                    annualizedIncome: number | null;
-                    incomeFinalized: boolean;
-                    finalizedAt: Date | null;
-                    hasNoIncome: boolean;
-                }[]>`
-                    SELECT "annualizedIncome", "incomeFinalized", "finalizedAt", "hasNoIncome"
-                    FROM "Resident"
-                    WHERE "id" = ${lease.residents[i].id}
-                `;
+                const residentData = await prisma.resident.findUnique({
+                    where: { id: lease.residents[i].id },
+                    select: {
+                        annualizedIncome: true,
+                        calculatedAnnualizedIncome: true,
+                        incomeFinalized: true,
+                        finalizedAt: true,
+                        hasNoIncome: true
+                    }
+                });
                 
-                if (residentData.length > 0) {
-                    (lease.residents[i] as any).calculatedAnnualizedIncome = residentData[0].annualizedIncome;
-                    (lease.residents[i] as any).incomeFinalized = residentData[0].incomeFinalized;
-                    (lease.residents[i] as any).finalizedAt = residentData[0].finalizedAt;
-                    (lease.residents[i] as any).hasNoIncome = residentData[0].hasNoIncome;
+                if (residentData) {
+                    (lease.residents[i] as any).calculatedAnnualizedIncome = residentData.calculatedAnnualizedIncome;
+                    (lease.residents[i] as any).incomeFinalized = residentData.incomeFinalized;
+                    (lease.residents[i] as any).finalizedAt = residentData.finalizedAt;
+                    (lease.residents[i] as any).hasNoIncome = residentData.hasNoIncome;
                 }
             }
         }

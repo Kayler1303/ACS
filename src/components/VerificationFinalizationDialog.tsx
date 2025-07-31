@@ -154,7 +154,10 @@ export default function VerificationFinalizationDialog({
       documentsCount: residentDocs.length,
       documentIds: residentDocs.map(d => d.id),
       calculatedVerifiedIncome: residentVerifiedIncome,
-      shouldShowVerifiedIncome: resident.incomeFinalized
+      shouldShowVerifiedIncome: resident.incomeFinalized,
+      whatWillBeDisplayed: resident.incomeFinalized 
+        ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(residentVerifiedIncome)
+        : "Not Finalized"
     });
     
     return {
