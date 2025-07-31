@@ -886,7 +886,7 @@ export default function ResidentDetailPage() {
       // Use the verification service with already-available tenancy data
       // No need to call the property-wide API!
       const verificationStatus = getUnitVerificationStatus(
-        tenancyData.unit, 
+        tenancyData.unit as any, // Type assertion to handle the interface differences
         new Date(tenancyData.rentRoll.date)
       );
       setUnitVerificationStatus(verificationStatus);
@@ -1033,7 +1033,7 @@ export default function ResidentDetailPage() {
         
         <div className="bg-white p-6 rounded-lg shadow-md mb-8">
         <h2 className="text-2xl font-semibold text-brand-blue mb-4">Unit Information</h2>
-         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div>
             <p className="text-sm font-medium text-gray-500">Unit Number</p>
             <p className="text-lg font-semibold text-gray-900">{formatUnitNumber(tenancyData.unit.unitNumber)}</p>
@@ -1057,6 +1057,23 @@ export default function ResidentDetailPage() {
                 ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(parseFloat(tenancyData.lease.leaseRent))
                 : 'N/A'
               }
+            </p>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-gray-500">Total Unit Verified Income</p>
+            <p className="text-lg font-semibold text-gray-900">
+              {(() => {
+                // Calculate total verified income for all finalized residents in the unit
+                const totalVerifiedIncome = tenancyData.unit.leases.reduce((total, lease) => {
+                  return total + lease.residents.reduce((leaseTotal, resident) => {
+                    return leaseTotal + (resident.incomeFinalized ? (resident.calculatedAnnualizedIncome || 0) : 0);
+                  }, 0);
+                }, 0);
+                
+                return totalVerifiedIncome > 0 
+                  ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(totalVerifiedIncome)
+                  : <span className="text-gray-400">Not Finalized</span>;
+              })()}
             </p>
           </div>
         </div>
@@ -1566,7 +1583,7 @@ export default function ResidentDetailPage() {
           onClose={handleCloseResidentFinalizationDialog}
           onConfirm={handleFinalizeResidentVerification}
           verification={residentFinalizationDialog.verification}
-          resident={residentFinalizationDialog.resident}
+          resident={residentFinalizationDialog.resident as any}
           leaseName={residentFinalizationDialog.leaseName}
         />
       )}
