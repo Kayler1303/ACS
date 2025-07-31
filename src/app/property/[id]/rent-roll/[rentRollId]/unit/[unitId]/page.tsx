@@ -1213,9 +1213,10 @@ export default function ResidentDetailPage() {
                         // Show documents if ANY documents exist (not just completed ones with calculated income)
                         const hasAnyDocuments = residentDocuments.length > 0;
                         
-                        // Validation logic for this resident - allow finalization if they have completed documents with income, documents that need review, OR if they're marked as no income
+                        // Validation logic for this resident - allow finalization if they have completed documents, documents that need review, OR if they're marked as no income
                         const hasDocumentsNeedingReview = residentDocuments.some(doc => doc.status === 'NEEDS_REVIEW');
-                        const canFinalizeResident = ((hasCompletedDocuments && residentVerifiedIncome > 0) || hasDocumentsNeedingReview || resident.hasNoIncome) && !isResidentFinalized;
+                        // Allow finalization if there are completed documents (income will be calculated during finalization), need review docs, or no income
+                        const canFinalizeResident = (hasCompletedDocuments || hasDocumentsNeedingReview || resident.hasNoIncome) && !isResidentFinalized;
 
                         return (
                           <div key={resident.id} className="px-6 py-4">
