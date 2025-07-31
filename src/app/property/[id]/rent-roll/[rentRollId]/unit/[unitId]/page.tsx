@@ -1238,9 +1238,7 @@ export default function ResidentDetailPage() {
                                     <span className="font-medium">Verified Income:</span> {
                                       isResidentFinalized 
                                         ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(residentVerifiedIncome)
-                                        : hasCompletedDocuments
-                                          ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(residentVerifiedIncome)
-                                          : 'N/A'
+                                        : <span className="text-gray-400">Not Finalized</span>
                                     }
                                   </div>
                                 </div>
@@ -1400,8 +1398,11 @@ export default function ResidentDetailPage() {
                                                                                  {/* Income calculation is now handled at the resident level */}
                                         <div className="col-span-2 pt-2 border-t border-blue-200">
                                           <span className="text-gray-700">Total Verified Income:</span>
-                                          <div className="font-bold text-blue-700 text-lg">
-                                            {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(residentVerifiedIncome)}
+                                          <div className="font-bold text-lg">
+                                            {isResidentFinalized 
+                                              ? <span className="text-blue-700">{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(residentVerifiedIncome)}</span>
+                                              : <span className="text-gray-400">Not Finalized</span>
+                                            }
                                           </div>
                                         </div>
                                       </div>

@@ -44,8 +44,10 @@ export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Da
 
   const leaseStartDate = new Date(lease.leaseStartDate);
   const allResidents = lease.residents;
-  const allDocuments = allResidents.flatMap(r => r.incomeDocuments);
-  const verifiedDocuments = allDocuments.filter(d => d.status === 'COMPLETED');
+  const allDocuments = allResidents.flatMap(r => r.incomeDocuments || []);
+  
+  // Add null/undefined checks to prevent TypeScript errors
+  const verifiedDocuments = allDocuments.filter(d => d && d.status === 'COMPLETED');
 
   if (verifiedDocuments.length === 0) {
     return "Out of Date Income Documents";
@@ -53,6 +55,7 @@ export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Da
 
   // Check timeliness of documents
   const areDocumentsTimely = verifiedDocuments.every(doc => {
+    if (!doc || !doc.documentType) return false; // Add safety check
     if (doc.documentType === DocumentType.W2) {
       if (!doc.taxYear) return false;
       const leaseStartYear = getYear(leaseStartDate);
