@@ -125,17 +125,18 @@ export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Da
   const totalUploadedIncome = allResidents.reduce((acc, r) => acc + (Number(r.annualizedIncome) || 0), 0);
   
   // Calculate total verified income from resident-level calculated income
-  // Use calculatedAnnualizedIncome if available, otherwise fall back to annualizedIncome for finalized residents
+  // Only include finalized residents with valid calculatedAnnualizedIncome
   const totalVerifiedIncome = allResidents.reduce((acc, r) => {
     const amount = r.incomeFinalized 
-      ? (Number(r.calculatedAnnualizedIncome) || Number(r.annualizedIncome) || 0)
+      ? (Number(r.calculatedAnnualizedIncome) || 0)
       : 0;
     console.log(`[VERIFICATION SERVICE] Resident ${r.id}:`, {
       incomeFinalized: r.incomeFinalized,
       calculatedAnnualizedIncome: r.calculatedAnnualizedIncome,
       annualizedIncome: r.annualizedIncome,
-      amount: amount,
-      runningTotal: acc + amount
+      amountAdded: amount,
+      runningTotal: acc + amount,
+      finalizedOnly: true
     });
     return acc + amount;
   }, 0);

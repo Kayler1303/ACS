@@ -130,17 +130,32 @@ export default function VerificationFinalizationDialog({
     return w2Income + paystubIncome + otherIncome;
   };
 
-  // Calculate total verified income (Phase 2: Sum resident-level calculated incomes)
+  // Calculate total verified income (Only include finalized residents)
   const totalVerifiedIncome = residents.reduce((sum, resident) => {
-    return sum + (resident.calculatedAnnualizedIncome || 0);
-  }, 0) || calculateVerifiedIncome(completedDocuments); // Fallback to document-level if no resident data
+    if (resident.incomeFinalized) {
+      return sum + (resident.calculatedAnnualizedIncome || 0);
+    }
+    return sum;
+  }, 0);
 
   // Group documents by resident (Phase 2: Use resident-level calculated income)
   const documentsByResident = residents.map(resident => {
     const residentDocs = completedDocuments.filter(doc => doc.residentId === resident.id);
     
-    // Use resident-level calculatedAnnualizedIncome if available, otherwise fall back to document-level calculation
-    const residentVerifiedIncome = resident.calculatedAnnualizedIncome || calculateVerifiedIncome(residentDocs);
+    // Only show verified income if the resident's income has been finalized
+    const residentVerifiedIncome = resident.incomeFinalized 
+      ? (resident.calculatedAnnualizedIncome || calculateVerifiedIncome(residentDocs))
+      : 0;
+    
+    console.log(`[VERIFICATION DIALOG DEBUG] Resident ${resident.id} (${resident.name}):`, {
+      incomeFinalized: resident.incomeFinalized,
+      calculatedAnnualizedIncome: resident.calculatedAnnualizedIncome,
+      annualizedIncome: resident.annualizedIncome,
+      documentsCount: residentDocs.length,
+      documentIds: residentDocs.map(d => d.id),
+      calculatedVerifiedIncome: residentVerifiedIncome,
+      shouldShowVerifiedIncome: resident.incomeFinalized
+    });
     
     return {
       resident,
@@ -364,8 +379,11 @@ export default function VerificationFinalizationDialog({
                       })}
                       <div className="border-t pt-2 flex justify-between items-center font-semibold">
                         <span>Verified Income:</span>
-                        <span className="text-green-600">
-                          {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(verifiedIncome)}
+                        <span className={resident.incomeFinalized ? "text-green-600" : "text-gray-400"}>
+                          {resident.incomeFinalized 
+                            ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(verifiedIncome)
+                            : "Not Finalized"
+                          }
                         </span>
                       </div>
                     </div>
