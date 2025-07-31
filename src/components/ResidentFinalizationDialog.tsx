@@ -104,19 +104,9 @@ export default function ResidentFinalizationDialog({
     ? (resident.calculatedAnnualizedIncome || manualW2Value || 0)
     : 0;
     
-  // Add debugging logs to trace the issue
-  console.log(`[RESIDENT FINALIZATION DIALOG DEBUG] Resident ${resident.id} (${resident.name}):`, {
-    incomeFinalized: resident.incomeFinalized,
-    calculatedAnnualizedIncome: resident.calculatedAnnualizedIncome,
-    annualizedIncome: resident.annualizedIncome,
-    manualW2Value: manualW2Value,
-    residentVerifiedIncome: residentVerifiedIncome,
-    documentsCount: residentDocuments.length,
-    shouldShowVerifiedIncome: resident.incomeFinalized,
-    whatWillBeDisplayed: resident.incomeFinalized 
-      ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(residentVerifiedIncome)
-      : "Not Finalized"
-  });
+  // For validation purposes, check if there's income available to finalize
+  // (regardless of whether it's been finalized yet)
+  const availableIncomeForFinalization = resident.calculatedAnnualizedIncome || manualW2Value || 0;
 
   // Enhanced validation logic for this resident
   const paystubs = residentDocuments.filter(doc => doc.documentType === 'PAYSTUB');
@@ -152,12 +142,28 @@ export default function ResidentFinalizationDialog({
       if (paystubs.length < requiredStubs) {
         canFinalize = false;
         validationMessage = `${resident.name} needs ${requiredStubs - paystubs.length} more paystub${requiredStubs - paystubs.length !== 1 ? 's' : ''} for ${formatPayFrequency(payFrequency).toLowerCase()} pay (${paystubs.length}/${requiredStubs} uploaded).`;
-      } else if (!residentVerifiedIncome || residentVerifiedIncome <= 0) {
+      } else if (!availableIncomeForFinalization || availableIncomeForFinalization <= 0) {
         canFinalize = false;
         validationMessage = `${resident.name}'s income calculation is still being processed.`;
       }
     }
   }
+
+  // Add debugging logs to trace the validation results
+  console.log(`[RESIDENT FINALIZATION DIALOG DEBUG] Resident ${resident.id} (${resident.name}):`, {
+    incomeFinalized: resident.incomeFinalized,
+    calculatedAnnualizedIncome: resident.calculatedAnnualizedIncome,
+    annualizedIncome: resident.annualizedIncome,
+    manualW2Value: manualW2Value,
+    residentVerifiedIncome: residentVerifiedIncome,
+    availableIncomeForFinalization: availableIncomeForFinalization,
+    documentsCount: residentDocuments.length,
+    canFinalize: canFinalize,
+    validationMessage: validationMessage,
+    whatWillBeDisplayed: resident.incomeFinalized
+      ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(residentVerifiedIncome)
+      : "Not Finalized"
+  });
 
   const handleFinalize = async () => {
     if (!canFinalize) return;
