@@ -24,7 +24,7 @@ export default function InitialAddResidentDialog({
       <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-8 text-center">
         <h2 className="text-2xl font-bold text-gray-800 mb-2">Add a Resident</h2>
         <p className="text-sm text-gray-500 mb-8">
-          For provisional lease: <span className="font-medium">{leaseName}</span>
+          For lease: <span className="font-medium">{leaseName}</span>
         </p>
         <p className="text-gray-700 mb-6">Is this a renewal of a previous resident or a new applicant?</p>
 

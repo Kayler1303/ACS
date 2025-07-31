@@ -59,7 +59,7 @@ export default function AdminDashboard() {
   const [overrideRequests, setOverrideRequests] = useState<OverrideRequest[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('PENDING');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   
   // Message modal state

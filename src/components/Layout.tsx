@@ -59,7 +59,7 @@ const Header = () => {
                                     Admin
                                 </Link>
                             )}
-                            <button onClick={() => signOut()} className="text-2xl hover:text-gray-600 text-brand-blue">
+                            <button onClick={() => signOut({ callbackUrl: '/' })} className="text-2xl hover:text-gray-600 text-brand-blue">
                                 Logout
                             </button>
                         </>
@@ -95,7 +95,7 @@ const Header = () => {
                                     Admin
                                 </Link>
                             )}
-                            <button onClick={() => { signOut(); setIsMenuOpen(false); }} className="block py-2 text-center text-lg text-brand-blue w-full">
+                            <button onClick={() => { signOut({ callbackUrl: '/' }); setIsMenuOpen(false); }} className="block py-2 text-center text-lg text-brand-blue w-full">
                                 Logout
                             </button>
                         </>

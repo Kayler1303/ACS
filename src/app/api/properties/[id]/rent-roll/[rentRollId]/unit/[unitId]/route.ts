@@ -72,18 +72,18 @@ export async function GET(req: NextRequest, { params }: { params: { id: string, 
         for (const lease of unitWithLeases.leases) {
             for (let i = 0; i < lease.residents.length; i++) {
                 const residentData = await prisma.$queryRaw<{
-                    calculatedAnnualizedIncome: number | null;
+                    annualizedIncome: number | null;
                     incomeFinalized: boolean;
                     finalizedAt: Date | null;
                     hasNoIncome: boolean;
                 }[]>`
-                    SELECT "calculatedAnnualizedIncome", "incomeFinalized", "finalizedAt", "hasNoIncome"
+                    SELECT "annualizedIncome", "incomeFinalized", "finalizedAt", "hasNoIncome"
                     FROM "Resident"
                     WHERE "id" = ${lease.residents[i].id}
                 `;
                 
                 if (residentData.length > 0) {
-                    (lease.residents[i] as any).calculatedAnnualizedIncome = residentData[0].calculatedAnnualizedIncome;
+                    (lease.residents[i] as any).calculatedAnnualizedIncome = residentData[0].annualizedIncome;
                     (lease.residents[i] as any).incomeFinalized = residentData[0].incomeFinalized;
                     (lease.residents[i] as any).finalizedAt = residentData[0].finalizedAt;
                     (lease.residents[i] as any).hasNoIncome = residentData[0].hasNoIncome;

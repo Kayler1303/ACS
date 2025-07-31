@@ -38,22 +38,39 @@ export default function ReconciliationPage() {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        const [leasesRes, tenanciesRes] = await Promise.all([
+        const [provisionalRes, futureRes, tenanciesRes] = await Promise.all([
           fetch(`/api/properties/${propertyId}/provisional-leases`),
+          fetch(`/api/properties/${propertyId}/future-leases`),
           fetch(`/api/properties/${propertyId}/new-tenancies`),
         ]);
 
-        if (!leasesRes.ok) {
+        if (!provisionalRes.ok) {
           throw new Error('Failed to fetch provisional leases');
+        }
+        if (!futureRes.ok) {
+          throw new Error('Failed to fetch future leases');
         }
         if (!tenanciesRes.ok) {
           throw new Error('Failed to fetch new tenancies');
         }
 
-        const leasesData = await leasesRes.json();
+        const provisionalData = await provisionalRes.json();
+        const futureData = await futureRes.json();
         const tenanciesData = await tenanciesRes.json();
 
-        setProvisionalLeases(leasesData);
+        // Combine provisional leases and future leases into one array
+        const combinedLeases = [
+          ...provisionalData,
+          ...futureData.units.filter((unit: any) => unit.futureLease).map((unit: any) => ({
+            id: unit.futureLease.id,
+            name: unit.futureLease.leaseName,
+            leaseStartDate: unit.futureLease.leaseStartDate,
+            unitId: unit.unitId,
+            unit: { unitNumber: unit.unitNumber }
+          }))
+        ];
+
+        setProvisionalLeases(combinedLeases);
         setNewTenancies(tenanciesData);
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : 'An unexpected error occurred');
@@ -91,13 +108,28 @@ export default function ReconciliationPage() {
       }
 
       // Refetch data to update the lists
-      const [leasesRes, tenanciesRes] = await Promise.all([
+      const [provisionalRes, futureRes, tenanciesRes] = await Promise.all([
         fetch(`/api/properties/${propertyId}/provisional-leases`),
+        fetch(`/api/properties/${propertyId}/future-leases`),
         fetch(`/api/properties/${propertyId}/new-tenancies`),
       ]);
-      const leasesData = await leasesRes.json();
+      const provisionalData = await provisionalRes.json();
+      const futureData = await futureRes.json();
       const tenanciesData = await tenanciesRes.json();
-      setProvisionalLeases(leasesData);
+      
+      // Combine provisional leases and future leases into one array
+      const combinedLeases = [
+        ...provisionalData,
+        ...futureData.units.filter((unit: any) => unit.futureLease).map((unit: any) => ({
+          id: unit.futureLease.id,
+          name: unit.futureLease.leaseName,
+          leaseStartDate: unit.futureLease.leaseStartDate,
+          unitId: unit.unitId,
+          unit: { unitNumber: unit.unitNumber }
+        }))
+      ];
+      
+      setProvisionalLeases(combinedLeases);
       setNewTenancies(tenanciesData);
       setSelectedLeaseId(null);
       setSelectedTenancyId(null);
@@ -126,7 +158,7 @@ export default function ReconciliationPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div className="bg-white p-6 rounded-lg shadow-md">
-          <h2 className="text-2xl font-semibold text-brand-blue mb-4">Unmatched Provisional Leases</h2>
+          <h2 className="text-2xl font-semibold text-brand-blue mb-4">Unmatched Leases (Provisional & Future)</h2>
           <div className="space-y-2">
             {provisionalLeases.map((lease) => (
               <div key={lease.id} className="flex items-center">
@@ -145,9 +177,9 @@ export default function ReconciliationPage() {
               </div>
             ))}
           </div>
-          {provisionalLeases.length === 0 && (
-            <p className="text-gray-500">No unmatched provisional leases found.</p>
-          )}
+                      {provisionalLeases.length === 0 && (
+              <p className="text-gray-500">No unmatched leases found.</p>
+            )}
         </div>
 
         <div className="bg-white p-6 rounded-lg shadow-md">

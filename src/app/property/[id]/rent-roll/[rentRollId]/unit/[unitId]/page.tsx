@@ -985,9 +985,8 @@ export default function ResidentDetailPage() {
           ← Back to Property
         </Link>
         <h1 className="text-4xl font-bold text-brand-blue">Unit {formatUnitNumber(tenancyData.unit.unitNumber)} - Resident Details</h1>
-      </div>
-
-       <div className="bg-white p-6 rounded-lg shadow-md mb-8">
+        
+        <div className="bg-white p-6 rounded-lg shadow-md mb-8">
         <h2 className="text-2xl font-semibold text-brand-blue mb-4">Unit Information</h2>
          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
@@ -1620,6 +1619,7 @@ export default function ResidentDetailPage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

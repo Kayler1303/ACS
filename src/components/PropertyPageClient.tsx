@@ -52,6 +52,16 @@ interface ProcessedUnit {
   complianceBucket: string;
   verificationStatus?: VerificationStatus;
   provisionalLeases?: ProvisionalLease[];
+  futureLease?: {
+    id: string;
+    leaseName: string;
+    verificationStatus: string;
+    totalIncome: number;
+    complianceBucket: string;
+    leaseStartDate: string;
+    isToggled: boolean;
+    residents: any[];
+  };
 }
 
 // Helper function to format unit numbers (remove leading zeros)
@@ -144,8 +154,66 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
   const [verificationLoading, setVerificationLoading] = useState(false);
   const [provisionalLeases, setProvisionalLeases] = useState<ProvisionalLease[]>([]);
   const [selectedProvisionalLeases, setSelectedProvisionalLeases] = useState<Set<string>>(new Set());
+  const [futureLeases, setFutureLeases] = useState<any[]>([]);
+  const [selectedFutureLeases, setSelectedFutureLeases] = useState<Set<string>>(new Set());
   const [utilityCategory, setUtilityCategory] = useState<string>('');
   const [utilityAllowance, setUtilityAllowance] = useState<number>(0);
+
+  // Function to save property settings to database
+  const savePropertySettings = async (settings: {
+    complianceOption?: string;
+    includeRentAnalysis?: boolean;
+    includeUtilityAllowances?: boolean;
+    utilityAllowances?: {[bedroomCount: number]: number};
+  }) => {
+    try {
+      const response = await fetch(`/api/properties/${property.id}/settings`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          complianceOption: settings.complianceOption ?? complianceOption,
+          includeRentAnalysis: settings.includeRentAnalysis ?? includeRentAnalysis,
+          includeUtilityAllowances: settings.includeUtilityAllowances ?? includeUtilityAllowances,
+          utilityAllowances: settings.utilityAllowances ?? utilityAllowances,
+        }),
+      });
+
+      if (!response.ok) {
+        console.error('Failed to save property settings:', response.status, response.statusText);
+      }
+    } catch (error) {
+      console.error('Error saving property settings:', error);
+    }
+  };
+
+  // Function to save future lease selections to localStorage
+  const saveFutureLeaseSelections = (selections: Set<string>) => {
+    try {
+      localStorage.setItem(
+        `futureLeaseSelections_${property.id}`,
+        JSON.stringify(Array.from(selections))
+      );
+    } catch (error) {
+      console.error('Error saving future lease selections to localStorage:', error);
+    }
+  };
+
+  // Function to load future lease selections from localStorage
+  const loadFutureLeaseSelections = (): Set<string> => {
+    try {
+      const saved = localStorage.getItem(`futureLeaseSelections_${property.id}`);
+      if (saved) {
+        const selections = JSON.parse(saved) as string[];
+        return new Set(selections);
+      }
+    } catch (error) {
+      console.error('Error loading future lease selections from localStorage:', error);
+    }
+    return new Set();
+  };
   const [utilitySelection, setUtilitySelection] = useState<string>('NO');
   const [uploadingCompliance, setUploadingCompliance] = useState(false);
   const [verificationStatuses, setVerificationStatuses] = useState<VerificationStatus[]>([]);
@@ -262,7 +330,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     fetchVerificationData();
   }, [property.id, selectedRentRollId]);
 
-  // Fetch provisional leases data
+  // Fetch provisional leases data (for projected compliance)
   useEffect(() => {
     const fetchProvisionalLeases = async () => {
       try {
@@ -285,6 +353,33 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     };
 
     fetchProvisionalLeases();
+  }, [property.id]);
+
+  // Fetch future leases data (for Future Leases column)
+  useEffect(() => {
+    const fetchFutureLeases = async () => {
+      try {
+        const res = await fetch(`/api/properties/${property.id}/future-leases`, {
+          credentials: 'include'
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setFutureLeases(data.units);
+        } else {
+          console.error('Failed to fetch future leases:', res.status, res.statusText);
+        }
+      } catch (error) {
+        console.error('Error fetching future leases:', error);
+      }
+    };
+
+    fetchFutureLeases();
+  }, [property.id]);
+
+  // Load future lease selections from localStorage on mount
+  useEffect(() => {
+    const savedSelections = loadFutureLeaseSelections();
+    setSelectedFutureLeases(savedSelections);
   }, [property.id]);
 
   // Function to fetch AMI bucket data for a specific provisional lease
@@ -537,8 +632,12 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       // Get verification status for this unit
       const unitVerification = verificationData?.units.find(v => v.unitId === unit.id);
       
-      // Get provisional leases for this unit
+      // Get provisional leases for this unit (for projected compliance)
       const unitProvisionalLeases = provisionalLeases.filter(lease => lease.unitId === unit.id);
+      
+      // Get future lease for this unit (for Future Leases column)
+      const unitFutureLease = futureLeases.find(fl => fl.unitId === unit.id);
+
       
       return {
         id: unit.id,
@@ -551,6 +650,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
         complianceBucket: actualBucket, // Will be updated below
         verificationStatus: unitVerification?.verificationStatus,
         provisionalLeases: unitProvisionalLeases,
+        futureLease: unitFutureLease?.futureLease,
       };
     });
 
@@ -588,6 +688,21 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       } else {
         newSet.add(leaseId);
       }
+      return newSet;
+    });
+  };
+
+  // Handle future lease checkbox changes
+  const handleFutureLeaseToggle = (leaseId: string) => {
+    setSelectedFutureLeases(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(leaseId)) {
+        newSet.delete(leaseId);
+      } else {
+        newSet.add(leaseId);
+      }
+      // Save to localStorage
+      saveFutureLeaseSelections(newSet);
       return newSet;
     });
   };
@@ -861,13 +976,13 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     };
   };
 
-  // Calculate projected compliance with selected provisional leases
+  // Calculate projected compliance with selected provisional and future leases
   const calculateProjectedSummaryStats = () => {
     const totalUnits = processedTenancies.length;
     const targetCounts = getTargetCounts(complianceOption, totalUnits);
     const targets = getTargetPercentages(complianceOption, totalUnits);
     
-    // Create projected tenancies by replacing compliance buckets for selected provisional leases
+    // Create projected tenancies by replacing compliance buckets for selected provisional or future leases
     const projectedTenancies = processedTenancies.map(unit => {
       // Check if this unit has a selected provisional lease
       const selectedProvisionalLease = unit.provisionalLeases?.find(lease => 
@@ -879,6 +994,15 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
         return {
           ...unit,
           complianceBucket: selectedProvisionalLease.amiBucketInfo.actualBucket
+        };
+      }
+      
+      // Check if this unit has a selected future lease
+      if (unit.futureLease && selectedFutureLeases.has(unit.futureLease.id)) {
+        // Replace the compliance bucket with the future lease's compliance bucket
+        return {
+          ...unit,
+          complianceBucket: unit.futureLease.complianceBucket
         };
       }
       
@@ -996,6 +1120,8 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
   const stats = calculateSummaryStats();
       const projectedStats = calculateProjectedSummaryStats();
     const hasSelectedProvisionalLeases = selectedProvisionalLeases.size > 0;
+    const hasSelectedFutureLeases = selectedFutureLeases.size > 0;
+    const hasAnySelectedLeases = hasSelectedProvisionalLeases || hasSelectedFutureLeases;
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -1053,7 +1179,11 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                     name="compliance-option"
                     className="w-full pl-3 pr-10 py-2.5 text-sm border-gray-300 focus:outline-none focus:ring-brand-blue focus:border-brand-blue rounded-md shadow-sm bg-white"
                                                 value={complianceOption}
-                    onChange={(e) => setComplianceOption(e.target.value)}
+                    onChange={(e) => {
+                      const newValue = e.target.value;
+                      setComplianceOption(newValue);
+                      savePropertySettings({ complianceOption: newValue });
+                    }}
                   >
                     <option value="20% at 50% AMI, 55% at 80% AMI">20% at 50% AMI, 55% at 80% AMI</option>
                     <option value="40% at 60% AMI, 35% at 80% AMI">40% at 60% AMI, 35% at 80% AMI</option>
@@ -1093,7 +1223,11 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                     id="include-rent-analysis"
                     type="checkbox"
                     checked={includeRentAnalysis}
-                    onChange={(e) => setIncludeRentAnalysis(e.target.checked)}
+                    onChange={(e) => {
+                      const newValue = e.target.checked;
+                      setIncludeRentAnalysis(newValue);
+                      savePropertySettings({ includeRentAnalysis: newValue });
+                    }}
                     className="h-4 w-4 text-brand-blue focus:ring-brand-blue border-gray-300 rounded"
                   />
                   <label htmlFor="include-rent-analysis" className="text-sm font-medium text-gray-700">
@@ -1111,8 +1245,10 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                     checked={includeUtilityAllowances && includeRentAnalysis}
                     onChange={(e) => {
                       if (includeRentAnalysis) {
-                        setIncludeUtilityAllowances(e.target.checked);
-                        if (e.target.checked) {
+                        const newValue = e.target.checked;
+                        setIncludeUtilityAllowances(newValue);
+                        savePropertySettings({ includeUtilityAllowances: newValue });
+                        if (newValue) {
                           setShowUtilityModal(true);
                         }
                       }
@@ -1141,6 +1277,98 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
         </div>
       </div>
 
+      {/* Verification Status Summary */}
+      {processedTenancies.length > 0 && (
+        <div className="mb-6 bg-white rounded-lg shadow-md overflow-hidden">
+          <div className="bg-gradient-to-r from-brand-blue to-brand-accent px-6 py-4">
+            <h2 className="text-lg font-semibold text-white">Verification Status Summary</h2>
+          </div>
+          
+          <div className="p-6">
+            <div className="overflow-x-auto">
+              <table className="min-w-full table-fixed">
+                <thead>
+                  <tr className="bg-gradient-to-r from-brand-blue to-brand-accent">
+                    <th className="w-1/4 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Status</th>
+                    <th className="w-1/4 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Count</th>
+                    <th className="w-1/4 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Percentage</th>
+                    <th className="w-1/4 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Description</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {(() => {
+                    const verificationCounts = {
+                      'Verified': 0,
+                      'In Progress - Finalize to Process': 0,
+                      'Out of Date Income Documents': 0,
+                      'Needs Investigation': 0,
+                      'Vacant': 0,
+                      'Other': 0
+                    };
+
+                    processedTenancies.forEach(unit => {
+                      const status = unit.verificationStatus || 'Other';
+                      if (verificationCounts.hasOwnProperty(status)) {
+                        verificationCounts[status as keyof typeof verificationCounts]++;
+                      } else {
+                        verificationCounts['Other']++;
+                      }
+                    });
+
+                    const totalUnits = processedTenancies.length;
+                    const statusOrder = [
+                      'Verified',
+                      'In Progress - Finalize to Process', 
+                      'Out of Date Income Documents',
+                      'Needs Investigation',
+                      'Vacant'
+                    ];
+
+                    return statusOrder.map((status, index) => {
+                      const count = verificationCounts[status as keyof typeof verificationCounts];
+                      const percentage = totalUnits > 0 ? (count / totalUnits * 100).toFixed(1) : '0.0';
+                      
+                      const descriptions = {
+                        'Verified': 'Units with verified income documentation',
+                        'In Progress - Finalize to Process': 'Units pending admin review/finalization',
+                        'Out of Date Income Documents': 'Units requiring updated documentation',
+                        'Needs Investigation': 'Units flagged for admin investigation',
+                        'Vacant': 'Currently vacant units'
+                      };
+
+                      const statusColors = {
+                        'Verified': 'bg-green-50 text-green-700',
+                        'In Progress - Finalize to Process': 'bg-blue-50 text-blue-700',
+                        'Out of Date Income Documents': 'bg-red-50 text-red-700',
+                        'Needs Investigation': 'bg-yellow-50 text-yellow-700',
+                        'Vacant': 'bg-gray-50 text-gray-700'
+                      };
+
+                      return (
+                        <tr key={status} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                          <td className={`px-4 py-3 text-sm font-medium text-center ${statusColors[status as keyof typeof statusColors] || 'text-gray-700'}`}>
+                            {status}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-900 text-center font-medium">
+                            {count}
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-900 text-center font-medium">
+                            {percentage}%
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-600 text-center">
+                            {descriptions[status as keyof typeof descriptions]}
+                          </td>
+                        </tr>
+                      );
+                    });
+                  })()}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Compliance Summary */}
       {processedTenancies.length > 0 && (
         <div className="mb-8 bg-white rounded-lg shadow-md overflow-hidden">
@@ -1156,14 +1384,12 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                 <table className="min-w-full table-fixed">
                   <thead>
                     <tr className="bg-gradient-to-r from-brand-blue to-brand-accent">
-                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Bucket</th>
-                                                  <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Target</th>
-                                                  <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Actual</th>
-                                                  <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance</th>
-                                                  <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Adjust Compliance with Vacants</th>
-                                                  <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Over/(Under)</th>
-                                                  <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Verified Income Units</th>
-                                                </tr>
+                      <th className="w-1/5 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Bucket</th>
+                      <th className="w-1/5 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Target</th>
+                      <th className="w-1/5 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Occupied</th>
+                      <th className="w-1/5 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance</th>
+                      <th className="w-1/5 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Over/(Under)</th>
+                    </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {Object.entries(stats.targets).map(([bucket, target], index) => {
@@ -1175,15 +1401,11 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                       return (
                         <tr key={bucket}>
                           <td className="px-4 py-4 whitespace-nowrap text-center text-sm font-medium text-gray-900">{bucket}</td>
-                                                      <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{target.toFixed(1)}%</td>
-                                                      <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{actual.toFixed(1)}%</td>
-                                                      <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{compliance.toFixed(1)}%</td>
-                                                      <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{withVacants.toFixed(1)}%</td>
-                                                      <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">
-                            {overUnder >= 0 ? '+' : ''}{overUnder.toFixed(1)}%
-                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{target.toFixed(1)}%</td>
+                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{compliance.toFixed(1)}%</td>
+                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{withVacants.toFixed(1)}%</td>
                           <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">
-                            {stats.verifiedIncomeByBucket[bucket] ? `${stats.verifiedIncomeByBucket[bucket].percentage.toFixed(1)}%` : '-'}
+                            {overUnder >= 0 ? '+' : ''}{overUnder.toFixed(1)}%
                           </td>
                         </tr>
                       );
@@ -1200,14 +1422,12 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                 <table className="min-w-full table-fixed">
                   <thead>
                     <tr className="bg-gradient-to-r from-brand-blue to-brand-accent">
-                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Bucket</th>
-                                                  <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Target</th>
-                                                  <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Actual</th>
-                                                  <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance</th>
-                                                  <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Adjust Compliance with Vacants</th>
-                                                  <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Over/(Under)</th>
-                                                  <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Verified Income Units</th>
-                                                </tr>
+                      <th className="w-1/5 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Bucket</th>
+                      <th className="w-1/5 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Target</th>
+                      <th className="w-1/5 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Occupied</th>
+                      <th className="w-1/5 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance</th>
+                      <th className="w-1/5 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Over/(Under)</th>
+                    </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {Object.entries(stats.targets).map(([bucket, targetPercent], index) => {
@@ -1220,15 +1440,11 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                       return (
                         <tr key={bucket}>
                           <td className="px-4 py-4 whitespace-nowrap text-center text-sm font-medium text-gray-900">{bucket}</td>
-                                                      <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{targetUnits}</td>
-                                                      <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{actualUnits}</td>
-                                                      <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{complianceUnits}</td>
-                                                      <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{withVacantsUnits}</td>
-                                                      <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">
-                            {overUnderUnits >= 0 ? '+' : ''}{overUnderUnits}
-                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{targetUnits}</td>
+                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{complianceUnits}</td>
+                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{withVacantsUnits}</td>
                           <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">
-                            {stats.verifiedIncomeByBucket[bucket] ? stats.verifiedIncomeByBucket[bucket].verified : '-'}
+                            {overUnderUnits >= 0 ? '+' : ''}{overUnderUnits}
                           </td>
                         </tr>
                       );
@@ -1242,12 +1458,15 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       )}
 
       {/* Projected Compliance Summary */}
-      {processedTenancies.length > 0 && hasSelectedProvisionalLeases && (
+      {processedTenancies.length > 0 && hasAnySelectedLeases && (
         <div className="mb-8 bg-white rounded-lg shadow-md overflow-hidden">
           <div className="bg-gradient-to-r from-green-600 to-green-700 px-6 py-4">
             <h2 className="text-lg font-semibold text-white">Projected Compliance (With Selected Future Leases)</h2>
             <p className="text-green-100 text-sm mt-1">
-              Compliance analysis including {selectedProvisionalLeases.size} selected provisional lease{selectedProvisionalLeases.size === 1 ? '' : 's'}
+              Compliance analysis including {selectedProvisionalLeases.size + selectedFutureLeases.size} selected lease{(selectedProvisionalLeases.size + selectedFutureLeases.size) === 1 ? '' : 's'}
+              {selectedProvisionalLeases.size > 0 && selectedFutureLeases.size > 0 && ` (${selectedProvisionalLeases.size} provisional, ${selectedFutureLeases.size} future)`}
+              {selectedProvisionalLeases.size > 0 && selectedFutureLeases.size === 0 && ` (provisional)`}
+              {selectedProvisionalLeases.size === 0 && selectedFutureLeases.size > 0 && ` (future)`}
             </p>
           </div>
           
@@ -1259,19 +1478,16 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                 <table className="min-w-full table-fixed">
                   <thead>
                     <tr className="bg-gradient-to-r from-green-600 to-green-700">
-                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Bucket</th>
-                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Target</th>
-                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Projected</th>
-                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance</th>
-                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Adjust Compliance with Vacants</th>
-                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Over/(Under)</th>
-                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Verified Income Units</th>
+                      <th className="w-1/5 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Bucket</th>
+                      <th className="w-1/5 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Target</th>
+                      <th className="w-1/5 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Projected Occupied</th>
+                      <th className="w-1/5 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Projected Compliance</th>
+                      <th className="w-1/5 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Over/(Under)</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {Object.entries(projectedStats.targets).map(([bucket, target], index) => {
                       const projected = ((projectedStats.bucketCounts[bucket] || 0) / projectedStats.totalUnits * 100);
-                      const compliance = projected; // Compliance column shows percentage of total units in this bucket
                       const withVacants = ((projectedStats.bucketCountsWithVacants[bucket] || 0) / projectedStats.totalUnits * 100);
                       const overUnder = withVacants - target;
                       const current = ((stats.bucketCounts[bucket] || 0) / stats.totalUnits * 100);
@@ -1293,13 +1509,9 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                               )}
                             </div>
                           </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{compliance.toFixed(1)}%</td>
                           <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{withVacants.toFixed(1)}%</td>
                           <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">
                             {overUnder >= 0 ? '+' : ''}{overUnder.toFixed(1)}%
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">
-                            {projectedStats.verifiedIncomeByBucket[bucket] ? `${projectedStats.verifiedIncomeByBucket[bucket].percentage.toFixed(1)}%` : '-'}
                           </td>
                         </tr>
                       );
@@ -1316,20 +1528,17 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                 <table className="min-w-full table-fixed">
                   <thead>
                     <tr className="bg-gradient-to-r from-green-600 to-green-700">
-                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Bucket</th>
-                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Target</th>
-                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Projected</th>
-                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Compliance</th>
-                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Adjust Compliance with Vacants</th>
-                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Over/(Under)</th>
-                      <th className="w-1/6 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Verified Income Units</th>
+                      <th className="w-1/5 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Bucket</th>
+                      <th className="w-1/5 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Target</th>
+                      <th className="w-1/5 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Projected Occupied</th>
+                      <th className="w-1/5 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Projected Compliance</th>
+                      <th className="w-1/5 px-4 py-3 text-center text-xs font-medium text-white uppercase tracking-wider">Over/(Under)</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {Object.entries(projectedStats.targets).map(([bucket, targetPercent], index) => {
                       const targetUnits = projectedStats.targetCounts[bucket] || 0;
                       const projectedUnits = projectedStats.bucketCounts[bucket] || 0;
-                      const complianceUnits = projectedUnits;
                       const withVacantsUnits = projectedStats.bucketCountsWithVacants[bucket] || 0;
                       const overUnderUnits = withVacantsUnits - targetUnits;
                       const currentUnits = stats.bucketCounts[bucket] || 0;
@@ -1351,13 +1560,9 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                               )}
                             </div>
                           </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{complianceUnits}</td>
                           <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">{withVacantsUnits}</td>
                           <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">
                             {overUnderUnits >= 0 ? '+' : ''}{overUnderUnits}
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap text-center text-sm text-gray-500">
-                            {projectedStats.verifiedIncomeByBucket[bucket] ? projectedStats.verifiedIncomeByBucket[bucket].verified : '-'}
                           </td>
                         </tr>
                       );
@@ -1491,62 +1696,37 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                         )}
                      </td>
                      <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
-                       {unit.provisionalLeases && unit.provisionalLeases.length > 0 ? (
-                         <div className="space-y-2">
-                           {unit.provisionalLeases.map((lease) => (
-                             <div key={lease.id} className="flex items-center justify-center space-x-2">
-                               <input
-                                 type="checkbox"
-                                 id={`lease-${lease.id}`}
-                                 checked={selectedProvisionalLeases.has(lease.id)}
-                                 onChange={() => handleProvisionalLeaseToggle(lease.id)}
-                                 disabled={!lease.isVerificationFinalized}
-                                 className={`h-4 w-4 text-brand-blue focus:ring-brand-blue border-gray-300 rounded ${
-                                   !lease.isVerificationFinalized ? 'opacity-50 cursor-not-allowed' : ''
-                                 }`}
-                               />
-                               <label
-                                 htmlFor={`lease-${lease.id}`}
-                                 className={`text-sm cursor-pointer ${
-                                   lease.isVerificationFinalized 
-                                     ? 'text-gray-700' 
-                                     : 'text-gray-400 cursor-not-allowed'
-                                 }`}
-                                 title={!lease.isVerificationFinalized ? 'Income verification must be finalized first' : ''}
-                               >
-                                 <div className="flex flex-col">
-                                   <Link
-                                     href={`/property/${property.id}/rent-roll/${selectedRentRollId}/unit/${unit.id}`}
-                                     className="text-sm text-gray-900 hover:text-brand-blue cursor-pointer"
-                                   >
-                                     {lease.name}
-                                   </Link>
-                                   {lease.isVerificationFinalized && lease.amiBucketInfo ? (
-                                     <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                       lease.amiBucketInfo.actualBucket === '50% AMI' ? 'bg-green-100 text-green-800' :
-                                       lease.amiBucketInfo.actualBucket === '60% AMI' ? 'bg-blue-100 text-blue-800' :
-                                       lease.amiBucketInfo.actualBucket === '80% AMI' ? 'bg-purple-100 text-purple-800' :
-                                       'bg-gray-100 text-gray-800'
-                                     }`}>
-                                       {lease.amiBucketInfo.actualBucket}
-                                     </span>
-                                   ) : lease.isVerificationFinalized ? (
-                                     <span className="text-xs text-gray-400 italic">
-                                       Calculating...
-                                     </span>
-                                   ) : (
-                                     <Link
-                                       href={`/property/${property.id}/rent-roll/${selectedRentRollId}/unit/${unit.id}`}
-                                       className="text-xs text-red-600 hover:text-red-800 cursor-pointer text-center"
-                                     >
-                                       <div>Income Verification</div>
-                                       <div>Not Finalized</div>
-                                     </Link>
-                                   )}
-                                 </div>
-                               </label>
-                             </div>
-                           ))}
+                       {unit.futureLease ? (
+                         <div className="flex flex-col items-center space-y-1">
+                           <div className="text-sm text-gray-900 font-medium">
+                             {unit.futureLease.leaseName}
+                           </div>
+                           <div className="flex items-center space-x-1">
+                             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                               unit.futureLease.verificationStatus === 'Verified' ? 'bg-green-100 text-green-800' :
+                               unit.futureLease.verificationStatus === 'In Progress' ? 'bg-yellow-100 text-yellow-800' :
+                               'bg-gray-100 text-gray-800'
+                             }`}>
+                               {unit.futureLease.verificationStatus}
+                             </span>
+                             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                               unit.futureLease.complianceBucket === '50% AMI' ? 'bg-green-100 text-green-800' :
+                               unit.futureLease.complianceBucket === '60% AMI' ? 'bg-blue-100 text-blue-800' :
+                               unit.futureLease.complianceBucket === '80% AMI' ? 'bg-purple-100 text-purple-800' :
+                               'bg-gray-100 text-gray-800'
+                             }`}>
+                               {unit.futureLease.complianceBucket}
+                             </span>
+                           </div>
+                           <input
+                             type="checkbox"
+                             checked={selectedFutureLeases.has(unit.futureLease?.id || '')}
+                             onChange={() => unit.futureLease && handleFutureLeaseToggle(unit.futureLease.id)}
+                             disabled={unit.futureLease?.verificationStatus !== 'Verified'}
+                             className={`h-4 w-4 text-brand-blue focus:ring-brand-blue border-gray-300 rounded ${
+                               unit.futureLease.verificationStatus !== 'Verified' ? 'opacity-50 cursor-not-allowed' : ''
+                             }`}
+                           />
                          </div>
                        ) : (
                          <span className="text-gray-400 text-xs">-</span>
@@ -1709,7 +1889,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
             <div className="mt-3">
               <h3 className="text-lg font-medium text-gray-900 mb-4">Configure Utility Allowances</h3>
               <p className="text-sm text-gray-600 mb-4">
-                Enter monthly utility allowances that will be subtracted from LIHTC maximum rents.
+                Enter the monthly utility allowances for each bedroom count.
               </p>
 
               <div className="space-y-3">
@@ -1751,7 +1931,8 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                 <button
                   onClick={() => {
                     setShowUtilityModal(false);
-                    // Keep the toggle enabled and data saved
+                    // Save utility allowances to database
+                    savePropertySettings({ utilityAllowances });
                   }}
                   className="px-4 py-2 text-sm font-medium text-white bg-brand-blue border border-transparent rounded-md hover:bg-blue-600"
                                             >

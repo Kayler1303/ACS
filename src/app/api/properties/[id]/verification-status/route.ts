@@ -86,28 +86,34 @@ export async function GET(
       // Initialize enhanced unit (will be populated later with resident income data)
       let enhancedUnit = { ...unit };
       
-      // Find the active lease (with tenancy)
+      // SIMPLIFIED: Only handle current leases (with tenancy)
       const currentLease = unit.leases
-        .filter(l => l.tenancy !== null)
-        .sort((a, b) => new Date(b.tenancy!.createdAt).getTime() - new Date(a.tenancy!.createdAt).getTime())[0];
+        .filter((l: any) => l.tenancy !== null)
+        .sort((a: any, b: any) => new Date(b.tenancy!.createdAt).getTime() - new Date(a.tenancy!.createdAt).getTime())[0];
 
       let verificationStatus: any;
 
-      // Check if there's an active income verification in progress
-      if (currentLease && currentLease.incomeVerifications.length > 0) {
-        const latestVerification = currentLease.incomeVerifications[0]; // Already sorted by createdAt desc
-        
-        if (latestVerification.status === 'IN_PROGRESS') {
-          verificationStatus = 'In Progress - Finalize to Process';
-        } else if (latestVerification.status === 'FINALIZED') {
-          // Only check for discrepancies if verification is finalized
-          verificationStatus = getUnitVerificationStatus(enhancedUnit, latestRentRollDate);
+      if (!currentLease) {
+        // No active lease = Vacant
+        verificationStatus = 'Vacant';
+      } else {
+        // Check if there's an active income verification in progress  
+        if (currentLease.incomeVerifications.length > 0) {
+          const latestVerification = currentLease.incomeVerifications[0]; // Already sorted by createdAt desc
+          
+          if (latestVerification.status === 'IN_PROGRESS') {
+            verificationStatus = 'In Progress - Finalize to Process';
+          } else if (latestVerification.status === 'FINALIZED') {
+            // Only check for discrepancies if verification is finalized
+            verificationStatus = getUnitVerificationStatus(enhancedUnit, latestRentRollDate);
+          } else {
+            // Fallback verification status for edge cases
+            verificationStatus = getUnitVerificationStatus(enhancedUnit, latestRentRollDate);
+          }
         } else {
+          // No verification in progress, check overall unit status
           verificationStatus = getUnitVerificationStatus(enhancedUnit, latestRentRollDate);
         }
-      } else {
-        // No verification process started yet
-        verificationStatus = getUnitVerificationStatus(enhancedUnit, latestRentRollDate);
       }
       
       // Automatically create override request for "Needs Investigation" status
@@ -126,39 +132,41 @@ export async function GET(
       
       // Find the active lease (with tenancy)
       const activeLease = unit.leases
-        .filter(l => l.tenancy !== null)
-        .sort((a, b) => new Date(b.tenancy!.createdAt).getTime() - new Date(a.tenancy!.createdAt).getTime())[0];
+        .filter((l: any) => l.tenancy !== null)
+        .sort((a: any, b: any) => new Date(b.tenancy!.createdAt).getTime() - new Date(a.tenancy!.createdAt).getTime())[0];
 
-      // Calculate total uploaded income (from compliance uploads)
-      const totalUploadedIncome = activeLease 
-        ? activeLease.residents.reduce((acc, r) => acc + (r.annualizedIncome || 0), 0)
+      // Calculate total uploaded income (from compliance uploads) - only use active lease
+      const totalUploadedIncome = currentLease 
+        ? currentLease.residents.reduce((acc: any, r: any) => acc + (r.annualizedIncome || 0), 0)
         : 0;
 
       // Calculate total verified income using resident-level data and create enhanced unit for verification status
       let totalVerifiedIncome = 0;
       
-      if (activeLease) {
-        // Fetch resident-level income data using Prisma client instead of raw SQL
+      if (currentLease) {
+        // Fetch resident-level income data using available fields (not calculatedAnnualizedIncome)
         const enhancedResidents = [];
-        for (const resident of activeLease.residents) {
+        for (const resident of currentLease.residents) {
           try {
             const residentIncomeData = await prisma.resident.findUnique({
               where: { id: resident.id },
               select: {
-                calculatedAnnualizedIncome: true,
-                incomeFinalized: true
+                incomeFinalized: true,
+                hasNoIncome: true,
+                annualizedIncome: true
               }
             });
             
             const enhancedResident = {
               ...resident,
-              calculatedAnnualizedIncome: residentIncomeData?.calculatedAnnualizedIncome || null,
-              incomeFinalized: residentIncomeData?.incomeFinalized || false
+              incomeFinalized: residentIncomeData?.incomeFinalized || false,
+              hasNoIncome: residentIncomeData?.hasNoIncome || false
             };
             enhancedResidents.push(enhancedResident);
             
-            if (residentIncomeData?.incomeFinalized && residentIncomeData.calculatedAnnualizedIncome) {
-              totalVerifiedIncome += Number(residentIncomeData.calculatedAnnualizedIncome) || 0;
+            // Use annualizedIncome if available and income is finalized
+            if (residentIncomeData?.incomeFinalized && residentIncomeData.annualizedIncome) {
+              totalVerifiedIncome += Number(residentIncomeData.annualizedIncome) || 0;
             }
           } catch (error) {
             console.error(`Error fetching resident income data for ${resident.id}:`, error);
@@ -167,11 +175,11 @@ export async function GET(
         }
         
         // Create enhanced unit with enhanced residents for verification status calculation
-        const enhancedLease = { ...activeLease, residents: enhancedResidents };
+        const enhancedLease = { ...currentLease, residents: enhancedResidents };
         enhancedUnit = {
           ...unit,
-          leases: unit.leases.map(lease => 
-            lease.id === activeLease.id ? enhancedLease : lease
+          leases: unit.leases.map((lease: any) => 
+            lease.id === currentLease.id ? enhancedLease : lease
           )
         };
       }
@@ -185,15 +193,15 @@ export async function GET(
       }
 
       // Count documents
-      const documentCount = activeLease 
-        ? activeLease.residents.flatMap(r => r.incomeDocuments).length
+      const documentCount = currentLease 
+        ? currentLease.residents.flatMap((r: any) => r.incomeDocuments).length
         : 0;
 
       // Find last verification update
-      const lastVerificationUpdate = activeLease 
-        ? activeLease.residents
-            .flatMap(r => r.incomeDocuments)
-            .reduce((latest, doc) => {
+      const lastVerificationUpdate = currentLease 
+        ? currentLease.residents
+            .flatMap((r: any) => r.incomeDocuments)
+            .reduce((latest: any, doc: any) => {
               const docDate = new Date(doc.uploadDate);
               return !latest || docDate > latest ? docDate : latest;
             }, null as Date | null)
@@ -205,7 +213,7 @@ export async function GET(
         verificationStatus,
         totalUploadedIncome,
         totalVerifiedIncome,
-        leaseStartDate: activeLease?.leaseStartDate ? new Date(activeLease.leaseStartDate) : null,
+        leaseStartDate: currentLease?.leaseStartDate ? new Date(currentLease.leaseStartDate) : null,
         documentCount,
         lastVerificationUpdate,
       };

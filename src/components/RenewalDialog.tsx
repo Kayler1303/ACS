@@ -85,7 +85,7 @@ export default function RenewalDialog({
       <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl p-8 max-h-[90vh] overflow-y-auto">
         <h2 className="text-2xl font-bold text-center text-gray-800 mb-2">Select Residents for Renewal</h2>
         <p className="text-sm text-center text-gray-500 mb-6">
-          For provisional lease: <span className="font-medium">{leaseName}</span>
+          For lease: <span className="font-medium">{leaseName}</span>
         </p>
 
         {/* Existing Residents Section */}

@@ -74,7 +74,7 @@ export async function PATCH(
       // All residents are finalized, finalize the verification
       // Calculate total verified income using raw SQL
       const totalIncomeResult = await prisma.$queryRaw<Array<{ total: number }>>`
-        SELECT COALESCE(SUM("calculatedAnnualizedIncome"), 0) as total
+        SELECT COALESCE(SUM("annualizedIncome"), 0) as total
         FROM "Resident"
         WHERE "leaseId" = ${leaseId} AND "incomeFinalized" = true
       `;
