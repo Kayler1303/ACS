@@ -311,6 +311,18 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     const fetchVerificationData = async () => {
       if (!selectedRentRollId) return;
       
+      // Don't fetch verification data if we're on a unit detail page or other nested pages
+      // This prevents expensive property-wide API calls when viewing individual units
+      const isUnitDetailPage = window.location.pathname.includes('/unit/');
+      const isUploadPage = window.location.pathname.includes('/upload-units');
+      const isReconciliationPage = window.location.pathname.includes('/reconciliation');
+      const isUpdateCompliancePage = window.location.pathname.includes('/update-compliance');
+      
+      if (isUnitDetailPage || isUploadPage || isReconciliationPage || isUpdateCompliancePage) {
+        console.log('[PropertyPageClient] Skipping verification-status API call - on nested page');
+        return;
+      }
+      
       setVerificationLoading(true);
       try {
         const res = await fetch(`/api/properties/${property.id}/verification-status`);
