@@ -800,8 +800,14 @@ export default function ResidentDetailPage() {
 
   useEffect(() => {
     fetchTenancyData();
-    fetchUnitVerificationStatus();
   }, [fetchTenancyData]);
+
+  // Call fetchUnitVerificationStatus when tenancyData is available
+  useEffect(() => {
+    if (tenancyData) {
+      fetchUnitVerificationStatus();
+    }
+  }, [tenancyData]);
 
   // Updated Effect for polling
   useEffect(() => {
@@ -831,22 +837,20 @@ export default function ResidentDetailPage() {
     }
   };
 
-  // Function to fetch verification status for this unit
+  // Function to fetch verification status for this unit using already available data
   const fetchUnitVerificationStatus = async () => {
-    if (!propertyId || !unitId) return;
+    if (!tenancyData?.unit) return;
     
     try {
-      const response = await fetch(`/api/properties/${propertyId}/verification-status`);
-      if (response.ok) {
-        const data = await response.json();
-        // Find this unit's status from the response
-        const unitStatus = data.units?.find((u: any) => u.unitId === unitId);
-        if (unitStatus) {
-          setUnitVerificationStatus(unitStatus.verificationStatus);
-        }
-      }
+      // Use the verification service with already-available tenancy data
+      // No need to call the property-wide API!
+      const verificationStatus = getUnitVerificationStatus(
+        tenancyData.unit, 
+        new Date(tenancyData.rentRoll.date)
+      );
+      setUnitVerificationStatus(verificationStatus);
     } catch (error) {
-      console.error('Error fetching unit verification status:', error);
+      console.error('Error calculating unit verification status:', error);
     }
   };
 
