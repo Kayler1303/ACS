@@ -153,20 +153,38 @@ export async function GET(
               select: {
                 incomeFinalized: true,
                 hasNoIncome: true,
-                annualizedIncome: true
+                annualizedIncome: true,
+                calculatedAnnualizedIncome: true
               }
             });
             
             const enhancedResident = {
               ...resident,
               incomeFinalized: residentIncomeData?.incomeFinalized || false,
-              hasNoIncome: residentIncomeData?.hasNoIncome || false
+              hasNoIncome: residentIncomeData?.hasNoIncome || false,
+              calculatedAnnualizedIncome: residentIncomeData?.calculatedAnnualizedIncome || null
             };
             enhancedResidents.push(enhancedResident);
             
-            // Use annualizedIncome if available and income is finalized
-            if (residentIncomeData?.incomeFinalized && residentIncomeData.annualizedIncome) {
-              totalVerifiedIncome += Number(residentIncomeData.annualizedIncome) || 0;
+            // Use calculatedAnnualizedIncome if available and income is finalized, otherwise fall back to annualizedIncome
+            if (residentIncomeData?.incomeFinalized) {
+              const verifiedAmount = residentIncomeData.calculatedAnnualizedIncome || residentIncomeData.annualizedIncome;
+              console.log(`[DEBUG ${unit.unitNumber}] Resident ${resident.id}:`, {
+                incomeFinalized: residentIncomeData.incomeFinalized,
+                calculatedAnnualizedIncome: residentIncomeData.calculatedAnnualizedIncome,
+                annualizedIncome: residentIncomeData.annualizedIncome,
+                verifiedAmount: verifiedAmount,
+                addingToTotal: Number(verifiedAmount) || 0
+              });
+              if (verifiedAmount) {
+                totalVerifiedIncome += Number(verifiedAmount) || 0;
+              }
+            } else {
+              console.log(`[DEBUG ${unit.unitNumber}] Resident ${resident.id} - NOT FINALIZED:`, {
+                incomeFinalized: residentIncomeData?.incomeFinalized,
+                calculatedAnnualizedIncome: residentIncomeData?.calculatedAnnualizedIncome,
+                annualizedIncome: residentIncomeData?.annualizedIncome
+              });
             }
           } catch (error) {
             console.error(`Error fetching resident income data for ${resident.id}:`, error);
