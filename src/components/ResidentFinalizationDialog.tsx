@@ -51,6 +51,7 @@ interface IncomeVerification {
   verificationPeriodEnd?: string;
   dueDate?: string;
   reason?: string;
+  leaseId?: string; // Added leaseId to the interface
 }
 
 interface Resident {
@@ -99,68 +100,44 @@ export default function ResidentFinalizationDialog({
   // Use resident-level calculated income or manual W2 entry
   const manualW2Value = manualW2Income ? parseFloat(manualW2Income) : 0;
   
-  // Only show verified income if the resident's income has been finalized
+  // Calculate available income for finalization (used for validation)
+  const availableIncomeForFinalization = resident.calculatedAnnualizedIncome || manualW2Value || 0;
+  
+  // Calculate verified income display (only show if already finalized)
   const residentVerifiedIncome = resident.incomeFinalized 
     ? (resident.calculatedAnnualizedIncome || manualW2Value || 0)
     : 0;
-    
-  // For validation purposes, check if there's income available to finalize
-  // (regardless of whether it's been finalized yet)
-  const availableIncomeForFinalization = resident.calculatedAnnualizedIncome || manualW2Value || 0;
 
-  // Enhanced validation logic for this resident
-  const paystubs = residentDocuments.filter(doc => doc.documentType === 'PAYSTUB');
-  const nonPaystubs = residentDocuments.filter(doc => doc.documentType !== 'PAYSTUB');
+  // Calculate total number of documents uploaded
+  const completedDocumentsCount = residentDocuments.filter(doc => doc.status === 'COMPLETED').length;
+  const hasDocuments = completedDocumentsCount > 0;
   
-  let canFinalize = true;
+  // Validation logic for finalization
+  let canFinalize = false;
   let validationMessage = '';
   
-  if (residentDocuments.length === 0) {
+  if (resident.incomeFinalized) {
+    // Already finalized - show unfinalize option
+    canFinalize = false; // We'll show unfinalize button instead
+    validationMessage = 'Income has been finalized';
+  } else if (availableIncomeForFinalization <= 0) {
     canFinalize = false;
-    validationMessage = `${resident.name} has no income documents.`;
-  } else if (w2DocumentsNeedingManualEntry.length > 0 && !manualW2Income) {
-    canFinalize = false;
-    validationMessage = `W2 data extraction failed. Please enter the annual income manually.`;
-  } else if (nonPaystubs.length === 0 && paystubs.length > 0) {
-    // Only paystubs - check if sufficient
-    const payFrequency = paystubs[0]?.payFrequency;
-    
-    if (!payFrequency) {
-      canFinalize = false;
-      validationMessage = `${resident.name} has paystubs but pay frequency could not be determined.`;
+    if (!hasDocuments) {
+      validationMessage = 'No income documents uploaded yet';
     } else {
-      const payPeriodDays: Record<string, number> = {
-        'BI_WEEKLY': 14,
-        'WEEKLY': 7,
-        'SEMI_MONTHLY': 15,
-        'MONTHLY': 30,
-        'UNKNOWN': 14
-      };
-      const days = payPeriodDays[payFrequency] || 14;
-      const requiredStubs = Math.ceil(30 / days);
-      
-      if (paystubs.length < requiredStubs) {
-        canFinalize = false;
-        validationMessage = `${resident.name} needs ${requiredStubs - paystubs.length} more paystub${requiredStubs - paystubs.length !== 1 ? 's' : ''} for ${formatPayFrequency(payFrequency).toLowerCase()} pay (${paystubs.length}/${requiredStubs} uploaded).`;
-      } else if (!availableIncomeForFinalization || availableIncomeForFinalization <= 0) {
-        canFinalize = false;
-        validationMessage = `${resident.name}'s income calculation is still being processed.`;
-      }
+      validationMessage = 'Income calculation is still being processed or no income calculated';
     }
+  } else {
+    canFinalize = true;
+    validationMessage = 'Ready to finalize';
   }
 
-  // Add debugging logs to trace the validation results
-  console.log(`[RESIDENT FINALIZATION DIALOG DEBUG] Resident ${resident.id} (${resident.name}):`, {
+  console.log(`[FINALIZATION DIALOG DEBUG] Resident ${resident.id} (${resident.name}):`, {
     incomeFinalized: resident.incomeFinalized,
     calculatedAnnualizedIncome: resident.calculatedAnnualizedIncome,
     annualizedIncome: resident.annualizedIncome,
-    manualW2Value: manualW2Value,
-    residentVerifiedIncome: residentVerifiedIncome,
-    availableIncomeForFinalization: availableIncomeForFinalization,
-    documentsCount: residentDocuments.length,
-    canFinalize: canFinalize,
-    validationMessage: validationMessage,
-    whatWillBeDisplayed: resident.incomeFinalized
+    shouldShowVerifiedIncome: resident.incomeFinalized,
+    whatWillBeDisplayed: resident.incomeFinalized 
       ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(residentVerifiedIncome)
       : "Not Finalized"
   });
@@ -190,6 +167,53 @@ export default function ResidentFinalizationDialog({
       console.log(`[FINALIZATION DEBUG] Finalization completed successfully`);
     } catch (error) {
       console.error(`[FINALIZATION DEBUG] Finalization failed:`, error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleUnfinalize = async () => {
+    setIsSubmitting(true);
+    
+    console.log(`[UNFINALIZATION DEBUG] Starting unfinalization for resident ${resident.id} (${resident.name})`);
+    
+    try {
+      // Use the correct IDs from the verification object
+      const leaseId = verification.leaseId; // This is the actual lease ID
+      const verificationId = verification.id; // This is the verification ID
+      
+      if (!leaseId) {
+        console.error(`[UNFINALIZATION DEBUG] Missing leaseId in verification object`);
+        alert('Unable to unfinalize: missing lease information');
+        return;
+      }
+      
+      const response = await fetch(`/api/leases/${leaseId}/verifications/${verificationId}/residents/${resident.id}/unfinalize`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      console.log(`[UNFINALIZATION DEBUG] API response status:`, response.status);
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`[UNFINALIZATION DEBUG] API response result:`, result);
+        
+        // Close the dialog and refresh the parent component
+        onClose();
+        
+        // Trigger a refresh by calling onConfirm with 0 (this will refresh the data)
+        await onConfirm(0);
+        
+        console.log(`[UNFINALIZATION DEBUG] Unfinalization completed successfully`);
+      } else {
+        const errorData = await response.json();
+        console.error(`[UNFINALIZATION DEBUG] API error:`, errorData);
+        alert(`Failed to unfinalize income: ${errorData.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error(`[UNFINALIZATION DEBUG] Network/other error:`, error);
+      alert('Network error occurred while unfinalizing income');
     } finally {
       setIsSubmitting(false);
     }
@@ -358,17 +382,29 @@ export default function ResidentFinalizationDialog({
               </button>
             )}
             
+            {resident.incomeFinalized && (
+              <button
+                onClick={handleUnfinalize}
+                disabled={isSubmitting}
+                className={`px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md ${
+                  isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
+              >
+                Unfinalize Income
+              </button>
+            )}
+
             <button
               onClick={handleFinalize}
-              disabled={isSubmitting || !canFinalize}
+              disabled={isSubmitting || !canFinalize || resident.incomeFinalized}
               className={`px-4 py-2 text-sm font-medium text-white rounded-md ${
-                !isSubmitting && canFinalize
+                !isSubmitting && canFinalize && !resident.incomeFinalized
                   ? 'bg-green-600 hover:bg-green-700'
                   : 'bg-gray-400 cursor-not-allowed'
               }`}
               title={!canFinalize ? 'Please resolve the issues above before finalizing' : ''}
             >
-              {isSubmitting ? 'Finalizing...' : `Finalize ${resident.name}'s Income`}
+              {isSubmitting ? 'Processing...' : resident.incomeFinalized ? 'Already Finalized' : `Finalize ${resident.name}'s Income`}
             </button>
           </div>
         </div>
@@ -389,4 +425,4 @@ export default function ResidentFinalizationDialog({
       />
     </div>
   );
-} 
+}
