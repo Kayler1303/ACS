@@ -1454,18 +1454,23 @@ export default function ResidentDetailPage() {
                                   </button>
                                 )}
                                 {isResidentFinalized && (
-                                  <button
-                                    onClick={() => handleOpenResidentFinalizationDialog(verification!, resident, period.name)}
-                                    className="flex items-center justify-center px-3 py-1 text-sm bg-green-100 text-green-800 rounded-md border border-green-200 hover:bg-green-200 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
-                                    title={`View or modify income verification for ${resident.name}`}
-                                  >
-                                    <span className="font-medium">Finalized ✓</span>
-                                    {resident.finalizedAt && (
-                                      <span className="ml-2 text-xs text-green-600">
-                                        {format(new Date(resident.finalizedAt), 'MMM d')}
-                                      </span>
-                                    )}
-                                  </button>
+                                  <div className="flex items-center space-x-2">
+                                    <div className="flex items-center justify-center px-3 py-1 text-sm bg-green-100 text-green-800 rounded-md border border-green-200">
+                                      <span className="font-medium">Finalized ✓</span>
+                                      {resident.finalizedAt && (
+                                        <span className="ml-2 text-xs text-green-600">
+                                          {format(new Date(resident.finalizedAt), 'MMM d')}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <button
+                                      onClick={() => handleOpenResidentFinalizationDialog(verification!, resident, period.name)}
+                                      className="px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-800 border border-blue-300 hover:border-blue-400 rounded-md hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors duration-200"
+                                      title={`Modify income verification for ${resident.name}`}
+                                    >
+                                      Modify
+                                    </button>
+                                  </div>
                                 )}
                               </div>
                             </div>
