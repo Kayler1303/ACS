@@ -1,4 +1,3 @@
-import { IncomeDocument, DocumentType } from '@prisma/client';
 import { differenceInDays } from 'date-fns';
 
 const PAY_PERIOD_FREQUENCIES = {
@@ -23,23 +22,21 @@ interface PaystubAnalysisResult {
 }
 
 // Type for paystub documents with required fields
-type PaystubDocument = IncomeDocument & {
-  payPeriodStartDate: Date;
-  payPeriodEndDate: Date;
+type PaystubDocument = any & {
   grossPayAmount: number;
 };
 
 // Helper type for documents that might have paystub fields
-type PotentialPaystubDocument = IncomeDocument & {
+type PotentialPaystubDocument = any & {
   payPeriodStartDate?: Date | null;
   payPeriodEndDate?: Date | null;
   grossPayAmount?: any; // Could be Decimal or number
 };
 
 /**
- * Analyzes a list of paystub documents to determine pay frequency and calculate annualized income.
+ * Analyzes a list of paystub documents to calculate annualized income using correct business logic.
  *
- * @param paystubs - A list of IncomeDocument objects of type PAYSTUB.
+ * @param paystubs - A list of income document objects of type PAYSTUB.
  * @returns An object containing the annualized income or an error message.
  */
 export function analyzePaystubs(paystubs: PotentialPaystubDocument[]): PaystubAnalysisResult {
@@ -53,55 +50,38 @@ export function analyzePaystubs(paystubs: PotentialPaystubDocument[]): PaystubAn
         // Handle both Prisma Decimal and number types for grossPayAmount
         const grossPayAmount = p.grossPayAmount ? Number(p.grossPayAmount) : null;
         
-        if (!p.payPeriodStartDate || !p.payPeriodEndDate || !grossPayAmount || grossPayAmount <= 0) {
+        if (!grossPayAmount || grossPayAmount <= 0) {
             return null;
         }
 
         return {
             ...p,
-            payPeriodStartDate: p.payPeriodStartDate,
-            payPeriodEndDate: p.payPeriodEndDate,
             grossPayAmount: grossPayAmount,
         };
     })
-    .filter((p): p is PaystubDocument => p !== null)
-    .sort((a, b) => new Date(b.payPeriodEndDate).getTime() - new Date(a.payPeriodEndDate).getTime());
+    .filter((p): p is PaystubDocument => p !== null);
 
-  if (processedPaystubs.length < 2) {
-    return { annualizedIncome: null, error: 'At least two paystubs are required to determine frequency.' };
+  if (processedPaystubs.length === 0) {
+    return { annualizedIncome: null, error: 'No valid paystubs with gross pay amounts found.' };
   }
 
-  // Determine pay frequency from the two most recent paystubs
-  const [latest, secondLatest] = processedPaystubs;
-  const daysBetween = differenceInDays(new Date(latest.payPeriodEndDate), new Date(secondLatest.payPeriodEndDate));
+  // Get pay frequency from any paystub (should be the same for all from same resident)
+  // Convert from upload format (BI-WEEKLY) to constant format (BI_WEEKLY)
+  const uploadFrequency = processedPaystubs[0]?.payFrequency || 'BI-WEEKLY';
+  const payFrequency = uploadFrequency.replace('-', '_') as keyof typeof PAY_PERIOD_FREQUENCIES;
   
-  let payFrequency: keyof typeof PAY_PERIOD_FREQUENCIES | undefined;
-  for (const [freq, days] of Object.entries(PAY_PERIOD_FREQUENCIES)) {
-    if (Math.abs(daysBetween - days) <= 2) { // Allow a 2-day tolerance
-      payFrequency = freq as keyof typeof PAY_PERIOD_FREQUENCIES;
-      break;
-    }
-  }
+  // Calculate the average gross pay from all available paystubs
+  const totalGrossPay = processedPaystubs.reduce((acc, p) => acc + p.grossPayAmount, 0);
+  const averageGrossPay = totalGrossPay / processedPaystubs.length;
 
-  if (!payFrequency) {
-    return { annualizedIncome: null, error: 'Could not determine pay frequency.' };
-  }
-  
-  // Verify there's at least a full month of paystubs
-  const requiredStubs = Math.ceil(30 / PAY_PERIOD_FREQUENCIES[payFrequency]);
-  if (processedPaystubs.length < requiredStubs) {
-      return { annualizedIncome: null, error: `Not enough paystubs for a full month. Expected ${requiredStubs}, got ${processedPaystubs.length}.`};
-  }
-  
-  // Calculate the average gross pay from the available paystubs
-  const totalGrossPay = processedPaystubs.slice(0, requiredStubs).reduce((acc, p) => acc + p.grossPayAmount, 0);
-  const averageGrossPay = totalGrossPay / requiredStubs;
-
-  // Annualize the income
-  const multiplier = FREQUENCY_MULTIPLIERS[payFrequency];
+  // Get the multiplier for annualization
+  const multiplier = FREQUENCY_MULTIPLIERS[payFrequency] || FREQUENCY_MULTIPLIERS.BI_WEEKLY; // Default to bi-weekly
   const annualizedIncome = averageGrossPay * multiplier;
 
-  return { annualizedIncome, payFrequency };
+  return { 
+    annualizedIncome, 
+    payFrequency: uploadFrequency as any // Return in upload format for consistency
+  };
 }
 
 export interface HudIncomeLimits {
@@ -205,24 +185,51 @@ export function getComplianceAmiBucket(
 }
 
 /**
- * Calculate total verified income from income documents
+ * Calculate total verified income from income documents using correct business logic
  */
 export function calculateTotalVerifiedIncome(incomeDocuments: any[]): number {
   const verifiedDocuments = incomeDocuments.filter(d => d.status === 'COMPLETED');
   
-  // Sum W2 income (box1_wages)
-  const w2Income = verifiedDocuments
-    .filter(d => d.documentType === 'W2')
-    .reduce((acc, d) => acc + (d.box1_wages || 0), 0);
+  // Group documents by type
+  const w2Documents = verifiedDocuments.filter(d => d.documentType === 'W2');
+  const paystubDocuments = verifiedDocuments.filter(d => d.documentType === 'PAYSTUB');
+  const otherDocuments = verifiedDocuments.filter(d => d.documentType !== 'W2' && d.documentType !== 'PAYSTUB');
   
-  // Sum paystub income (calculatedAnnualizedIncome)
-  const paystubIncome = verifiedDocuments
-    .filter(d => d.documentType === 'PAYSTUB' && d.calculatedAnnualizedIncome)
-    .reduce((acc, d) => acc + d.calculatedAnnualizedIncome!, 0);
+  // Calculate W2 income - take highest of boxes 1, 3, 5
+  const w2Income = w2Documents.reduce((acc, doc) => {
+    const box1 = doc.box1_wages || 0;
+    const box3 = doc.box3_ss_wages || 0;
+    const box5 = doc.box5_med_wages || 0;
+    const highestAmount = Math.max(box1, box3, box5);
+    return acc + highestAmount;
+  }, 0);
+  
+  // Calculate paystub income - average gross pay then annualize based on frequency
+  let paystubIncome = 0;
+  if (paystubDocuments.length > 0) {
+    // Average the gross pay amounts
+    const totalGrossPay = paystubDocuments.reduce((acc, doc) => acc + (doc.grossPayAmount || 0), 0);
+    const averageGrossPay = totalGrossPay / paystubDocuments.length;
     
-  // Sum other income types (calculatedAnnualizedIncome)
-  const otherIncome = verifiedDocuments
-    .filter(d => d.documentType !== 'W2' && d.documentType !== 'PAYSTUB' && d.calculatedAnnualizedIncome)
+    // Get pay frequency from any paystub (should be the same for all from same resident)
+    const payFrequency = paystubDocuments[0]?.payFrequency || 'BI-WEEKLY';
+    
+    // Convert to annual based on frequency
+    const frequencyMultipliers: { [key: string]: number } = {
+      'WEEKLY': 52,
+      'BI-WEEKLY': 26,
+      'SEMI-MONTHLY': 24, // Twice a month
+      'MONTHLY': 12,
+      'YEARLY': 1
+    };
+    
+    const multiplier = frequencyMultipliers[payFrequency] || 26; // Default to bi-weekly
+    paystubIncome = averageGrossPay * multiplier;
+  }
+  
+  // Calculate other income types (use existing calculatedAnnualizedIncome)
+  const otherIncome = otherDocuments
+    .filter(d => d.calculatedAnnualizedIncome)
     .reduce((acc, d) => acc + d.calculatedAnnualizedIncome!, 0);
 
   return w2Income + paystubIncome + otherIncome;

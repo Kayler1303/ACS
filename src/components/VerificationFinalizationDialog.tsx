@@ -31,6 +31,9 @@ interface IncomeDocument {
   employeeName?: string;
   employerName?: string;
   box1_wages?: number;
+  box3_ss_wages?: number; // Added for W2
+  box5_med_wages?: number; // Added for W2
+  grossPayAmount?: number; // Added for PAYSTUB
   residentId?: string;
   calculatedAnnualizedIncome?: number; // Added for PAYSTUB
   payPeriodStartDate?: string; // Added for PAYSTUB
@@ -89,15 +92,39 @@ export default function VerificationFinalizationDialog({
     const paystubDocuments = documents.filter(doc => doc.documentType === 'PAYSTUB');
     const otherDocuments = documents.filter(doc => doc.documentType !== 'W2' && doc.documentType !== 'PAYSTUB');
 
-    // Sum W2 wages
-    const w2Income = w2Documents.reduce((sum, doc) => sum + (doc.box1_wages || 0), 0);
+    // Calculate W2 income - take highest of boxes 1, 3, 5
+    const w2Income = w2Documents.reduce((sum, doc) => {
+      const box1 = doc.box1_wages || 0;
+      const box3 = doc.box3_ss_wages || 0;
+      const box5 = doc.box5_med_wages || 0;
+      const highestAmount = Math.max(box1, box3, box5);
+      return sum + highestAmount;
+    }, 0);
     
-    // For paystubs, take the average of calculated annualized income (they should all be the same)
-    const paystubIncome = paystubDocuments.length > 0 
-      ? paystubDocuments.reduce((sum, doc) => sum + (doc.calculatedAnnualizedIncome || 0), 0) / paystubDocuments.length
-      : 0;
+    // Calculate paystub income - average gross pay then annualize based on frequency
+    let paystubIncome = 0;
+    if (paystubDocuments.length > 0) {
+      // Average the gross pay amounts
+      const totalGrossPay = paystubDocuments.reduce((sum, doc) => sum + (doc.grossPayAmount || 0), 0);
+      const averageGrossPay = totalGrossPay / paystubDocuments.length;
+      
+      // Get pay frequency from any paystub (should be the same for all from same resident)
+      const payFrequency = paystubDocuments[0]?.payFrequency || 'BI-WEEKLY';
+      
+      // Convert to annual based on frequency
+      const frequencyMultipliers: { [key: string]: number } = {
+        'WEEKLY': 52,
+        'BI-WEEKLY': 26,
+        'SEMI-MONTHLY': 24, // Twice a month
+        'MONTHLY': 12,
+        'YEARLY': 1
+      };
+      
+      const multiplier = frequencyMultipliers[payFrequency] || 26; // Default to bi-weekly
+      paystubIncome = averageGrossPay * multiplier;
+    }
     
-    // Sum other document types
+    // Sum other document types (use existing calculatedAnnualizedIncome)
     const otherIncome = otherDocuments.reduce((sum, doc) => sum + (doc.calculatedAnnualizedIncome || 0), 0);
 
     return w2Income + paystubIncome + otherIncome;

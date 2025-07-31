@@ -166,6 +166,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             
             // More lenient validation - require at least Box 1 wages and tax year
             if (box1Amount && box1Amount > 0 && taxYear) {
+                // Calculate the highest value from boxes 1, 3, and 5 for annualized income
+                const highestAmount = Math.max(box1Amount || 0, box3Amount || 0, box5Amount || 0);
+                
                 document = await prisma.incomeDocument.update({
                   where: { id: document.id },
                   data: {
@@ -176,18 +179,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     taxYear: taxYear,
                     employeeName: employeeName || 'Not extracted',
                     employerName: employerName || 'Not extracted',
-                    calculatedAnnualizedIncome: box1Amount, // Use Box 1 for annualized income
+                    calculatedAnnualizedIncome: highestAmount, // Use highest of boxes 1, 3, 5
                   },
                 });
 
                 // PHASE 2 ARCHITECTURE: Also update resident-level calculated income for W2
                 await prisma.$executeRaw`
                   UPDATE "Resident" 
-                  SET "calculatedAnnualizedIncome" = ${Number(box1Amount)}::numeric
+                  SET "calculatedAnnualizedIncome" = ${Number(highestAmount)}::numeric
                   WHERE "id" = ${document.residentId}
                 `;
                 
-                console.log(`Updated resident ${document.residentId} with W2 calculated annualized income: $${box1Amount}`);
+                console.log(`Updated resident ${document.residentId} with W2 calculated annualized income (highest of boxes 1,3,5): $${highestAmount}`);
               } else {
                 console.log("W2 fields not found or empty in Azure response. Document requires manual review.");
                 document = await prisma.incomeDocument.update({
