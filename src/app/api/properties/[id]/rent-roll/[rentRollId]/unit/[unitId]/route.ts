@@ -68,25 +68,38 @@ export async function GET(req: NextRequest, { params }: { params: { id: string, 
             return NextResponse.json({ error: 'Unit not found' }, { status: 404 });
         }
 
-        // Enhance residents with income finalization data using Prisma ORM
+        // Enhance residents with income finalization data using batched Prisma query
         for (const lease of unitWithLeases.leases) {
-            for (let i = 0; i < lease.residents.length; i++) {
-                const residentData = await prisma.resident.findUnique({
-                    where: { id: lease.residents[i].id },
+            if (lease.residents.length > 0) {
+                // Batch fetch all resident data in a single query instead of individual queries
+                const residentIds = lease.residents.map(r => r.id);
+                const residentDataMap = await prisma.resident.findMany({
+                    where: { id: { in: residentIds } },
                     select: {
+                        id: true,
                         annualizedIncome: true,
                         calculatedAnnualizedIncome: true,
                         incomeFinalized: true,
                         finalizedAt: true,
                         hasNoIncome: true
                     }
-                });
-                
-                if (residentData) {
-                    (lease.residents[i] as any).calculatedAnnualizedIncome = residentData.calculatedAnnualizedIncome;
-                    (lease.residents[i] as any).incomeFinalized = residentData.incomeFinalized;
-                    (lease.residents[i] as any).finalizedAt = residentData.finalizedAt;
-                    (lease.residents[i] as any).hasNoIncome = residentData.hasNoIncome;
+                }).then(results => 
+                    results.reduce((map, resident) => {
+                        map[resident.id] = resident;
+                        return map;
+                    }, {} as Record<string, any>)
+                );
+
+                // Apply the data to each resident
+                for (let i = 0; i < lease.residents.length; i++) {
+                    const residentData = residentDataMap[lease.residents[i].id];
+                    
+                    if (residentData) {
+                        (lease.residents[i] as any).calculatedAnnualizedIncome = residentData.calculatedAnnualizedIncome;
+                        (lease.residents[i] as any).incomeFinalized = residentData.incomeFinalized;
+                        (lease.residents[i] as any).finalizedAt = residentData.finalizedAt;
+                        (lease.residents[i] as any).hasNoIncome = residentData.hasNoIncome;
+                    }
                 }
             }
         }
