@@ -1454,14 +1454,18 @@ export default function ResidentDetailPage() {
                                   </button>
                                 )}
                                 {isResidentFinalized && (
-                                  <div className="flex items-center justify-center px-3 py-1 text-sm bg-green-100 text-green-800 rounded-md border border-green-200">
+                                  <button
+                                    onClick={() => handleOpenResidentFinalizationDialog(verification!, resident, period.name)}
+                                    className="flex items-center justify-center px-3 py-1 text-sm bg-green-100 text-green-800 rounded-md border border-green-200 hover:bg-green-200 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                                    title={`View or modify income verification for ${resident.name}`}
+                                  >
                                     <span className="font-medium">Finalized ✓</span>
                                     {resident.finalizedAt && (
                                       <span className="ml-2 text-xs text-green-600">
                                         {format(new Date(resident.finalizedAt), 'MMM d')}
                                       </span>
                                     )}
-                                  </div>
+                                  </button>
                                 )}
                               </div>
                             </div>
