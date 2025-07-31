@@ -41,6 +41,13 @@ export async function GET(req: NextRequest, { params }: { params: { id: string, 
                             orderBy: {
                                 annualizedIncome: 'desc'
                             },
+                            include: {
+                                incomeDocuments: {
+                                    orderBy: {
+                                        uploadDate: 'desc'
+                                    }
+                                }
+                            }
                         },
                         incomeVerifications: {
                             orderBy: {

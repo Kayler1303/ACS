@@ -1,0 +1,1 @@
+SELECT id, "documentType", "employeeName", "employerName", status FROM "IncomeDocument" WHERE "residentId" IN (SELECT id FROM "Resident" WHERE name = 'Audrey Makins') ORDER BY "uploadDate" DESC LIMIT 10;
