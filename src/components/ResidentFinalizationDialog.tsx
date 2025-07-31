@@ -59,6 +59,7 @@ interface Resident {
   annualizedIncome: number;
   verifiedIncome: number | null;
   calculatedAnnualizedIncome?: number | null;
+  incomeFinalized?: boolean; // Add this field to track finalization status
 }
 
 interface ResidentFinalizationDialogProps {
@@ -97,7 +98,25 @@ export default function ResidentFinalizationDialog({
 
   // Use resident-level calculated income or manual W2 entry
   const manualW2Value = manualW2Income ? parseFloat(manualW2Income) : 0;
-  const residentVerifiedIncome = resident.calculatedAnnualizedIncome || manualW2Value || 0;
+  
+  // Only show verified income if the resident's income has been finalized
+  const residentVerifiedIncome = resident.incomeFinalized 
+    ? (resident.calculatedAnnualizedIncome || manualW2Value || 0)
+    : 0;
+    
+  // Add debugging logs to trace the issue
+  console.log(`[RESIDENT FINALIZATION DIALOG DEBUG] Resident ${resident.id} (${resident.name}):`, {
+    incomeFinalized: resident.incomeFinalized,
+    calculatedAnnualizedIncome: resident.calculatedAnnualizedIncome,
+    annualizedIncome: resident.annualizedIncome,
+    manualW2Value: manualW2Value,
+    residentVerifiedIncome: residentVerifiedIncome,
+    documentsCount: residentDocuments.length,
+    shouldShowVerifiedIncome: resident.incomeFinalized,
+    whatWillBeDisplayed: resident.incomeFinalized 
+      ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(residentVerifiedIncome)
+      : "Not Finalized"
+  });
 
   // Enhanced validation logic for this resident
   const paystubs = residentDocuments.filter(doc => doc.documentType === 'PAYSTUB');
@@ -265,8 +284,11 @@ export default function ResidentFinalizationDialog({
                 })}
                 <div className="border-t pt-3 flex justify-between items-center font-semibold text-lg">
                   <span>Total Annualized Verified Income:</span>
-                  <span className="text-green-600">
-                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(residentVerifiedIncome)}
+                  <span className={resident.incomeFinalized ? "text-green-600" : "text-gray-400"}>
+                    {resident.incomeFinalized 
+                      ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(residentVerifiedIncome)
+                      : "Not Finalized"
+                    }
                   </span>
                 </div>
               </div>
