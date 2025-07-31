@@ -290,10 +290,10 @@ export default function ResidentFinalizationDialog({
                 })}
                 <div className="border-t pt-3 flex justify-between items-center font-semibold text-lg">
                   <span>Total Annualized Verified Income:</span>
-                  <span className={resident.incomeFinalized ? "text-green-600" : "text-gray-400"}>
-                    {resident.incomeFinalized 
-                      ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(residentVerifiedIncome)
-                      : "Not Finalized"
+                  <span className={resident.incomeFinalized ? "text-green-600" : "text-blue-600"}>
+                    {availableIncomeForFinalization > 0
+                      ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(availableIncomeForFinalization)
+                      : <span className="text-gray-400">No income calculated</span>
                     }
                   </span>
                 </div>
