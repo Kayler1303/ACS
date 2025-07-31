@@ -126,13 +126,22 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         });
         
         // Create tenancy data (links lease to rent roll)
-        tenanciesData.push({
-          id: tenancyId,
-          rentRollId: newRentRoll.id,
-          leaseId: leaseId,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
+        // Only create tenancy if lease STARTED on or before rent roll date
+        const rentRollDate = new Date(newRentRoll.date);
+        const leaseStart = new Date(leaseStartDate);
+        
+        if (leaseStart <= rentRollDate) {
+          // Lease started on/before rent roll date - create tenancy
+          // This includes active leases AND month-to-month (expired lease but still in rent roll)
+          tenanciesData.push({
+            id: tenancyId,
+            rentRollId: newRentRoll.id,
+            leaseId: leaseId,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+        }
+        // Note: Only leases with start dates AFTER rent roll date are "future leases"
         
         // Create residents data for this lease
         for (const row of rows) {

@@ -131,11 +131,11 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
   const [processedTenancies, setProcessedTenancies] = useState<ProcessedUnit[]>([]);
   const [hudIncomeLimits, setHudIncomeLimits] = useState<HudIncomeLimits | null>(null);
   const [lihtcRentData, setLihtcRentData] = useState<Record<string, unknown> | null>(null);
-  const [complianceOption, setComplianceOption] = useState<string>("20% at 50% AMI, 55% at 80% AMI");
-  const [includeRentAnalysis, setIncludeRentAnalysis] = useState<boolean>(false);
-  const [includeUtilityAllowances, setIncludeUtilityAllowances] = useState<boolean>(false);
+  const [complianceOption, setComplianceOption] = useState<string>(property.complianceOption || "20% at 50% AMI, 55% at 80% AMI");
+  const [includeRentAnalysis, setIncludeRentAnalysis] = useState<boolean>(property.includeRentAnalysis || false);
+  const [includeUtilityAllowances, setIncludeUtilityAllowances] = useState<boolean>(property.includeUtilityAllowances || false);
   const [showUtilityModal, setShowUtilityModal] = useState<boolean>(false);
-  const [utilityAllowances, setUtilityAllowances] = useState<{[bedroomCount: number]: number}>({});
+  const [utilityAllowances, setUtilityAllowances] = useState<{[bedroomCount: number]: number}>(property.utilityAllowances as {[bedroomCount: number]: number} || {});
   const [isRequestingDeletion, setIsRequestingDeletion] = useState(false);
   const [showDeletionModal, setShowDeletionModal] = useState(false);
   const [deletionReason, setDeletionReason] = useState('');
@@ -214,6 +214,17 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
             console.log('📊 LIHTC rent data received:', data);
             console.log('📊 LIHTC max rents structure:', data.lihtcMaxRents);
             console.log('📊 Year used for LIHTC data:', data._metadata?.actualYear, data._metadata?.usedFallback ? '(fallback)' : '(current)');
+            
+            // 🎯 LOG 60% AMI RENT LIMITS FOR USER
+            if (data.lihtcMaxRents && data.lihtcMaxRents['60percent']) {
+              console.log('🏠 === 60% AMI RENT LIMITS ===');
+              console.log('📍 1BR units:', data.lihtcMaxRents['60percent']['1br'] || 'N/A');
+              console.log('📍 2BR units:', data.lihtcMaxRents['60percent']['2br'] || 'N/A');
+              console.log('📍 3BR units:', data.lihtcMaxRents['60percent']['3br'] || 'N/A');
+              console.log('📍 4BR units:', data.lihtcMaxRents['60percent']['4br'] || 'N/A');
+              console.log('🏠 ===========================');
+            }
+            
             setLihtcRentData(data);
           } else {
             console.error('❌ Failed to fetch LIHTC rents:', res.status, res.statusText);
@@ -395,18 +406,34 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       availableBedroomKeys50: maxRents['50percent'] ? Object.keys(maxRents['50percent']) : 'None'
     });
 
-    // Check from lowest to highest AMI
+    // Check rent compliance for the specific income bucket they qualify for
+    console.log(`🔍 Checking rent compliance for ${incomeBucket} with compliance option: ${complianceOption}`);
+    console.log(`💰 Unit rent: $${leaseRent}, Max rents - 60%: $${maxRent60}, 80%: $${maxRent80}`);
+    
     if (incomeBucket === '50% AMI' && leaseRent <= maxRent50) {
-      console.log('✅ Qualifies for 50% AMI (rent compliant)');
+      console.log('✅ Qualifies for 50% AMI (income + rent compliant)');
       return '50% AMI';
     }
-    if ((incomeBucket === '50% AMI' || incomeBucket === '60% AMI') && leaseRent <= maxRent60) {
-      console.log('✅ Qualifies for 60% AMI (rent compliant)');
+    if (incomeBucket === '60% AMI' && leaseRent <= maxRent60) {
+      console.log('✅ Qualifies for 60% AMI (income + rent compliant)', { leaseRent, maxRent60 });
       return '60% AMI';
     }
-    if ((['50% AMI', '60% AMI', '80% AMI'].includes(incomeBucket)) && leaseRent <= maxRent80) {
-      console.log('✅ Qualifies for 80% AMI (rent compliant)');
+    if (incomeBucket === '60% AMI' && leaseRent > maxRent60) {
+      console.log('❌ 60% AMI income but rent too high for 60% AMI limits', { leaseRent, maxRent60, difference: leaseRent - maxRent60 });
+      // Check if this unit can qualify for 80% AMI by rent
+      if (leaseRent <= maxRent80) {
+        console.log('✅ 60% AMI income unit qualifies for 80% AMI by rent', { leaseRent, maxRent80 });
+        return '80% AMI';
+      } else {
+        console.log('❌ 60% AMI income unit rent too high even for 80% AMI', { leaseRent, maxRent80, difference: leaseRent - maxRent80 });
+      }
+    }
+    if (incomeBucket === '80% AMI' && leaseRent <= maxRent80) {
+      console.log('✅ Qualifies for 80% AMI (income + rent compliant)', { leaseRent, maxRent80 });
       return '80% AMI';
+    }
+    if (incomeBucket === '80% AMI' && leaseRent > maxRent80) {
+      console.log('❌ 80% AMI income but rent too high for 80% AMI limits', { leaseRent, maxRent80, difference: leaseRent - maxRent80 });
     }
                                 
     // If rent exceeds all limits, it's market rate
@@ -643,8 +670,8 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
         };
       case '40% at 60% AMI, 35% at 80% AMI':
         const units60 = Math.ceil(totalUnits * 0.40); // Round UP for 60% AMI (minimum 40%)
-        const marketUnits2 = Math.floor(totalUnits * 0.25); // Round DOWN for Market (maximum 25%)
-        const units80_2 = totalUnits - units60 - marketUnits2; // Remaining units for 80% AMI
+        const units80_2 = Math.ceil(totalUnits * 0.35); // Round UP for 80% AMI (minimum 35%)
+        const marketUnits2 = totalUnits - units60 - units80_2; // Remaining units for Market
         return { 
           '60% AMI': units60, 
           '80% AMI': units80_2, 
@@ -742,21 +769,8 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       return aIndex - bIndex;
     });
     
-    // Cascade excess units through the actual target buckets (lowest AMI to highest)
-    for (let i = 0; i < sortedTargetBuckets.length - 1; i++) {
-      const currentBucket = sortedTargetBuckets[i];
-      const nextBucket = sortedTargetBuckets[i + 1];
-      
-      const targetCount = targetCounts[currentBucket] || 0;
-      const currentCount = bucketCountsWithVacants[currentBucket] || 0;
-      
-      if (currentCount > targetCount && targetCount > 0) {
-        // Move excess units to next bucket
-        const excess = currentCount - targetCount;
-        bucketCountsWithVacants[currentBucket] = targetCount;
-        bucketCountsWithVacants[nextBucket] = (bucketCountsWithVacants[nextBucket] || 0) + excess;
-      }
-    }
+    // NO CASCADING: Units stay in the bucket they actually qualify for
+    // Compliance targets can show over/under, but units don't get artificially moved
 
     // Calculate verified income units by bucket (excluding vacants)
     const verifiedIncomeByBucket: { [key: string]: { verified: number; total: number; percentage: number } } = {};
@@ -773,6 +787,41 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
         percentage: unitsInBucket.length > 0 ? (verifiedInBucket.length / unitsInBucket.length * 100) : 0
       };
     });
+
+    // 🎯 SUMMARY BREAKDOWN FOR USER DEBUG
+    if (includeRentAnalysis && selectedRentRollId) {
+      const currentRentRoll = property.rentRolls.find((rr: FullRentRoll) => rr.id === selectedRentRollId);
+      
+      if (currentRentRoll) {
+        const activeLeasesArray = processedTenancies.filter(unit => unit.actualBucket !== 'Vacant');
+        
+        const incomeOnly60 = activeLeasesArray.filter(unit => {
+          const tenancy = currentRentRoll.tenancies.find((t: FullTenancy) => t.lease.unitId === unit.id);
+          const residents = tenancy?.lease?.residents || [];
+          const totalIncome = residents.reduce((acc: number, res: Resident) => acc + Number(res.annualizedIncome || 0), 0);
+          return getActualBucket(totalIncome, residents.length, hudIncomeLimits, complianceOption) === '60% AMI';
+        }).length;
+        
+        const rentOnly60 = activeLeasesArray.filter(unit => {
+          const maxRent60 = lihtcRentData?.lihtcMaxRents?.['60percent']?.[`${unit.bedroomCount}br`] || 0;
+          const tenancy = currentRentRoll.tenancies.find((t: FullTenancy) => t.lease.unitId === unit.id);
+          const leaseRent = Number(tenancy?.lease.leaseRent || 0);
+          const utilityAllowance = includeUtilityAllowances ? (utilityAllowances[unit.bedroomCount] || 0) : 0;
+          const adjustedMaxRent = maxRent60 + utilityAllowance;
+          return leaseRent <= adjustedMaxRent;
+        }).length;
+        
+        const both60 = bucketCounts['60% AMI'] || 0;
+        
+        console.log('📊 === 60% AMI BREAKDOWN ===');
+        console.log(`📈 Units qualifying by INCOME only for 60% AMI: ${incomeOnly60}`);
+        console.log(`🏠 Units qualifying by RENT only for 60% AMI: ${rentOnly60}`);
+        console.log(`✅ Units qualifying by BOTH income AND rent: ${both60}`);
+        console.log(`❌ Income-qualified but rent too high: ${incomeOnly60 - both60}`);
+        console.log(`❌ Rent-qualified but income too high: ${rentOnly60 - both60}`);
+        console.log('📊 ============================');
+      }
+    }
 
     return { 
       totalUnits, 
@@ -869,21 +918,8 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       return aIndex - bIndex;
     });
     
-    // Cascade excess units through the actual target buckets (lowest AMI to highest)
-    for (let i = 0; i < sortedTargetBuckets.length - 1; i++) {
-      const currentBucket = sortedTargetBuckets[i];
-      const nextBucket = sortedTargetBuckets[i + 1];
-      
-      const targetCount = targetCounts[currentBucket] || 0;
-      const currentCount = bucketCountsWithVacants[currentBucket] || 0;
-      
-      if (currentCount > targetCount && targetCount > 0) {
-        // Move excess units to next bucket
-        const excess = currentCount - targetCount;
-        bucketCountsWithVacants[currentBucket] = targetCount;
-        bucketCountsWithVacants[nextBucket] = (bucketCountsWithVacants[nextBucket] || 0) + excess;
-      }
-    }
+    // NO CASCADING: Units stay in the bucket they actually qualify for
+    // Compliance targets can show over/under, but units don't get artificially moved
 
     // Calculate verified income units by bucket (excluding vacants) - using projected data
     const verifiedIncomeByBucket: { [key: string]: { verified: number; total: number; percentage: number } } = {};

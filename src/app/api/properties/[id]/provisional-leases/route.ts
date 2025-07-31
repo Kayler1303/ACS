@@ -15,12 +15,27 @@ export async function GET(
   const { id: propertyId } = await params;
 
   try {
+    // Get the most recent rent roll date for this property to determine what's "future"
+    const mostRecentRentRoll = await prisma.rentRoll.findFirst({
+      where: {
+        propertyId: propertyId,
+      },
+      orderBy: {
+        date: 'desc'
+      }
+    });
+
     const provisionalLeases = await prisma.lease.findMany({
       where: {
         unit: {
           propertyId: propertyId,
         },
         tenancy: null,
+        // Only include leases that START after the most recent rent roll date
+        // This excludes active leases (including month-to-month) and past leases
+        leaseStartDate: mostRecentRentRoll ? {
+          gt: mostRecentRentRoll.date
+        } : undefined,
       },
       include: {
         unit: true,

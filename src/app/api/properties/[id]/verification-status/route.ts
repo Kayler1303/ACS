@@ -138,28 +138,27 @@ export async function GET(
       let totalVerifiedIncome = 0;
       
       if (activeLease) {
-        // Fetch resident-level income data using raw SQL (temporary workaround for Prisma client types)
+        // Fetch resident-level income data using Prisma client instead of raw SQL
         const enhancedResidents = [];
         for (const resident of activeLease.residents) {
           try {
-            const residentIncomeData = await prisma.$queryRaw<Array<{
-              calculatedAnnualizedIncome: number | null;
-              incomeFinalized: boolean;
-            }>>`
-              SELECT "calculatedAnnualizedIncome", "incomeFinalized"
-              FROM "Resident"
-              WHERE "id" = ${resident.id}
-            `;
+            const residentIncomeData = await prisma.resident.findUnique({
+              where: { id: resident.id },
+              select: {
+                calculatedAnnualizedIncome: true,
+                incomeFinalized: true
+              }
+            });
             
             const enhancedResident = {
               ...resident,
-              calculatedAnnualizedIncome: residentIncomeData.length > 0 ? residentIncomeData[0].calculatedAnnualizedIncome : null,
-              incomeFinalized: residentIncomeData.length > 0 ? residentIncomeData[0].incomeFinalized : false
+              calculatedAnnualizedIncome: residentIncomeData?.calculatedAnnualizedIncome || null,
+              incomeFinalized: residentIncomeData?.incomeFinalized || false
             };
             enhancedResidents.push(enhancedResident);
             
-            if (residentIncomeData.length > 0 && residentIncomeData[0].incomeFinalized) {
-              totalVerifiedIncome += Number(residentIncomeData[0].calculatedAnnualizedIncome) || 0;
+            if (residentIncomeData?.incomeFinalized && residentIncomeData.calculatedAnnualizedIncome) {
+              totalVerifiedIncome += Number(residentIncomeData.calculatedAnnualizedIncome) || 0;
             }
           } catch (error) {
             console.error(`Error fetching resident income data for ${resident.id}:`, error);

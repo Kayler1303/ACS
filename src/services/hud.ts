@@ -27,7 +27,7 @@ function getStateAbbreviation(stateIdentifier: string): string | null {
 
 const API_BASE_URL = 'https://www.huduser.gov/hudapi/public';
 
-export async function getHudIncomeLimits(county: string, state: string, year: number = 2024) {
+export async function getHudIncomeLimits(county: string, state: string, year: number = 2025) {
     const cacheKey = `income-limits-${county}-${state}-${year}`;
     if (cache.has(cacheKey)) {
         console.log(`[Cache] HIT for ${cacheKey}`);
@@ -99,14 +99,15 @@ export async function getHudIncomeLimits(county: string, state: string, year: nu
 export function calculateLihtcMaxRents(incomeLimitsData: Record<string, Record<string, number>>) {
     const maxRents: { [key: string]: { [key: string]: number } } = {};
     
-    // Standard bedroom counts and corresponding family sizes
+    // Standard bedroom counts and corresponding family sizes (HUD/LIHTC standards)
+    // Uses exact fractional values with interpolation for precise calculations
     const bedroomToFamilySize = {
-        'studio': 1,    // Studio/efficiency
-        '1br': 1,       // 1 bedroom
-        '2br': 2,       // 2 bedroom  
-        '3br': 3,       // 3 bedroom
-        '4br': 4,       // 4 bedroom
-        '5br': 5,       // 5 bedroom
+        'studio': 1.0,  // Studio/efficiency (1 person)
+        '1br': 1.5,     // 1 bedroom (1.5 persons)
+        '2br': 3.0,     // 2 bedroom (3 persons)
+        '3br': 4.5,     // 3 bedroom (4.5 persons)
+        '4br': 6.0,     // 4 bedroom (6 persons)
+        '5br': 8.0,     // 5 bedroom (8 persons estimated)
     };
     
     // AMI percentages commonly used in LIHTC
@@ -117,9 +118,29 @@ export function calculateLihtcMaxRents(incomeLimitsData: Record<string, Record<s
             maxRents[amiPercent] = {};
             
             for (const [bedroom, familySize] of Object.entries(bedroomToFamilySize)) {
-                // Get the income limit for this family size at this AMI percentage
-                const incomeLimitKey = `il${amiPercent.replace('percent', '')}_p${familySize}`;
-                const incomeLimit = incomeLimitsData[amiPercent][incomeLimitKey];
+                let incomeLimit: number | null = null;
+                
+                if (familySize % 1 === 0) {
+                    // Whole number family size - direct lookup
+                    const incomeLimitKey = `il${amiPercent.replace('percent', '')}_p${familySize}`;
+                    incomeLimit = incomeLimitsData[amiPercent][incomeLimitKey];
+                } else {
+                    // Fractional family size - interpolate between floor and ceiling
+                    const lowerSize = Math.floor(familySize);
+                    const upperSize = Math.ceil(familySize);
+                    const fraction = familySize - lowerSize;
+                    
+                    const lowerKey = `il${amiPercent.replace('percent', '')}_p${lowerSize}`;
+                    const upperKey = `il${amiPercent.replace('percent', '')}_p${upperSize}`;
+                    
+                    const lowerLimit = incomeLimitsData[amiPercent][lowerKey];
+                    const upperLimit = incomeLimitsData[amiPercent][upperKey];
+                    
+                    if (lowerLimit && upperLimit && typeof lowerLimit === 'number' && typeof upperLimit === 'number') {
+                        // Linear interpolation: lower + (upper - lower) * fraction
+                        incomeLimit = lowerLimit + (upperLimit - lowerLimit) * fraction;
+                    }
+                }
                 
                 if (incomeLimit && typeof incomeLimit === 'number') {
                     // LIHTC max rent = 30% of income limit / 12 months

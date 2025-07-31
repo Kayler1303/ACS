@@ -28,19 +28,23 @@ model User {
 }
 
 model Property {
-  id               String            @id @default(cuid())
-  name             String
-  address          String?
-  county           String
-  state            String
-  numberOfUnits    Int?
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  ownerId          String
-  overrideRequests OverrideRequest[]
-  owner            User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  rentRolls        RentRoll[]
-  units            Unit[]
+  id                      String            @id @default(cuid())
+  name                    String
+  address                 String?
+  county                  String
+  state                   String
+  numberOfUnits           Int?
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+  ownerId                 String
+  complianceOption        String?           @default("20% at 50% AMI, 55% at 80% AMI")
+  includeRentAnalysis     Boolean           @default(false)
+  includeUtilityAllowances Boolean          @default(false)
+  utilityAllowances       Json?
+  overrideRequests        OverrideRequest[]
+  owner                   User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  rentRolls               RentRoll[]
+  units                   Unit[]
 }
 
 model Unit {
