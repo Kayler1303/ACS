@@ -414,6 +414,16 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       console.log('✅ Qualifies for 50% AMI (income + rent compliant)');
       return '50% AMI';
     }
+    if (incomeBucket === '50% AMI' && leaseRent > maxRent50) {
+      console.log('❌ 50% AMI income but rent too high for 50% AMI limits', { leaseRent, maxRent50, difference: leaseRent - maxRent50 });
+      // Check if this unit can qualify for 80% AMI by rent
+      if (leaseRent <= maxRent80) {
+        console.log('✅ 50% AMI income unit qualifies for 80% AMI by rent', { leaseRent, maxRent80 });
+        return '80% AMI';
+      } else {
+        console.log('❌ 50% AMI income unit rent too high even for 80% AMI', { leaseRent, maxRent80, difference: leaseRent - maxRent80 });
+      }
+    }
     if (incomeBucket === '60% AMI' && leaseRent <= maxRent60) {
       console.log('✅ Qualifies for 60% AMI (income + rent compliant)', { leaseRent, maxRent60 });
       return '60% AMI';
@@ -769,8 +779,26 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       return aIndex - bIndex;
     });
     
-    // NO CASCADING: Units stay in the bucket they actually qualify for
-    // Compliance targets can show over/under, but units don't get artificially moved
+    // CASCADING FOR COMPLIANCE ADJUSTMENT: 
+    // For "Adjust compliance with vacants" column, excess units in lower buckets 
+    // should count toward higher bucket targets for compliance calculation purposes
+    // EXCLUDE Market from cascading - units should never cascade TO Market
+    const amiTargetBuckets = sortedTargetBuckets.filter(bucket => bucket !== 'Market' && bucket !== 'Vacant' && bucket !== 'No Income Information');
+    for (let i = 0; i < amiTargetBuckets.length - 1; i++) {
+      const currentBucket = amiTargetBuckets[i];
+      const nextBucket = amiTargetBuckets[i + 1];
+      
+      const targetCount = targetCounts[currentBucket] || 0;
+      const currentCount = bucketCountsWithVacants[currentBucket] || 0;
+      
+      if (currentCount > targetCount && targetCount > 0) {
+        // Move excess units to next bucket for compliance calculation
+        const excess = currentCount - targetCount;
+        bucketCountsWithVacants[currentBucket] = targetCount;
+        bucketCountsWithVacants[nextBucket] = (bucketCountsWithVacants[nextBucket] || 0) + excess;
+        console.log(`📊 Compliance adjustment: Moving ${excess} excess units from ${currentBucket} to ${nextBucket}`);
+      }
+    }
 
     // Calculate verified income units by bucket (excluding vacants)
     const verifiedIncomeByBucket: { [key: string]: { verified: number; total: number; percentage: number } } = {};
@@ -918,8 +946,26 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       return aIndex - bIndex;
     });
     
-    // NO CASCADING: Units stay in the bucket they actually qualify for
-    // Compliance targets can show over/under, but units don't get artificially moved
+    // CASCADING FOR PROJECTED COMPLIANCE ADJUSTMENT: 
+    // For projected "Adjust compliance with vacants" column, excess units in lower buckets 
+    // should count toward higher bucket targets for compliance calculation purposes
+    // EXCLUDE Market from cascading - units should never cascade TO Market
+    const amiTargetBuckets = sortedTargetBuckets.filter(bucket => bucket !== 'Market' && bucket !== 'Vacant' && bucket !== 'No Income Information');
+    for (let i = 0; i < amiTargetBuckets.length - 1; i++) {
+      const currentBucket = amiTargetBuckets[i];
+      const nextBucket = amiTargetBuckets[i + 1];
+      
+      const targetCount = targetCounts[currentBucket] || 0;
+      const currentCount = bucketCountsWithVacants[currentBucket] || 0;
+      
+      if (currentCount > targetCount && targetCount > 0) {
+        // Move excess units to next bucket for compliance calculation
+        const excess = currentCount - targetCount;
+        bucketCountsWithVacants[currentBucket] = targetCount;
+        bucketCountsWithVacants[nextBucket] = (bucketCountsWithVacants[nextBucket] || 0) + excess;
+        console.log(`📊 Projected compliance adjustment: Moving ${excess} excess units from ${currentBucket} to ${nextBucket}`);
+      }
+    }
 
     // Calculate verified income units by bucket (excluding vacants) - using projected data
     const verifiedIncomeByBucket: { [key: string]: { verified: number; total: number; percentage: number } } = {};
