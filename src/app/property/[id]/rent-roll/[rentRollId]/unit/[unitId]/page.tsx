@@ -686,12 +686,44 @@ export default function ResidentDetailPage() {
   };
 
   // New handlers for resident-specific finalization
-  const handleOpenResidentFinalizationDialog = (verification: IncomeVerification, resident: Resident, leaseName: string) => {
+  const handleOpenResidentFinalizationDialog = async (verification: IncomeVerification, resident: Resident, periodName: string) => {
+    // If the resident is already finalized and this is called from the "Modify" button,
+    // automatically unfinalize them first
+    if (resident.incomeFinalized) {
+      console.log(`[MODIFY ACTION] Auto-unfinalizing resident ${resident.id} (${resident.name})`);
+      
+      try {
+        const leaseId = verification.leaseId;
+        const verificationId = verification.id;
+        
+        const response = await fetch(`/api/leases/${leaseId}/verifications/${verificationId}/residents/${resident.id}/unfinalize`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        if (response.ok) {
+          console.log(`[MODIFY ACTION] Successfully unfinalized resident ${resident.id}`);
+          // Refresh the page to show the updated state
+          window.location.reload();
+          return;
+        } else {
+          console.error(`[MODIFY ACTION] Failed to unfinalize resident: ${response.status}`);
+          alert('Failed to unfinalize resident income. Please try again.');
+          return;
+        }
+      } catch (error) {
+        console.error(`[MODIFY ACTION] Error unfinalizing resident:`, error);
+        alert('Error unfinalizing resident income. Please try again.');
+        return;
+      }
+    }
+
+    // Only open the dialog if the resident is not finalized
     setResidentFinalizationDialog({ 
       isOpen: true, 
       verification, 
       resident, 
-      leaseName 
+      leaseName: periodName 
     });
   };
 
