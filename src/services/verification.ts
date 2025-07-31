@@ -34,11 +34,20 @@ export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Da
     .filter(l => l.tenancy !== null) // Only include leases that are linked to a rent roll
     .sort((a, b) => new Date(b.tenancy!.createdAt).getTime() - new Date(a.tenancy!.createdAt).getTime())[0];
     
+  console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}:`, {
+    totalLeases: unit.leases.length,
+    leasesWithTenancy: unit.leases.filter(l => l.tenancy !== null).length,
+    selectedLease: lease?.id,
+    leaseStartDate: lease?.leaseStartDate
+  });
+    
   if (!lease) {
+    console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: No lease found - returning Vacant`);
     return "Vacant";
   }
 
   if (!lease.leaseStartDate) {
+    console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: No lease start date - returning Vacant`);
     return "Vacant"; // Changed from "Pending Lease Start" to "Vacant" to match user requirements
   }
 
@@ -46,28 +55,52 @@ export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Da
   const allResidents = lease.residents;
   const allDocuments = allResidents.flatMap(r => r.incomeDocuments || []);
   
+  console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}:`, {
+    leaseStartDate: leaseStartDate.toISOString(),
+    residentsCount: allResidents.length,
+    totalDocuments: allDocuments.length
+  });
+  
   // Add null/undefined checks to prevent TypeScript errors
   const verifiedDocuments = allDocuments.filter(d => d && d.status === 'COMPLETED');
 
+  console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}:`, {
+    verifiedDocuments: verifiedDocuments.length,
+    documentStatuses: allDocuments.map(d => ({ id: d?.id, status: d?.status, type: d?.documentType }))
+  });
+
   if (verifiedDocuments.length === 0) {
+    console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: No verified documents - returning Out of Date Income Documents`);
     return "Out of Date Income Documents";
   }
 
   // Check timeliness of documents
   const areDocumentsTimely = verifiedDocuments.every(doc => {
-    if (!doc || !doc.documentType) return false; // Add safety check
+    if (!doc || !doc.documentType) {
+      console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: Document missing type - failing timeliness check`);
+      return false; // Add safety check
+    }
+    
     if (doc.documentType === DocumentType.W2) {
-      if (!doc.taxYear) return false;
+      if (!doc.taxYear) {
+        console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: W2 missing tax year - failing timeliness check`);
+        return false;
+      }
       const leaseStartYear = getYear(leaseStartDate);
       const leaseStartMonth = leaseStartDate.getMonth(); // 0-indexed (0=Jan, 1=Feb, 2=Mar)
 
-      // W2 logic: For leases starting Jan-Mar, accept W2 from current year-1 or year-2
-      // For leases starting Apr-Dec, only accept W2 from current year-1
-      if (leaseStartMonth <= 2) { // Jan, Feb, Mar
-        return doc.taxYear === leaseStartYear - 1 || doc.taxYear === leaseStartYear - 2;
-      } else {
-        return doc.taxYear === leaseStartYear - 1;
-      }
+      const isTimely = leaseStartMonth <= 2 
+        ? (doc.taxYear === leaseStartYear - 1 || doc.taxYear === leaseStartYear - 2)
+        : (doc.taxYear === leaseStartYear - 1);
+        
+      console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: W2 timeliness check:`, {
+        docTaxYear: doc.taxYear,
+        leaseStartYear,
+        leaseStartMonth,
+        isTimely
+      });
+      
+      return isTimely;
     } else {
       // For non-W2 documents: must be within 6 months prior to lease start OR on/after lease start
       const documentDate = new Date(doc.documentDate);
@@ -75,18 +108,37 @@ export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Da
       // Valid if within 6 months prior to lease start, or any time on or after lease start
       // Set reasonable future limit of 10 years for sanity check
       const tenYearsAfterLeaseStart = new Date(new Date(leaseStartDate).setFullYear(leaseStartDate.getFullYear() + 10));
-      return isWithinInterval(documentDate, { start: sixMonthsBeforeLeaseStart, end: tenYearsAfterLeaseStart });
+      
+      const isTimely = isWithinInterval(documentDate, { start: sixMonthsBeforeLeaseStart, end: tenYearsAfterLeaseStart });
+      
+      console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: Non-W2 timeliness check:`, {
+        documentType: doc.documentType,
+        documentDate: documentDate.toISOString(),
+        leaseStartDate: leaseStartDate.toISOString(),
+        sixMonthsBeforeLeaseStart: sixMonthsBeforeLeaseStart.toISOString(),
+        tenYearsAfterLeaseStart: tenYearsAfterLeaseStart.toISOString(),
+        isTimely
+      });
+      
+      return isTimely;
     }
   });
 
   if (!areDocumentsTimely) {
+    console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: Documents not timely - returning Out of Date Income Documents`);
     return "Out of Date Income Documents";
   }
 
   // Check if names on documents match resident names
   const doNamesMatch = verifiedDocuments.every(doc => {
       const resident = allResidents.find(r => r.id === doc.residentId);
-      if (!resident || !doc.employeeName) return false;
+      if (!resident || !doc.employeeName) {
+        console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: Name validation failed - no resident or employee name:`, {
+          residentFound: !!resident,
+          employeeName: doc.employeeName
+        });
+        return false;
+      }
       
       const residentNameLower = resident.name.toLowerCase().trim();
       const employeeNameLower = doc.employeeName.toLowerCase().trim();
@@ -102,6 +154,8 @@ export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Da
       const residentWords = residentNameLower.split(/\s+/).filter(word => word.length > 0);
       const employeeWords = employeeNameLower.split(/\s+/).filter(word => word.length > 0);
       
+      let namesMatch = false;
+      
       // Check if employee name contains resident's first and last name (allowing middle initials)
       // Example: "Blanca Soto" should match "Blanca I Soto"
       if (residentWords.length >= 2 && employeeWords.length >= 2) {
@@ -112,16 +166,27 @@ export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Da
         
         // Match if first and last names match (case-insensitive)
         if (residentFirst === employeeFirst && residentLast === employeeLast) {
-          return true;
+          namesMatch = true;
         }
       }
       
       // Fallback to original contains logic
-      return residentNameLower.includes(employeeNameLower) || employeeNameLower.includes(residentNameLower);
+      if (!namesMatch) {
+        namesMatch = residentNameLower.includes(employeeNameLower) || employeeNameLower.includes(residentNameLower);
+      }
+      
+      console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: Name matching:`, {
+        residentName: resident.name,
+        employeeName: doc.employeeName,
+        namesMatch
+      });
+      
+      return namesMatch;
   });
 
   if (!doNamesMatch) {
-      return "Out of Date Income Documents";
+    console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: Names don't match - returning Out of Date Income Documents`);
+    return "Out of Date Income Documents";
   }
 
   // Check if total uploaded income matches total verified income
@@ -137,26 +202,22 @@ export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Da
       incomeFinalized: r.incomeFinalized,
       calculatedAnnualizedIncome: r.calculatedAnnualizedIncome,
       annualizedIncome: r.annualizedIncome,
-      amountAdded: amount,
-      runningTotal: acc + amount,
-      finalizedOnly: true
+      amount: amount,
+      runningTotal: acc + amount
     });
     return acc + amount;
   }, 0);
-  
-  // Compare with tolerance for floating point precision (allowing $1 difference)
+
   const incomeDifference = Math.abs(totalUploadedIncome - totalVerifiedIncome);
+  
   console.log(`[VERIFICATION SERVICE] FINAL COMPARISON:`, {
     totalUploadedIncome,
     totalVerifiedIncome,
     incomeDifference,
     result: incomeDifference > 1.00 ? "Needs Investigation" : "Verified"
   });
-  if (incomeDifference > 1.00) {
-    return "Needs Investigation";
-  }
 
-  return "Verified";
+  return incomeDifference > 1.00 ? "Needs Investigation" : "Verified";
 }
 
 // Additional types for API responses

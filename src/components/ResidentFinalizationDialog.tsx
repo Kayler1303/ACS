@@ -169,17 +169,27 @@ export default function ResidentFinalizationDialog({
     if (!canFinalize) return;
     
     setIsSubmitting(true);
+    
+    // Add comprehensive debugging
+    console.log(`[FINALIZATION DEBUG] Starting finalization for resident ${resident.id} (${resident.name})`);
+    console.log(`[FINALIZATION DEBUG] Available income for finalization: $${availableIncomeForFinalization}`);
+    console.log(`[FINALIZATION DEBUG] Manual W2 value: $${manualW2Value}`);
+    console.log(`[FINALIZATION DEBUG] Documents count:`, residentDocuments.length);
+    console.log(`[FINALIZATION DEBUG] Can finalize:`, canFinalize);
+    console.log(`[FINALIZATION DEBUG] Validation message:`, validationMessage);
+    
     try {
       // If we have manual W2 entry, we need to handle it specially
       if (w2DocumentsNeedingManualEntry.length > 0 && manualW2Income) {
-        // TODO: Update W2 document with manual income or create override
-        // For now, use the manual income value
+        console.log(`[FINALIZATION DEBUG] Using manual W2 income: $${manualW2Value}`);
         await onConfirm(manualW2Value);
       } else {
-        await onConfirm(residentVerifiedIncome);
+        console.log(`[FINALIZATION DEBUG] Using calculated income: $${availableIncomeForFinalization}`);
+        await onConfirm(availableIncomeForFinalization);
       }
+      console.log(`[FINALIZATION DEBUG] Finalization completed successfully`);
     } catch (error) {
-      console.error('Failed to finalize resident verification:', error);
+      console.error(`[FINALIZATION DEBUG] Finalization failed:`, error);
     } finally {
       setIsSubmitting(false);
     }
