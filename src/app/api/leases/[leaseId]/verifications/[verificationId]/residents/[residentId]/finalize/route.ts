@@ -103,13 +103,18 @@ export async function PATCH(
 
     // If all residents are now verified, finalize the entire verification
     if (finalizedCount === totalResidents) {
-      const totalVerifiedIncomeResult = await prisma.$queryRaw<{total: number}[]>`
-        SELECT COALESCE(SUM("calculatedAnnualizedIncome"), 0) as total
-        FROM "Resident" 
-        WHERE "leaseId" = ${leaseId} AND "incomeFinalized" = true
-      `;
+      // Calculate total verified income using Prisma ORM instead of raw SQL
+      const totalVerifiedIncomeResult = await prisma.resident.aggregate({
+        where: {
+          leaseId: leaseId,
+          incomeFinalized: true
+        },
+        _sum: {
+          calculatedAnnualizedIncome: true
+        }
+      });
       
-      const totalVerifiedIncome = totalVerifiedIncomeResult[0].total || 0;
+      const totalVerifiedIncome = totalVerifiedIncomeResult._sum.calculatedAnnualizedIncome || 0;
 
       // Check for income discrepancy at verification level too
       try {
