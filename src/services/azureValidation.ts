@@ -62,7 +62,17 @@ export function validatePaystubExtraction(azureResult: any): PaystubValidationRe
     employerName: null as string | null,
   };
 
-  // Check if Azure analysis succeeded
+  // Check if Azure analysis succeeded - with detailed debugging
+  console.log("[DEBUG] Structure check details:", {
+    hasAzureResult: !!azureResult,
+    hasDocuments: !!azureResult?.documents,
+    documentsLength: azureResult?.documents?.length,
+    hasFirstDocument: !!azureResult?.documents?.[0],
+    hasFields: !!azureResult?.documents?.[0]?.fields,
+    fieldsType: typeof azureResult?.documents?.[0]?.fields,
+    fieldsKeys: azureResult?.documents?.[0]?.fields ? Object.keys(azureResult.documents[0].fields).length : 'N/A'
+  });
+
   if (!azureResult?.documents?.[0]?.fields) {
     console.log("[DEBUG] Azure result structure:", JSON.stringify(azureResult, null, 2));
     errors.push("Azure Document Intelligence failed to extract any fields from the document");
