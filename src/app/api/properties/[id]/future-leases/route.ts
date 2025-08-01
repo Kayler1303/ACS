@@ -139,7 +139,7 @@ export async function GET(
             : residentNames[0] || 'Future Lease';
 
           // Only calculate compliance bucket if income is verified
-          let complianceBucket = 'Pending Verification';
+          let complianceBucket = '-';
           if (verificationStatus === 'Verified') {
             const hudIncomeLimits = await getHudIncomeLimits(property.county, property.state);
             complianceBucket = getActualAmiBucket(
