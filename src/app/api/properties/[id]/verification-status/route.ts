@@ -75,7 +75,6 @@ export async function GET(
     const units: UnitVerificationData[] = [];
     let summary = {
       verified: 0,
-      needsInvestigation: 0,
       outOfDate: 0,
       vacant: 0,
       verificationInProgress: 0,

@@ -1313,7 +1313,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                       'Verified': 0,
                       'In Progress - Finalize to Process': 0,
                       'Out of Date Income Documents': 0,
-                      'Needs Investigation': 0,
+                      'Waiting for Admin Review': 0,
                       'Vacant': 0,
                       'Other': 0
                     };
@@ -1332,7 +1332,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                       'Verified',
                       'In Progress - Finalize to Process', 
                       'Out of Date Income Documents',
-                      'Needs Investigation',
+                      'Waiting for Admin Review',
                       'Vacant'
                     ];
 
@@ -1344,7 +1344,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                         'Verified': 'Units with verified income documentation',
                         'In Progress - Finalize to Process': 'Units pending admin review/finalization',
                         'Out of Date Income Documents': 'Units requiring updated documentation',
-                        'Needs Investigation': 'Units flagged for admin investigation',
+                        'Waiting for Admin Review': 'Units waiting for admin to review documents',
                         'Vacant': 'Currently vacant units'
                       };
 
@@ -1352,7 +1352,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                         'Verified': 'bg-green-50 text-green-700',
                         'In Progress - Finalize to Process': 'bg-blue-50 text-blue-700',
                         'Out of Date Income Documents': 'bg-red-50 text-red-700',
-                        'Needs Investigation': 'bg-yellow-50 text-yellow-700',
+                        'Waiting for Admin Review': 'bg-orange-50 text-orange-700',
                         'Vacant': 'bg-gray-50 text-gray-700'
                       };
 
@@ -1680,7 +1680,6 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                          ) : (
                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                              unit.verificationStatus === 'Verified' ? 'bg-green-100 text-green-800 border border-green-200' :
-                             unit.verificationStatus === 'Needs Investigation' ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' :
                              (unit.verificationStatus as string) === 'In Progress - Finalize to Process' ? 'bg-blue-100 text-blue-800 border border-blue-200' :
                              unit.verificationStatus === 'Waiting for Admin Review' ? 'bg-orange-100 text-orange-800 border border-orange-200' :
                              unit.verificationStatus === 'Vacant' ? 'bg-gray-100 text-gray-600 border border-gray-200' :
@@ -1691,11 +1690,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                </svg>
                              )}
-                             {unit.verificationStatus === 'Needs Investigation' && (
-                               <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                 <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                               </svg>
-                             )}
+
                              {(unit.verificationStatus as string) === 'In Progress - Finalize to Process' && (
                                <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
