@@ -138,14 +138,17 @@ export async function GET(
             ? `${residentNames[0]} + ${residentNames.length - 1} other${residentNames.length > 2 ? 's' : ''}`
             : residentNames[0] || 'Future Lease';
 
-          // Get HUD income limits and calculate compliance bucket
-          const hudIncomeLimits = await getHudIncomeLimits(property.county, property.state);
-          const complianceBucket = getActualAmiBucket(
-            totalIncome,
-            futureLease.residents.length,
-            hudIncomeLimits,
-            property.complianceOption || "20% at 50% AMI, 55% at 80% AMI"
-          );
+          // Only calculate compliance bucket if income is verified
+          let complianceBucket = 'Pending Verification';
+          if (verificationStatus === 'Verified') {
+            const hudIncomeLimits = await getHudIncomeLimits(property.county, property.state);
+            complianceBucket = getActualAmiBucket(
+              totalIncome,
+              futureLease.residents.length,
+              hudIncomeLimits,
+              property.complianceOption || "20% at 50% AMI, 55% at 80% AMI"
+            );
+          }
 
         unitData.futureLease = {
           id: futureLease.id,
