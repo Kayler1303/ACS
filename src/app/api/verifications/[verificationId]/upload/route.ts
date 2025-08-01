@@ -127,12 +127,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     });
 
     // Validate Azure extraction results
+    console.log(`[UPLOAD DEBUG] About to validate ${documentType} document with Azure result...`);
+    console.log(`[UPLOAD DEBUG] Azure result has documents:`, !!analyzeResult?.documents);
+    console.log(`[UPLOAD DEBUG] First document has fields:`, !!analyzeResult?.documents?.[0]?.fields);
+    
     let validationResult: PaystubValidationResult | W2ValidationResult;
     
     if (documentType === DocumentType.PAYSTUB) {
+      console.log(`[UPLOAD DEBUG] Calling validatePaystubExtraction...`);
       validationResult = validatePaystubExtraction(analyzeResult);
+      console.log(`[UPLOAD DEBUG] Paystub validation complete:`, validationResult);
     } else if (documentType === DocumentType.W2) {
+      console.log(`[UPLOAD DEBUG] Calling validateW2Extraction...`);
       validationResult = validateW2Extraction(analyzeResult);
+      console.log(`[UPLOAD DEBUG] W2 validation complete:`, validationResult);
     } else {
       return NextResponse.json({ error: 'Unsupported document type' }, { status: 400 });
     }
