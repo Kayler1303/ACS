@@ -256,9 +256,7 @@ export async function GET(
         case 'Verified':
           summary.verified++;
           break;
-        case 'Needs Investigation':
-          summary.needsInvestigation++;
-          break;
+
         case 'Out of Date Income Documents':
           summary.outOfDate++;
           break;
