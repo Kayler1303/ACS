@@ -35,9 +35,9 @@ export interface W2ValidationResult extends AzureValidationResult {
   };
 }
 
-// Confidence thresholds - TEMPORARILY LOWERED FOR DEBUGGING
-const MIN_CONFIDENCE_THRESHOLD = 0.65; // Lowered from 85% to 65%
-const REVIEW_CONFIDENCE_THRESHOLD = 0.75; // Lowered from 95% to 75%
+// Realistic confidence thresholds based on Azure performance
+const MIN_CONFIDENCE_THRESHOLD = 0.50; // 50% - Many valid paystubs have lower confidence
+const REVIEW_CONFIDENCE_THRESHOLD = 0.65; // 65% - Flag for review but don't block
 
 // Sanity check thresholds for paystubs
 const MAX_REASONABLE_GROSS_PAY = 50000; // $50k per paycheck seems unreasonable
@@ -66,13 +66,8 @@ export function validatePaystubExtraction(azureResult: any): PaystubValidationRe
   if (!azureResult?.documents?.[0]?.fields) {
     console.log("[DEBUG] Azure result structure:", JSON.stringify(azureResult, null, 2));
     errors.push("Azure Document Intelligence failed to extract any fields from the document");
-    
-    // TEMPORARY: Be less strict - allow processing to continue for debugging
-    warnings.push("No fields extracted by Azure - document may need manual review");
-    needsAdminReview = true;
-    
     return {
-      isValid: true, // Changed from false to true temporarily
+      isValid: false,
       needsAdminReview: true,
       confidence: 0,
       warnings,
@@ -147,6 +142,14 @@ export function validatePaystubExtraction(azureResult: any): PaystubValidationRe
     }
   }
 
+  // Debug: Log field selection process
+  console.log(`[DEBUG] Gross pay field selection:`, {
+    candidatesCount: grossPayCandidates.length,
+    candidates: grossPayCandidates.map(c => ({ field: c.fieldName, value: c.value, confidence: c.confidence })),
+    bestField: bestGrossPayField ? { field: bestGrossPayField.fieldName, value: bestGrossPayField.value, confidence: bestGrossPayField.confidence } : null,
+    ytdCandidatesCount: ytdCandidates.length
+  });
+
   // VALIDATION: Gross Pay Amount
   if (!bestGrossPayField) {
     errors.push("No gross pay amount found in document");
@@ -155,10 +158,16 @@ export function validatePaystubExtraction(azureResult: any): PaystubValidationRe
     extractedData.grossPayAmount = bestGrossPayField.value;
     overallConfidence = Math.min(overallConfidence, bestGrossPayField.confidence);
 
-    // Check confidence threshold
+    // Check confidence threshold - be more lenient if values are reasonable
     if (bestGrossPayField.confidence < MIN_CONFIDENCE_THRESHOLD) {
       warnings.push(`Low confidence (${(bestGrossPayField.confidence * 100).toFixed(1)}%) on gross pay extraction`);
-      needsAdminReview = true;
+      
+      // Only flag for admin review if confidence is very low OR value seems unreasonable
+      if (bestGrossPayField.confidence < 0.3 || 
+          bestGrossPayField.value > MAX_REASONABLE_GROSS_PAY || 
+          bestGrossPayField.value < MIN_REASONABLE_GROSS_PAY) {
+        needsAdminReview = true;
+      }
     }
 
     // Sanity checks for gross pay amount
