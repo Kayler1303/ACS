@@ -61,6 +61,24 @@ export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Da
     totalDocuments: allDocuments.length
   });
   
+  // Check if there's an active income verification in progress
+  const activeVerifications = (lease as any).incomeVerifications || [];
+  const latestVerification = activeVerifications
+    .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+  
+  if (latestVerification && latestVerification.status === 'IN_PROGRESS') {
+    // Check if any documents are waiting for admin review
+    const hasDocumentsNeedingReview = allDocuments.some(doc => doc && doc.status === 'NEEDS_REVIEW');
+    
+    if (hasDocumentsNeedingReview) {
+      console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: Found NEEDS_REVIEW documents - returning Waiting for Admin Review`);
+      return "Waiting for Admin Review";
+    } else {
+      console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: IN_PROGRESS verification with no NEEDS_REVIEW docs - returning In Progress - Finalize to Process`);
+      return "In Progress - Finalize to Process";
+    }
+  }
+  
   // Add null/undefined checks to prevent TypeScript errors
   const verifiedDocuments = allDocuments.filter(d => d && d.status === 'COMPLETED');
 
