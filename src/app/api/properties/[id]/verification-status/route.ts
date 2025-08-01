@@ -32,7 +32,7 @@ export async function GET(
                   include: {
                     incomeDocuments: {
                       where: {
-                        status: 'COMPLETED', // Only include completed documents for verification
+                        status: { in: ['COMPLETED', 'NEEDS_REVIEW'] }, // Include completed and needs review documents
                       },
                       orderBy: {
                         uploadDate: 'desc',
@@ -79,6 +79,7 @@ export async function GET(
       outOfDate: 0,
       vacant: 0,
       verificationInProgress: 0,
+      waitingForAdminReview: 0,
     };
 
     // Process each unit
@@ -102,7 +103,16 @@ export async function GET(
           const latestVerification = currentLease.incomeVerifications[0]; // Already sorted by createdAt desc
           
           if (latestVerification.status === 'IN_PROGRESS') {
-            verificationStatus = 'In Progress - Finalize to Process';
+            // Check if any documents are waiting for admin review
+            const hasDocumentsNeedingReview = currentLease.residents.some((resident: any) => 
+              resident.incomeDocuments.some((doc: any) => doc.status === 'NEEDS_REVIEW')
+            );
+            
+            if (hasDocumentsNeedingReview) {
+              verificationStatus = 'Waiting for Admin Review';
+            } else {
+              verificationStatus = 'In Progress - Finalize to Process';
+            }
           } else if (latestVerification.status === 'FINALIZED') {
             // Only check for discrepancies if verification is finalized
             verificationStatus = getUnitVerificationStatus(enhancedUnit, latestRentRollDate);
@@ -258,6 +268,9 @@ export async function GET(
           break;
         case 'In Progress - Finalize to Process':
           summary.verificationInProgress++;
+          break;
+        case 'Waiting for Admin Review':
+          summary.waitingForAdminReview++;
           break;
       }
     }

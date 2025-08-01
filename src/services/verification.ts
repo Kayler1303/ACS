@@ -17,7 +17,7 @@ type FullUnit = Unit & {
   })[];
 };
 
-export type VerificationStatus = "Verified" | "Needs Investigation" | "Out of Date Income Documents" | "Vacant" | "In Progress - Finalize to Process";
+export type VerificationStatus = "Verified" | "Needs Investigation" | "Out of Date Income Documents" | "Vacant" | "In Progress - Finalize to Process" | "Waiting for Admin Review";
 
 /**
  * Determines the income verification status for a single unit based on its lease, residents, and documents.
