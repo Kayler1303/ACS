@@ -78,6 +78,9 @@ export function validatePaystubExtraction(azureResult: any): PaystubValidationRe
 
   const fields = azureResult.documents[0].fields;
 
+  // Debug: Log all available field names from Azure
+  console.log(`[DEBUG] All Azure fields available:`, Object.keys(fields));
+
   // Helper function to extract value and confidence from Azure field
   function extractFieldWithConfidence(field: any): { value: any; confidence: number } {
     if (!field) return { value: null, confidence: 0 };
@@ -101,7 +104,14 @@ export function validatePaystubExtraction(azureResult: any): PaystubValidationRe
     'CurrentGrossPay', 
     'GrossPay',
     'CurrentPeriodEarnings',
-    'PeriodGrossPay'
+    'PeriodGrossPay',
+    // Additional field names Azure might use
+    'CurrentPeriodPay',
+    'PeriodPay',
+    'CurrentEarnings',
+    'Earnings',
+    'Pay',
+    'CurrentPay'
   ];
 
   let bestGrossPayField = null;
@@ -138,6 +148,38 @@ export function validatePaystubExtraction(azureResult: any): PaystubValidationRe
       const { value, confidence } = extractFieldWithConfidence(fields[fieldName]);
       if (value !== null && typeof value === 'number' && value > 0) {
         ytdCandidates.push({ fieldName, value, confidence });
+      }
+    }
+  }
+
+  // If no specific gross pay fields found, try to find any field with "Pay", "Gross", or "Earnings" in the name
+  if (grossPayCandidates.length === 0) {
+    console.log(`[DEBUG] No specific gross pay fields found, searching for any pay-related fields...`);
+    
+    for (const [fieldName, fieldData] of Object.entries(fields)) {
+      if (fieldName.toLowerCase().includes('pay') || 
+          fieldName.toLowerCase().includes('gross') || 
+          fieldName.toLowerCase().includes('earnings')) {
+        
+        const { value, confidence } = extractFieldWithConfidence(fieldData);
+        
+        if (value !== null && typeof value === 'number' && value > 0) {
+          console.log(`[DEBUG] Found potential pay field: ${fieldName} = ${value} (confidence: ${confidence})`);
+          
+          // Skip obviously YTD fields for current period calculation
+          if (!fieldName.toLowerCase().includes('ytd') && 
+              !fieldName.toLowerCase().includes('yeartodate') &&
+              !fieldName.toLowerCase().includes('year') &&
+              value < MAX_REASONABLE_GROSS_PAY) {
+            
+            grossPayCandidates.push({ fieldName, value, confidence });
+            
+            if (confidence > bestGrossPayConfidence) {
+              bestGrossPayField = { fieldName, value, confidence };
+              bestGrossPayConfidence = confidence;
+            }
+          }
+        }
       }
     }
   }
