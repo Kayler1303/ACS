@@ -54,8 +54,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
       // 3. Calculate verification period based on current lease
       const now = new Date();
-      const leaseStart = new Date(tenancy.leaseStartDate);
-      const leaseEnd = new Date(tenancy.leaseEndDate);
+      const leaseStart = new Date((tenancy as any).leaseStartDate || new Date());
+      const leaseEnd = new Date((tenancy as any).leaseEndDate || new Date());
       
       // Calculate which lease year we're in
       const msPerYear = 365.25 * 24 * 60 * 60 * 1000;
@@ -89,8 +89,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           verificationPeriodEnd,
           dueDate,
           leaseYear,
-          associatedLeaseStart: tenancy.leaseStartDate,
-          associatedLeaseEnd: tenancy.leaseEndDate,
+          associatedLeaseStart: (tenancy as any).leaseStartDate || null,
+          associatedLeaseEnd: (tenancy as any).leaseEndDate || null,
         },
       });
 
