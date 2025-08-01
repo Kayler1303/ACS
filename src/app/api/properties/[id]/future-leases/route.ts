@@ -114,7 +114,16 @@ export async function GET(
             if (latestVerification.status === 'FINALIZED') {
               verificationStatus = 'Verified';
             } else if (latestVerification.status === 'IN_PROGRESS') {
-              verificationStatus = 'In Progress';
+              // Check if any documents are waiting for admin review
+              const hasDocumentsNeedingReview = futureLease.residents.some((resident: any) => 
+                resident.incomeDocuments.some((doc: any) => doc.status === 'NEEDS_REVIEW')
+              );
+              
+              if (hasDocumentsNeedingReview) {
+                verificationStatus = 'Waiting for Admin Review';
+              } else {
+                verificationStatus = 'In Progress';
+              }
             }
           }
 

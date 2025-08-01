@@ -39,7 +39,18 @@ export async function GET(
       },
       include: {
         unit: true,
-        residents: true,
+        residents: {
+          include: {
+            incomeDocuments: {
+              where: {
+                status: { in: ['COMPLETED', 'NEEDS_REVIEW'] }
+              },
+              orderBy: {
+                uploadDate: 'desc'
+              }
+            }
+          }
+        },
         incomeVerifications: {
           orderBy: {
             createdAt: 'desc'
