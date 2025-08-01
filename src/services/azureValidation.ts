@@ -48,27 +48,6 @@ const SUSPICIOUS_YTD_RATIO = 10; // If gross pay is 10x+ larger than typical, li
  * Validates Azure Document Intelligence results for paystub documents
  */
 export function validatePaystubExtraction(azureResult: any): PaystubValidationResult {
-  console.log(`[VALIDATION DEBUG] validatePaystubExtraction called!`);
-  console.log(`[VALIDATION DEBUG] azureResult type:`, typeof azureResult);
-  console.log(`[VALIDATION DEBUG] azureResult exists:`, !!azureResult);
-  
-  // TEMPORARY: Return a successful validation to bypass all checks for debugging
-  console.log(`[VALIDATION DEBUG] TEMPORARILY BYPASSING ALL VALIDATION CHECKS!`);
-  return {
-    isValid: true,
-    needsAdminReview: false,
-    confidence: 1.0,
-    warnings: [],
-    errors: [],
-    extractedData: {
-      grossPayAmount: 1000, // Dummy data for testing
-      payPeriodStartDate: new Date(),
-      payPeriodEndDate: new Date(),
-      employeeName: "Test Employee",
-      employerName: "Test Employer"
-    }
-  };
-  
   const warnings: string[] = [];
   const errors: string[] = [];
   let needsAdminReview = false;
@@ -83,19 +62,10 @@ export function validatePaystubExtraction(azureResult: any): PaystubValidationRe
     employerName: null as string | null,
   };
 
-  // Check if Azure analysis succeeded - with detailed debugging
-  console.log("[DEBUG] Structure check details:", {
-    hasAzureResult: !!azureResult,
-    hasDocuments: !!azureResult?.documents,
-    documentsLength: azureResult?.documents?.length,
-    hasFirstDocument: !!azureResult?.documents?.[0],
-    hasFields: !!azureResult?.documents?.[0]?.fields,
-    fieldsType: typeof azureResult?.documents?.[0]?.fields,
-    fieldsKeys: azureResult?.documents?.[0]?.fields ? Object.keys(azureResult.documents[0].fields).length : 'N/A'
-  });
-
-  if (!azureResult?.documents?.[0]?.fields) {
-    console.log("[DEBUG] Azure result structure:", JSON.stringify(azureResult, null, 2));
+  // Handle both possible Azure response structures
+  const documents = azureResult?.analyzeResult?.documents || azureResult?.documents;
+  
+  if (!documents?.[0]?.fields) {
     errors.push("Azure Document Intelligence failed to extract any fields from the document");
     return {
       isValid: false,
@@ -107,7 +77,7 @@ export function validatePaystubExtraction(azureResult: any): PaystubValidationRe
     };
   }
 
-  const fields = azureResult.documents[0].fields;
+  const fields = documents[0].fields;
 
   // Debug: Log all available field names from Azure
   console.log(`[DEBUG] All Azure fields available:`, Object.keys(fields));
