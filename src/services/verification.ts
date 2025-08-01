@@ -255,10 +255,10 @@ export interface PropertyVerificationSummary {
   units: UnitVerificationData[];
   summary: {
     verified: number;
-    needsInvestigation: number;
     outOfDate: number;
     vacant: number;
     verificationInProgress: number;
+    waitingForAdminReview: number;
   };
 }
 
