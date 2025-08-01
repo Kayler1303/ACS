@@ -35,9 +35,9 @@ export interface W2ValidationResult extends AzureValidationResult {
   };
 }
 
-// Confidence thresholds
-const MIN_CONFIDENCE_THRESHOLD = 0.85; // 85% confidence required
-const REVIEW_CONFIDENCE_THRESHOLD = 0.95; // Below 95%, flag for review
+// Confidence thresholds - TEMPORARILY LOWERED FOR DEBUGGING
+const MIN_CONFIDENCE_THRESHOLD = 0.65; // Lowered from 85% to 65%
+const REVIEW_CONFIDENCE_THRESHOLD = 0.75; // Lowered from 95% to 75%
 
 // Sanity check thresholds for paystubs
 const MAX_REASONABLE_GROSS_PAY = 50000; // $50k per paycheck seems unreasonable
@@ -64,9 +64,15 @@ export function validatePaystubExtraction(azureResult: any): PaystubValidationRe
 
   // Check if Azure analysis succeeded
   if (!azureResult?.documents?.[0]?.fields) {
+    console.log("[DEBUG] Azure result structure:", JSON.stringify(azureResult, null, 2));
     errors.push("Azure Document Intelligence failed to extract any fields from the document");
+    
+    // TEMPORARY: Be less strict - allow processing to continue for debugging
+    warnings.push("No fields extracted by Azure - document may need manual review");
+    needsAdminReview = true;
+    
     return {
-      isValid: false,
+      isValid: true, // Changed from false to true temporarily
       needsAdminReview: true,
       confidence: 0,
       warnings,

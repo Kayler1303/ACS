@@ -115,6 +115,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json(document, { status: 201 });
     }
 
+    // Debug: Log Azure response structure to understand the issue
+    console.log(`[DEBUG] Azure response structure for document ${document.id}:`, {
+      hasResult: !!analyzeResult,
+      hasDocuments: !!analyzeResult?.documents,
+      documentsLength: analyzeResult?.documents?.length || 0,
+      hasFirstDocument: !!analyzeResult?.documents?.[0],
+      hasFields: !!analyzeResult?.documents?.[0]?.fields,
+      fieldsKeys: analyzeResult?.documents?.[0]?.fields ? Object.keys(analyzeResult.documents[0].fields) : [],
+      sampleFieldNames: analyzeResult?.documents?.[0]?.fields ? Object.keys(analyzeResult.documents[0].fields).slice(0, 5) : []
+    });
+
     // Validate Azure extraction results
     let validationResult: PaystubValidationResult | W2ValidationResult;
     
