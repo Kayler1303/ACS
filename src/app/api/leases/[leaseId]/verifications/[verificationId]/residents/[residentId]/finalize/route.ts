@@ -114,7 +114,7 @@ export async function PATCH(
         }
       });
       
-      const totalVerifiedIncome = totalVerifiedIncomeResult._sum.calculatedAnnualizedIncome || 0;
+      const totalVerifiedIncome = totalVerifiedIncomeResult._sum.calculatedAnnualizedIncome?.toNumber() || 0;
 
       // Check for income discrepancy at verification level too
       try {

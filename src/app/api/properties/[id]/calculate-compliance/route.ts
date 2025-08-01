@@ -84,7 +84,7 @@ export async function POST(
   for (const unit of property.units) {
     // a. Calculate total household income and size
     const householdSize = unit.residents.length;
-    const totalIncome = unit.residents.reduce((acc, resident) => 
+    const totalIncome = unit.residents.reduce((acc: number, resident: any) => 
       acc + (resident.annualizedIncome?.toNumber() || 0), 0);
 
     // b. Calculate AMI Percentage
@@ -93,7 +93,7 @@ export async function POST(
     
     // c. Determine Bedroom Count
     const mapping = bedroomMappings.find(
-      (m) => (unit.squareFootage || 0) >= m.minSqFt && (unit.squareFootage || 0) <= m.maxSqFt
+      (m: any) => (unit.squareFootage || 0) >= m.minSqFt && (unit.squareFootage || 0) <= m.maxSqFt
     );
     const bedroomCount = mapping?.bedroomCount ?? null;
 

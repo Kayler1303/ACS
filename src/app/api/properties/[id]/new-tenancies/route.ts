@@ -31,7 +31,7 @@ export async function GET(
     const newTenancies = await prisma.tenancy.findMany({
       where: {
         rentRollId: latestRentRoll.id,
-        leaseId: null,
+        lease: null,
       },
       include: {
         lease: {

@@ -144,7 +144,7 @@ export async function GET(
           verificationStatus,
           totalIncome: parseFloat(totalIncome.toString()),
           complianceBucket,
-          leaseStartDate: futureLease.leaseStartDate,
+          leaseStartDate: futureLease.leaseStartDate?.toISOString() || '',
           isToggled: false, // Default to not toggled - will be managed by frontend state
           residents: futureLease.residents
         };

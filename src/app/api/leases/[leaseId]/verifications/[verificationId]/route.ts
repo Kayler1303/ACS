@@ -54,7 +54,8 @@ export async function PATCH(
     for (const resident of verification.lease.residents) {
       const allWages = resident.incomeDocuments.flatMap((doc: IncomeDocument) => 
         [doc.box1_wages, doc.box3_ss_wages, doc.box5_med_wages]
-        .filter((w): w is number => w !== null && w !== undefined)
+        .filter((w) => w !== null && w !== undefined)
+        .map((w) => typeof w === 'number' ? w : w.toNumber())
       );
       
       const residentVerifiedIncome = allWages.length > 0 ? Math.max(...allWages) : 0;
@@ -87,7 +88,8 @@ export async function PATCH(
     });
 
     // Check for income discrepancy and create auto-override if needed
-    const totalUploadedIncome = updatedVerification.lease.residents.reduce((acc, r) => acc + (r.annualizedIncome || 0), 0);
+    const totalUploadedIncome = updatedVerification.lease.residents.reduce((acc, r) => 
+      acc + (r.annualizedIncome ? r.annualizedIncome.toNumber() : 0), 0);
     
     try {
       await checkAndCreateIncomeDiscrepancyOverride({

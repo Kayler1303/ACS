@@ -109,7 +109,11 @@ export default async function ResidentPage({ params }: ResidentPageProps) {
         <div>
           <h2 className="text-2xl font-semibold mb-4">Upload Income Documents</h2>
           <div className="bg-white p-6 rounded-lg shadow-md">
-            <IncomeDocumentUploadForm residentId={resident.id} />
+            <IncomeDocumentUploadForm 
+              residentId={resident.id} 
+              onUploadComplete={() => window.location.reload()}
+              hasExistingDocuments={false}
+            />
           </div>
         </div>
       </div>

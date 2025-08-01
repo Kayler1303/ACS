@@ -954,11 +954,11 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
           const tenancy = currentRentRoll.tenancies.find((t: FullTenancy) => t.lease.unitId === unit.id);
           const residents = tenancy?.lease?.residents || [];
           const totalIncome = residents.reduce((acc: number, res: Resident) => acc + Number(res.annualizedIncome || 0), 0);
-          return getActualBucket(totalIncome, residents.length, hudIncomeLimits, complianceOption) === '60% AMI';
+          return hudIncomeLimits && getActualBucket(totalIncome, residents.length, hudIncomeLimits, complianceOption) === '60% AMI';
         }).length;
         
         const rentOnly60 = activeLeasesArray.filter(unit => {
-          const maxRent60 = lihtcRentData?.lihtcMaxRents?.['60percent']?.[`${unit.bedroomCount}br`] || 0;
+          const maxRent60 = (lihtcRentData?.lihtcMaxRents as any)?.['60percent']?.[`${unit.bedroomCount}br`] || 0;
           const tenancy = currentRentRoll.tenancies.find((t: FullTenancy) => t.lease.unitId === unit.id);
           const leaseRent = Number(tenancy?.lease.leaseRent || 0);
           const utilityAllowance = includeUtilityAllowances ? (utilityAllowances[unit.bedroomCount] || 0) : 0;

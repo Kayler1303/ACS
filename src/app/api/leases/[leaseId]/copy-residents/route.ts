@@ -56,9 +56,9 @@ export async function POST(
     }
 
     // 3. Prepare the data for the new resident records
-    const newResidentsData = sourceResidents.map((resident: Resident) => ({
+    const newResidentsData = sourceResidents.map((resident: any) => ({
       name: resident.name,
-      annualizedIncome: Number(resident.annualizedIncome),
+      annualizedIncome: resident.annualizedIncome ? resident.annualizedIncome.toNumber() : 0,
       leaseId: targetLeaseId,
     }));
 
