@@ -11,6 +11,8 @@ import AddResidentDialog from '@/components/AddResidentDialog';
 import RenewalDialog from '@/components/RenewalDialog';
 import InitialAddResidentDialog from '@/components/InitialAddResidentDialog';
 import ResidentFinalizationDialog from '@/components/ResidentFinalizationDialog';
+import IncomeDiscrepancyResolutionModal from '@/components/IncomeDiscrepancyResolutionModal';
+import VerificationConflictModal from '@/components/VerificationConflictModal';
 import { format } from 'date-fns';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -285,6 +287,23 @@ export default function ResidentDetailPage() {
     residents: Array<{ id: string; name: string }>;
     hasExistingDocuments: boolean;
   } | null>(null);
+
+  // Income discrepancy resolution state
+  const [discrepancyModal, setDiscrepancyModal] = useState<{
+    isOpen: boolean;
+    lease: Lease | null;
+    verification: IncomeVerification | null;
+    rentRollIncome: number;
+    verifiedIncome: number;
+  }>({ isOpen: false, lease: null, verification: null, rentRollIncome: 0, verifiedIncome: 0 });
+
+  // Verification conflict modal state
+  const [verificationConflictModal, setVerificationConflictModal] = useState<{
+    isOpen: boolean;
+    unitNumber: string;
+    existingVerificationId: string | null;
+    newLeaseId: string;
+  }>({ isOpen: false, unitNumber: '', existingVerificationId: null, newLeaseId: '' });
 
   // AMI bucket calculation state
   const [amiBucketData, setAmiBucketData] = useState<Record<string, any>>({});
@@ -628,7 +647,32 @@ export default function ResidentDetailPage() {
           }, 100); // Small delay to ensure state update
         }
     } catch (err: unknown) {
-        alert(`Error: ${err instanceof Error ? err.message : 'An unexpected error occurred'}`);
+        const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
+        
+        // Check if this is the verification conflict error
+        if (errorMessage.includes('Another verification is already in progress')) {
+          // Find the existing verification for this unit
+          const unitNumber = tenancyData?.unit.unitNumber || '';
+          let existingVerificationId = null;
+          
+          // Look through all leases in the unit to find the in-progress verification
+          for (const lease of tenancyData?.unit.leases || []) {
+            const inProgressVerification = lease.incomeVerifications?.find(v => v.status === 'IN_PROGRESS');
+            if (inProgressVerification) {
+              existingVerificationId = inProgressVerification.id;
+              break;
+            }
+          }
+          
+          setVerificationConflictModal({
+            isOpen: true,
+            unitNumber,
+            existingVerificationId,
+            newLeaseId: leaseId
+          });
+        } else {
+          alert(`Error: ${errorMessage}`);
+        }
     }
   };
 
@@ -638,6 +682,59 @@ export default function ResidentDetailPage() {
 
   const handleCloseFinalizationDialog = () => {
     setFinalizationDialog({ isOpen: false, verification: null });
+  };
+
+  const handleCancelExistingVerification = async () => {
+    if (!verificationConflictModal.existingVerificationId) {
+      toast.error('No existing verification found to cancel');
+      return;
+    }
+
+    try {
+      // Find the lease that contains the existing verification
+      let existingLeaseId = null;
+      for (const lease of tenancyData?.unit.leases || []) {
+        const verification = lease.incomeVerifications?.find(v => v.id === verificationConflictModal.existingVerificationId);
+        if (verification) {
+          existingLeaseId = lease.id;
+          break;
+        }
+      }
+
+      if (!existingLeaseId) {
+        throw new Error('Could not find lease for existing verification');
+      }
+
+      const response = await fetch(`/api/leases/${existingLeaseId}/verifications/${verificationConflictModal.existingVerificationId}/cancel`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to cancel existing verification');
+      }
+
+      toast.success('Existing verification cancelled successfully');
+      
+      // Close the modal
+      setVerificationConflictModal({ isOpen: false, unitNumber: '', existingVerificationId: null, newLeaseId: '' });
+      
+      // Refresh data
+      await fetchTenancyData(false);
+      
+      // Now try to start the new verification
+      setTimeout(() => {
+        handleStartVerification(verificationConflictModal.newLeaseId);
+      }, 100);
+      
+    } catch (error) {
+      console.error('Error cancelling verification:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to cancel verification');
+    }
+  };
+
+  const handleCloseVerificationConflictModal = () => {
+    setVerificationConflictModal({ isOpen: false, unitNumber: '', existingVerificationId: null, newLeaseId: '' });
   };
 
   const handleFinalizeVerification = async (calculatedIncome: number) => {
@@ -895,6 +992,137 @@ export default function ResidentDetailPage() {
     }
   };
 
+  // Income discrepancy detection and resolution functions
+  const checkForIncomeDiscrepancy = useCallback(() => {
+    if (!tenancyData) return;
+
+    // Check each lease for income discrepancies
+    tenancyData.unit.leases.forEach(lease => {
+      const verification = lease.incomeVerifications.find(v => v.status === 'IN_PROGRESS') || 
+                         lease.incomeVerifications.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+      
+      if (!verification || !verification.calculatedVerifiedIncome) return;
+
+      // Get rent roll income (original uploaded income for all residents in this lease)
+      const rentRollIncome = lease.residents.reduce((sum, resident) => {
+        return sum + (Number(resident.annualizedIncome) || 0);
+      }, 0);
+
+      const verifiedIncome = verification.calculatedVerifiedIncome;
+      const discrepancy = Math.abs(verifiedIncome - rentRollIncome);
+
+      // If discrepancy is greater than $1 (to account for rounding), show modal
+      if (discrepancy > 1.00 && verification.status === 'FINALIZED') {
+        console.log(`[DISCREPANCY DETECTED] Lease ${lease.id}:`, {
+          rentRollIncome,
+          verifiedIncome,
+          discrepancy
+        });
+
+        setDiscrepancyModal({
+          isOpen: true,
+          lease,
+          verification,
+          rentRollIncome,
+          verifiedIncome
+        });
+      }
+    });
+  }, [tenancyData]);
+
+  // Run discrepancy check when tenancy data changes
+  useEffect(() => {
+    checkForIncomeDiscrepancy();
+  }, [checkForIncomeDiscrepancy]);
+
+  // Handler functions for discrepancy resolution modal
+  const handleAcceptVerifiedIncome = async () => {
+    if (!discrepancyModal.lease || !discrepancyModal.verification) return;
+
+    try {
+      // Update the rent roll income to match the verified income
+      const response = await fetch(`/api/leases/${discrepancyModal.lease.id}/accept-verified-income`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          verifiedIncome: discrepancyModal.verifiedIncome
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to accept verified income');
+      }
+
+      toast.success('Verified income accepted! Rent roll income has been updated.');
+      fetchTenancyData(false);
+      setDiscrepancyModal({ isOpen: false, lease: null, verification: null, rentRollIncome: 0, verifiedIncome: 0 });
+    } catch (error) {
+      console.error('Error accepting verified income:', error);
+      toast.error((error instanceof Error ? error.message : 'An error occurred while accepting verified income.'));
+    }
+  };
+
+  const handleModifyDocuments = async () => {
+    if (!discrepancyModal.lease || !discrepancyModal.verification) return;
+
+    try {
+      // Unfinalize all residents in this lease
+      const response = await fetch(`/api/leases/${discrepancyModal.lease.id}/unfinalize-all-residents`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to unfinalize residents');
+      }
+
+      toast.success('All residents have been unfinalized. You can now modify documents.');
+      fetchTenancyData(false);
+      setDiscrepancyModal({ isOpen: false, lease: null, verification: null, rentRollIncome: 0, verifiedIncome: 0 });
+    } catch (error) {
+      console.error('Error unfinalizing residents:', error);
+      toast.error((error instanceof Error ? error.message : 'An error occurred while unfinalizing residents.'));
+    }
+  };
+
+  const handleSubmitOverrideRequest = async (explanation: string) => {
+    if (!discrepancyModal.lease || !discrepancyModal.verification) return;
+
+    try {
+      // Submit override request to admin using existing API
+      const response = await fetch('/api/override-requests', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          type: 'INCOME_DISCREPANCY',
+          userExplanation: `Income Discrepancy for Unit ${formatUnitNumber(tenancyData?.unit.unitNumber || '')}: ${explanation}\n\nDiscrepancy Details:\n- Rent Roll Income: $${discrepancyModal.rentRollIncome.toFixed(2)}\n- Verified Income: $${discrepancyModal.verifiedIncome.toFixed(2)}\n- Difference: $${Math.abs(discrepancyModal.verifiedIncome - discrepancyModal.rentRollIncome).toFixed(2)}`,
+          unitId: tenancyData?.unit.id,
+          verificationId: discrepancyModal.verification.id,
+          // Note: We don't include leaseId directly as the API schema doesn't have it as a separate field
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to submit override request');
+      }
+
+      toast.success('Override request submitted to admin for review.');
+      setDiscrepancyModal({ isOpen: false, lease: null, verification: null, rentRollIncome: 0, verifiedIncome: 0 });
+    } catch (error) {
+      console.error('Error submitting override request:', error);
+      toast.error((error instanceof Error ? error.message : 'An error occurred while submitting override request.'));
+    }
+  };
+
   // New function to create lease periods based on tenancy data
   const createLeasePeriods = () => {
     if (!tenancyData) return [];
@@ -965,8 +1193,8 @@ export default function ResidentDetailPage() {
 
 
 
+  // Call the function to get lease periods
   const leasePeriods = createLeasePeriods();
-
 
   if (loading) {
      return (
@@ -1298,11 +1526,28 @@ export default function ResidentDetailPage() {
                                   <div className="mt-3">
                                     <div className="text-xs font-medium text-gray-500 mb-2">Documents ({residentDocuments.length}):</div>
                                     <div className="space-y-2">
-                                      {residentDocuments.map(doc => (
-                                        <div key={doc.id} className="p-3 bg-green-50 border border-green-200 rounded-md">
+                                      {residentDocuments.map(doc => {
+                                        const needsReview = doc.status === 'NEEDS_REVIEW';
+                                        const containerClasses = needsReview 
+                                          ? "p-3 bg-yellow-50 border border-yellow-200 rounded-md"
+                                          : "p-3 bg-green-50 border border-green-200 rounded-md";
+                                        const badgeClasses = needsReview
+                                          ? "inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-yellow-100 text-yellow-800"
+                                          : "inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-green-100 text-green-800";
+                                        
+                                        return (
+                                          <div key={doc.id} className={containerClasses}>
+                                          {needsReview && (
+                                            <div className="mb-2 text-xs text-yellow-700 font-medium flex items-center">
+                                              <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                              </svg>
+                                              Waiting for Admin Review
+                                            </div>
+                                          )}
                                           <div className="flex justify-between items-start mb-2">
                                             <div className="flex items-center space-x-2">
-                                              <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-green-100 text-green-800">
+                                              <span className={badgeClasses}>
                                                 {doc.documentType}
                                               </span>
                                               {doc.employeeName && (
@@ -1331,7 +1576,7 @@ export default function ResidentDetailPage() {
                                           </div>
                                           
                                           {/* Document-specific details */}
-                                          {doc.documentType === 'PAYSTUB' && (
+                                          {doc.documentType === 'PAYSTUB' && !needsReview && (
                                             <div className="grid grid-cols-2 gap-3 text-xs">
                                               {doc.payPeriodStartDate && doc.payPeriodEndDate && (
                                                 <div>
@@ -1349,6 +1594,24 @@ export default function ResidentDetailPage() {
                                                   </div>
                                                 </div>
                                               )}
+                                            </div>
+                                          )}
+                                          
+                                          {/* Show admin review message for documents needing review */}
+                                          {needsReview && (
+                                            <div className="mt-2 text-xs text-yellow-700 font-medium">
+                                              Status: Pending Admin Review
+                                            </div>
+                                          )}
+                                          
+                                          {doc.documentType === 'PAYSTUB' && needsReview && (
+                                            <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-700">
+                                              This paystub could not be automatically processed and requires admin review.
+                                            </div>
+                                          )}
+                                          
+                                          {doc.documentType === 'PAYSTUB' && !needsReview && (
+                                            <div className="grid grid-cols-2 gap-3 text-xs">
                                               {doc.payFrequency && (
                                                 <div>
                                                   <span className="font-medium text-gray-700">Frequency:</span>
@@ -1438,14 +1701,15 @@ export default function ResidentDetailPage() {
                                             </div>
                                           )}
                                         </div>
-                                      ))}
+                                        );
+                                      })}
                                     </div>
                                     
                                     {/* Resident Income Summary */}
                                     <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
                                       <h5 className="text-sm font-medium text-blue-800 mb-2">Calculated Annual Income</h5>
                                       <div className="grid grid-cols-2 gap-3 text-sm">
-                                                                                 {/* Income calculation is now handled at the resident level */}
+                                        {/* Income calculation is now handled at the resident level */}
                                         <div className="col-span-2 pt-2 border-t border-blue-200">
                                           <span className="text-gray-700">Total Verified Income:</span>
                                           <div className="font-bold text-lg">
@@ -1587,6 +1851,28 @@ export default function ResidentDetailPage() {
           leaseName={residentFinalizationDialog.leaseName}
         />
       )}
+
+      {/* Income Discrepancy Resolution Modal */}
+      <IncomeDiscrepancyResolutionModal
+        isOpen={discrepancyModal.isOpen}
+        onClose={() => setDiscrepancyModal({ isOpen: false, lease: null, verification: null, rentRollIncome: 0, verifiedIncome: 0 })}
+        rentRollIncome={discrepancyModal.rentRollIncome}
+        verifiedIncome={discrepancyModal.verifiedIncome}
+        unitNumber={formatUnitNumber(tenancyData?.unit.unitNumber || '')}
+        residentName={discrepancyModal.lease?.residents.length === 1 ? discrepancyModal.lease.residents[0].name : undefined}
+        onAcceptVerifiedIncome={handleAcceptVerifiedIncome}
+        onModifyDocuments={handleModifyDocuments}
+        onSubmitOverrideRequest={handleSubmitOverrideRequest}
+      />
+
+            {/* Verification Conflict Modal */}
+      <VerificationConflictModal
+        isOpen={verificationConflictModal.isOpen}
+        onClose={handleCloseVerificationConflictModal}
+        onCancel={handleCancelExistingVerification}
+        unitNumber={formatUnitNumber(verificationConflictModal.unitNumber)}
+      />
+
       <CreateLeaseDialog
         isOpen={isCreateLeaseDialogOpen}
         onClose={() => setCreateLeaseDialogOpen(false)}

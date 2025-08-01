@@ -1,39 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '../../../auth/[...nextauth]/route';
-import { analyzeIncomeDocument } from '../../../../../services/azureAi';
-import { analyzePaystubs } from '../../../../../services/income';
-import { createAutoOverrideRequest } from '../../../../../services/override';
-import fs from 'fs/promises';
-import path from 'path';
-import { prisma } from '../../../../../lib/prisma';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { prisma } from '@/lib/prisma';
+import { analyzeIncomeDocument } from '@/services/azureAi';
+import { validatePaystubExtraction, validateW2Extraction, type PaystubValidationResult, type W2ValidationResult } from '@/services/azureValidation';
+import { analyzePaystubs } from '@/services/income';
+import { writeFile, mkdir } from 'fs/promises';
+import { join } from 'path';
+import { existsSync } from 'fs';
 import { DocumentType, DocumentStatus } from '@prisma/client';
 
-// Helper function to determine pay frequency from pay period dates
-function determinePayFrequency(startDate: Date, endDate: Date): string {
-  const daysDiff = Math.abs(endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
-  
-  if (daysDiff >= 12 && daysDiff <= 16) {
-    return 'BI_WEEKLY'; // Every 2 weeks
-  } else if (daysDiff >= 6 && daysDiff <= 8) {
-    return 'WEEKLY'; // Every week
-  } else if (daysDiff >= 14 && daysDiff <= 17) {
-    return 'SEMI_MONTHLY'; // Twice per month
-  } else if (daysDiff >= 28 && daysDiff <= 32) {
-    return 'MONTHLY'; // Once per month
-  } else {
-    return 'UNKNOWN';
-  }
-}
 
-async function saveFileLocally(fileBuffer: Buffer, fileName: string): Promise<string> {
-  const uniqueFileName = `${Date.now()}-${fileName}`;
-  const savePath = path.join(process.cwd(), 'uploads', uniqueFileName);
-  await fs.writeFile(savePath, fileBuffer);
-  return savePath;
-}
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ verificationId: string }> }) {
+  
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -41,397 +21,239 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const { verificationId } = await params;
-    if (!verificationId) {
-      return NextResponse.json({ error: 'Verification ID is required' }, { status: 400 });
-    }
-
-    // Verify the verification belongs to the user's property
-    const verification = await prisma.incomeVerification.findUnique({
-      where: {
-        id: verificationId,
-        lease: { unit: { property: { ownerId: session.user.id } } },
-      },
-    });
-
-    if (!verification) {
-      return NextResponse.json({ error: 'Verification not found' }, { status: 404 });
-    }
-
     const formData = await request.formData();
     const file = formData.get('file') as File;
-    const documentTypeRaw = formData.get('documentType') as string;
+    const documentType = formData.get('documentType') as DocumentType;
     const residentId = formData.get('residentId') as string;
 
-    if (!file || !documentTypeRaw || !residentId) {
-      return NextResponse.json({ error: 'File, document type, and resident ID are required' }, { status: 400 });
+    if (!file || !documentType || !residentId) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    console.log(`Processing upload for document type: ${documentTypeRaw}, resident: ${residentId}`);
-
-    // Map form values to enum values
-    const documentTypeMap: Record<string, DocumentType> = {
-      'PAYSTUB': DocumentType.PAYSTUB,
-      'W2': DocumentType.W2,
-      'W-2': DocumentType.W2,
-      'BANK_STATEMENT': DocumentType.BANK_STATEMENT,
-      'OFFER_LETTER': DocumentType.OFFER_LETTER,
-      'SOCIAL_SECURITY': DocumentType.SOCIAL_SECURITY,
-    };
-
-    const documentType = documentTypeMap[documentTypeRaw];
-    if (!documentType) {
-      return NextResponse.json({ error: `Invalid document type: ${documentTypeRaw}` }, { status: 400 });
-    }
-    
-    const fileBuffer = Buffer.from(await file.arrayBuffer());
-    const filePath = await saveFileLocally(fileBuffer, file.name);
-
-    let document = await prisma.incomeDocument.create({
-      data: {
-        documentType: documentType,
-        documentDate: new Date(),
-        uploadDate: new Date(),
-        status: 'PROCESSING',
-        filePath: filePath,
-        verificationId: verificationId,
-        residentId: residentId,
-      },
+    // Verify that the user owns this property through the verification
+    const verification = await prisma.incomeVerification.findUnique({
+      where: { id: verificationId },
+      include: {
+        lease: {
+          include: {
+            unit: {
+              include: {
+                property: true
+              }
+            }
+          }
+        }
+      }
     });
 
+    if (!verification || verification.lease?.unit?.property?.ownerId !== session.user.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // Create uploads directory if it doesn't exist
+    const uploadsDir = join(process.cwd(), 'uploads');
+    if (!existsSync(uploadsDir)) {
+      await mkdir(uploadsDir, { recursive: true });
+    }
+
+    // Save file to disk
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const filename = `${Date.now()}-${file.name}`;
+    const filepath = join(uploadsDir, filename);
+    await writeFile(filepath, buffer);
+
+    console.log(`File uploaded: ${filename} for verification ${verificationId}, resident ${residentId}`);
+
+         // Create initial document record
+     let document = await prisma.incomeDocument.create({
+       data: {
+         documentType,
+         documentDate: new Date(), // Required field for document date
+         uploadDate: new Date(),
+         status: DocumentStatus.PROCESSING,
+         filePath: filename,
+         verificationId,
+         residentId,
+       },
+     });
+
+    // Analyze the document with Azure Document Intelligence
+    let analyzeResult;
     try {
-      const modelId = documentType === DocumentType.W2 ? "prebuilt-tax.us.w2" : "prebuilt-payStub.us";
-      const analysisResult = await analyzeIncomeDocument(fileBuffer, modelId);
-      console.log("Azure analysis result:", JSON.stringify(analysisResult, null, 2));
-
-      // The v4.0 API has a different response structure
-      const analyzeResult = analysisResult.analyzeResult;
-      if (analyzeResult && analyzeResult.documents && analyzeResult.documents.length > 0) {
-        const doc = analyzeResult.documents[0];
-        const fields = doc.fields;
-        
-        if (documentType === DocumentType.W2) {
-            // Handle W2 documents with v4.0 API response structure
-            console.log("🔍 W2 Fields available:", Object.keys(fields || {}));
-            console.log("🔍 Raw W2 fields structure:", JSON.stringify(fields, null, 2));
-            
-            // Helper function to extract numeric values from Azure field objects
-            function extractNumericValue(field: any): number | null {
-              if (!field) return null;
-              
-              // Try different value extraction methods
-              if (typeof field.valueNumber === 'number') return field.valueNumber;
-              if (typeof field.valueCurrency === 'number') return field.valueCurrency;
-              if (typeof field.valueString === 'string') {
-                const parsed = parseFloat(field.valueString.replace(/[,$]/g, ''));
-                return isNaN(parsed) ? null : parsed;
-              }
-              if (typeof field.content === 'string') {
-                const parsed = parseFloat(field.content.replace(/[,$]/g, ''));
-                return isNaN(parsed) ? null : parsed;
-              }
-              
-              return null;
-            }
-            
-            // Try different possible field names for Box 1 wages
-            const box1Field = fields?.WagesTipsAndOtherCompensation || fields?.['W2FormBox1'] || fields?.Box1 || fields?.Wages;
-            const box1Amount = extractNumericValue(box1Field);
-            
-            // Try different possible field names for Box 3 (Social Security wages)
-            const box3Field = fields?.SocialSecurityWages || fields?.['W2FormBox3'] || fields?.Box3;
-            const box3Amount = extractNumericValue(box3Field);
-            
-            // Try different possible field names for Box 5 (Medicare wages)
-            const box5Field = fields?.MedicareWagesAndTips || fields?.['W2FormBox5'] || fields?.Box5 || fields?.MedicareWages;
-            const box5Amount = extractNumericValue(box5Field);
-            
-            const taxYearField = fields?.TaxYear || fields?.Year;
-            const taxYear = extractNumericValue(taxYearField);
-
-            const employee = fields?.Employee;
-            const employeeName = employee?.valueObject?.Name?.valueString || 
-                                employee?.valueString || employee?.content || '';
-
-            const employer = fields?.Employer;
-            const employerName = employer?.valueObject?.Name?.valueString || 
-                                employer?.valueString || employer?.content || '';
-            
-            console.log("📊 Extracted W2 values:");
-            console.log("- Box 1 (Wages):", box1Amount);
-            console.log("- Box 3 (SS Wages):", box3Amount);
-            console.log("- Box 5 (Medicare):", box5Amount);
-            console.log("- Tax Year:", taxYear);
-            console.log("- Employee:", employeeName);
-            console.log("- Employer:", employerName);
-            
-            // More lenient validation - require at least Box 1 wages and tax year
-            if (box1Amount && box1Amount > 0 && taxYear) {
-                // Calculate the highest value from boxes 1, 3, and 5 for annualized income
-                const highestAmount = Math.max(box1Amount || 0, box3Amount || 0, box5Amount || 0);
-                
-                document = await prisma.incomeDocument.update({
-                  where: { id: document.id },
-                  data: {
-                    status: DocumentStatus.COMPLETED,
-                    box1_wages: box1Amount,
-                    box3_ss_wages: box3Amount,
-                    box5_med_wages: box5Amount,
-                    taxYear: taxYear,
-                    employeeName: employeeName || 'Not extracted',
-                    employerName: employerName || 'Not extracted',
-                    calculatedAnnualizedIncome: highestAmount, // Use highest of boxes 1, 3, 5
-                  },
-                });
-
-                // PHASE 2 ARCHITECTURE: Also update resident-level calculated income for W2
-                await prisma.$executeRaw`
-                  UPDATE "Resident" 
-                  SET "calculatedAnnualizedIncome" = ${Number(highestAmount)}::numeric
-                  WHERE "id" = ${document.residentId}
-                `;
-                
-                console.log(`Updated resident ${document.residentId} with W2 calculated annualized income (highest of boxes 1,3,5): $${highestAmount}`);
-              } else {
-                console.log("W2 fields not found or empty in Azure response. Document requires manual review.");
-                document = await prisma.incomeDocument.update({
-                  where: { id: document.id },
-                  data: { status: DocumentStatus.NEEDS_REVIEW },
-                });
-
-                // Automatically create override request for manual review
-                try {
-                  await createAutoOverrideRequest({
-                    type: 'DOCUMENT_REVIEW',
-                    documentId: document.id,
-                    verificationId: verificationId,
-                    residentId: residentId,
-                    userId: session.user.id,
-                    systemExplanation: `System was unable to automatically extract required fields from W2 document. Manual review required for income verification.`
-                  });
-                } catch (overrideError) {
-                  console.error('Failed to create auto-override request for W2 document review:', overrideError);
-                }
-              }
-        } else if (documentType === DocumentType.PAYSTUB) {
-            // Handle paystubs with the new prebuilt-payStub.us model
-            const payPeriodStartDate = fields?.PayPeriodStartDate?.valueDate ? new Date(fields.PayPeriodStartDate.valueDate) : null;
-            const payPeriodEndDate = fields?.PayPeriodEndDate?.valueDate ? new Date(fields.PayPeriodEndDate.valueDate) : null;
-            
-            // Azure returns CurrentPeriodGrossPay for current pay period gross pay
-            let grossPayAmount = null;
-            
-            // Debug logging to understand field structure
-            console.log("CurrentPeriodGrossPay field debug:", {
-                exists: !!fields?.CurrentPeriodGrossPay,
-                field: fields?.CurrentPeriodGrossPay,
-                valueNumber: fields?.CurrentPeriodGrossPay?.valueNumber,
-                content: fields?.CurrentPeriodGrossPay?.content
-            });
-            
-            // Try CurrentPeriodGrossPay first (most common)
-            if (fields?.CurrentPeriodGrossPay?.valueNumber !== undefined) {
-                grossPayAmount = fields.CurrentPeriodGrossPay.valueNumber;
-                console.log("Found grossPayAmount via valueNumber:", grossPayAmount);
-            } else if (fields?.CurrentPeriodGrossPay?.content) {
-                const parsed = parseFloat(fields.CurrentPeriodGrossPay.content);
-                if (!isNaN(parsed)) {
-                    grossPayAmount = parsed;
-                    console.log("Found grossPayAmount via content:", grossPayAmount);
-                }
-            }
-            
-            // Fallback to other field names if CurrentPeriodGrossPay not found
-            if (grossPayAmount === null) {
-                if (fields?.CurrentGrossPay?.valueNumber !== undefined) {
-                    grossPayAmount = fields.CurrentGrossPay.valueNumber;
-                } else if (fields?.CurrentGrossPay?.content) {
-                    const parsed = parseFloat(fields.CurrentGrossPay.content);
-                    if (!isNaN(parsed)) {
-                        grossPayAmount = parsed;
-                    }
-                }
-            }
-            
-            // If still no gross pay, try GrossPay
-            if (grossPayAmount === null) {
-                if (fields?.GrossPay?.valueNumber !== undefined) {
-                    grossPayAmount = fields.GrossPay.valueNumber;
-                } else if (fields?.GrossPay?.content) {
-                    const parsed = parseFloat(fields.GrossPay.content);
-                    if (!isNaN(parsed)) {
-                        grossPayAmount = parsed;
-                    }
-                }
-            }
-
-            // Employee and Employer might be in different field structures
-            const employeeName = fields?.Employee?.valueString || 
-                               fields?.Employee?.content || 
-                               fields?.EmployeeName?.valueString || 
-                               fields?.EmployeeName?.content || '';
-                               
-            const employerName = fields?.Employer?.valueString || 
-                               fields?.Employer?.content || 
-                               fields?.EmployerName?.valueString || 
-                               fields?.EmployerName?.content || '';
-
-            console.log("Paystub analysis result:", {
-                payPeriodStartDate,
-                payPeriodEndDate, 
-                grossPayAmount,
-                employeeName,
-                employerName,
-                availableFields: Object.keys(fields || {})
-            });
-
-            if(payPeriodStartDate && payPeriodEndDate && grossPayAmount && grossPayAmount > 0) {
-                // Determine pay frequency from this single paystub
-                const payFrequency = determinePayFrequency(payPeriodStartDate, payPeriodEndDate);
-                
-                document = await prisma.incomeDocument.update({
-                    where: { id: document.id },
-                    data: {
-                        status: DocumentStatus.COMPLETED,
-                        payPeriodStartDate: payPeriodStartDate,
-                        payPeriodEndDate: payPeriodEndDate,
-                        grossPayAmount: grossPayAmount,
-                        employeeName: employeeName,
-                        employerName: employerName,
-                        payFrequency: payFrequency,
-                    } as any,
-                  });
-
-                // After successfully processing a paystub, analyze all paystubs for this resident
-                // to calculate annualized income and pay frequency
-                const residentPaystubs = await prisma.incomeDocument.findMany({
-                  where: {
-                    residentId: document.residentId,
-                    verificationId: document.verificationId,
-                    documentType: DocumentType.PAYSTUB,
-                    status: DocumentStatus.COMPLETED,
-                  },
-                  orderBy: {
-                    uploadDate: 'desc'
-                  }
-                });
-
-                if (residentPaystubs.length >= 1) {
-                  const analysisResult = analyzePaystubs(residentPaystubs);
-                  console.log("Paystub analysis result:", analysisResult);
-
-                  if (analysisResult.annualizedIncome && analysisResult.payFrequency) {
-                    // Update each paystub individually to avoid updateMany type issues
-                    const updatePromises = residentPaystubs.map(stub => 
-                        prisma.incomeDocument.update({
-                            where: { id: stub.id },
-                            data: {
-                                calculatedAnnualizedIncome: analysisResult.annualizedIncome!,
-                                payFrequency: analysisResult.payFrequency!,
-                            } as any
-                        })
-                    );
-                    await Promise.all(updatePromises);
-
-                    // PHASE 2 ARCHITECTURE: Also update resident-level calculated income
-                    await prisma.$executeRaw`
-                      UPDATE "Resident" 
-                      SET "calculatedAnnualizedIncome" = ${Number(analysisResult.annualizedIncome)}::numeric
-                      WHERE "id" = ${document.residentId}
-                    `;
-                    
-                    console.log(`Updated resident ${document.residentId} with calculated annualized income: $${analysisResult.annualizedIncome}`);
-                  }
-                }
-            } else {
-                console.log("Paystub fields not found or empty in Azure response. Document requires manual review.");
-                console.log("Missing fields:", {
-                    hasPayPeriodStartDate: !!payPeriodStartDate,
-                    hasPayPeriodEndDate: !!payPeriodEndDate,
-                    hasGrossPayAmount: !!grossPayAmount,
-                    grossPayValue: grossPayAmount
-                });
-                document = await prisma.incomeDocument.update({
-                  where: { id: document.id },
-                  data: { status: DocumentStatus.NEEDS_REVIEW },
-                });
-
-                // Automatically create override request for manual review
-                try {
-                  await createAutoOverrideRequest({
-                    type: 'DOCUMENT_REVIEW',
-                    documentId: document.id,
-                    verificationId: verificationId,
-                    residentId: residentId,
-                    userId: session.user.id,
-                    systemExplanation: `System was unable to automatically extract required fields from paystub document. Manual review required for income verification. Missing fields: ${JSON.stringify({
-                      hasPayPeriodStartDate: !!payPeriodStartDate,
-                      hasPayPeriodEndDate: !!payPeriodEndDate,
-                      hasGrossPayAmount: !!grossPayAmount
-                    })}`
-                  });
-                } catch (overrideError) {
-                  console.error('Failed to create auto-override request for paystub document review:', overrideError);
-                }
-            }
+      const modelId = documentType === DocumentType.W2 ? 'prebuilt-tax.us.w2' : 'prebuilt-payStub.us';
+      analyzeResult = await analyzeIncomeDocument(buffer, modelId);
+      console.log(`Azure analysis completed for document ${document.id}`);
+    } catch (azureError) {
+      console.error('Azure Document Intelligence failed:', azureError);
+      
+      // Mark document as needing admin review due to Azure failure
+      document = await prisma.incomeDocument.update({
+        where: { id: document.id },
+        data: {
+          status: DocumentStatus.NEEDS_REVIEW,
         }
+      });
 
-      } else {
-        console.log("No documents found in Azure response. Document requires manual review.");
-        document = await prisma.incomeDocument.update({
-          where: { id: document.id },
-          data: { status: DocumentStatus.NEEDS_REVIEW },
-        });
-
-        // Automatically create override request for manual review
-        try {
-          await createAutoOverrideRequest({
+      // Create override request for Azure failure
+      try {
+        await prisma.overrideRequest.create({
+          data: {
             type: 'DOCUMENT_REVIEW',
+            status: 'PENDING',
+            userExplanation: `Azure Document Intelligence failed to process ${documentType} document. Error: ${azureError instanceof Error ? azureError.message : 'Unknown error'}`,
             documentId: document.id,
             verificationId: verificationId,
             residentId: residentId,
-            userId: session.user.id,
-            systemExplanation: `No documents found in Azure response. Document analysis failed and requires manual review for income verification.`
-          });
-        } catch (overrideError) {
-          console.error('Failed to create auto-override request for no documents found:', overrideError);
-        }
-      }
-    } catch (error) {
-      console.error('Error analyzing document with Azure:', error);
-      document = await prisma.incomeDocument.update({
-        where: { id: document.id },
-        data: { status: DocumentStatus.NEEDS_REVIEW },
-      });
-
-      // Automatically create override request for manual review
-      try {
-        await createAutoOverrideRequest({
-          type: 'DOCUMENT_REVIEW',
-          documentId: document.id,
-          verificationId: verificationId,
-          residentId: residentId,
-          userId: session.user.id,
-          systemExplanation: `Azure document analysis error: ${error instanceof Error ? error.message : 'Unknown error'}. Manual review required for income verification.`
+            requesterId: session.user.id,
+            propertyId: verification.lease?.unit?.property?.id,
+          }
         });
       } catch (overrideError) {
-        console.error('Failed to create auto-override request for Azure error:', overrideError);
+        console.error('Failed to create auto-override request for Azure failure:', overrideError);
       }
+
+      return NextResponse.json(document, { status: 201 });
     }
 
-    if (document.documentType === DocumentType.PAYSTUB && document.status === DocumentStatus.COMPLETED) {
-        const residentPaystubs = await prisma.incomeDocument.findMany({
-            where: {
-                residentId: residentId,
-                verificationId: verificationId,
-                documentType: DocumentType.PAYSTUB,
-                status: DocumentStatus.COMPLETED,
-            }
+    // Validate Azure extraction results
+    let validationResult: PaystubValidationResult | W2ValidationResult;
+    
+    if (documentType === DocumentType.PAYSTUB) {
+      validationResult = validatePaystubExtraction(analyzeResult);
+    } else if (documentType === DocumentType.W2) {
+      validationResult = validateW2Extraction(analyzeResult);
+    } else {
+      return NextResponse.json({ error: 'Unsupported document type' }, { status: 400 });
+    }
+
+    console.log(`Validation result for document ${document.id}:`, {
+      isValid: validationResult.isValid,
+      needsAdminReview: validationResult.needsAdminReview,
+      confidence: validationResult.confidence,
+      warningsCount: validationResult.warnings.length,
+      errorsCount: validationResult.errors.length
+    });
+
+    // Handle validation results
+    if (!validationResult.isValid || validationResult.needsAdminReview) {
+      // Mark document as needing admin review
+      document = await prisma.incomeDocument.update({
+        where: { id: document.id },
+        data: {
+          status: DocumentStatus.NEEDS_REVIEW,
+        }
+      });
+
+      // Create comprehensive explanation for admin
+      const explanationParts = [];
+      if (validationResult.errors.length > 0) {
+        explanationParts.push(`Errors: ${validationResult.errors.join('; ')}`);
+      }
+      if (validationResult.warnings.length > 0) {
+        explanationParts.push(`Warnings: ${validationResult.warnings.join('; ')}`);
+      }
+      explanationParts.push(`Confidence: ${(validationResult.confidence * 100).toFixed(1)}%`);
+      
+      const explanation = `Azure Document Intelligence extraction requires admin review. ${explanationParts.join(' | ')}`;
+
+      // Create override request for admin review
+      try {
+        await prisma.overrideRequest.create({
+          data: {
+            type: 'DOCUMENT_REVIEW',
+            status: 'PENDING',
+            userExplanation: explanation,
+            documentId: document.id,
+            verificationId: verificationId,
+            residentId: residentId,
+            requesterId: session.user.id,
+            propertyId: verification.lease?.unit?.property?.id,
+          }
         });
+
+        console.log(`Created admin review request for document ${document.id} due to validation issues`);
+      } catch (overrideError) {
+        console.error('Failed to create auto-override request for validation issues:', overrideError);
+      }
+
+      return NextResponse.json(document, { status: 201 });
+    }
+
+    // Validation passed - process the document using validated data
+    if (documentType === DocumentType.W2) {
+      const w2Result = validationResult as W2ValidationResult;
+      const extractedData = w2Result.extractedData;
+      
+      // Use the highest amount from boxes 1, 3, 5 as per business rules
+      const amounts = [extractedData.box1_wages, extractedData.box3_ss_wages, extractedData.box5_med_wages]
+        .filter((amount): amount is number => amount !== null);
+      
+      if (amounts.length > 0) {
+        const highestAmount = Math.max(...amounts);
         
-        const analysisResult = analyzePaystubs(residentPaystubs);
+        document = await prisma.incomeDocument.update({
+          where: { id: document.id },
+          data: {
+            status: DocumentStatus.COMPLETED,
+            box1_wages: extractedData.box1_wages,
+            box3_ss_wages: extractedData.box3_ss_wages,
+            box5_med_wages: extractedData.box5_med_wages,
+            employeeName: extractedData.employeeName,
+            employerName: extractedData.employerName,
+            calculatedAnnualizedIncome: highestAmount
+          }
+        });
+
+        // Update resident-level calculated income
+        await prisma.$executeRaw`
+          UPDATE "Resident" 
+          SET "calculatedAnnualizedIncome" = ${Number(highestAmount)}::numeric
+          WHERE "id" = ${document.residentId}
+        `;
         
-        if (analysisResult.annualizedIncome && analysisResult.payFrequency) {
-            // Update each paystub individually to avoid updateMany type issues
+        console.log(`Updated resident ${document.residentId} with calculated annualized income: $${highestAmount}`);
+      }
+      
+    } else if (documentType === DocumentType.PAYSTUB) {
+      const paystubResult = validationResult as PaystubValidationResult;
+      const extractedData = paystubResult.extractedData;
+      
+      if (extractedData.grossPayAmount && extractedData.payPeriodStartDate && extractedData.payPeriodEndDate) {
+        // Determine pay frequency from pay period dates
+        const payFrequency = determinePayFrequency(extractedData.payPeriodStartDate, extractedData.payPeriodEndDate);
+        
+        document = await prisma.incomeDocument.update({
+          where: { id: document.id },
+          data: {
+            status: DocumentStatus.COMPLETED,
+            payPeriodStartDate: extractedData.payPeriodStartDate,
+            payPeriodEndDate: extractedData.payPeriodEndDate,
+            grossPayAmount: extractedData.grossPayAmount,
+            employeeName: extractedData.employeeName,
+            employerName: extractedData.employerName,
+            payFrequency: payFrequency,
+          } as any,
+        });
+
+        // After successfully processing a paystub, analyze all paystubs for this resident
+        const residentPaystubs = await prisma.incomeDocument.findMany({
+          where: {
+            residentId: document.residentId,
+            verificationId: document.verificationId,
+            documentType: DocumentType.PAYSTUB,
+            status: DocumentStatus.COMPLETED,
+          },
+          orderBy: {
+            uploadDate: 'desc'
+          }
+        });
+
+        if (residentPaystubs.length >= 1) {
+          const analysisResult = analyzePaystubs(residentPaystubs);
+          console.log("Paystub analysis result:", analysisResult);
+
+          if (analysisResult.annualizedIncome && analysisResult.payFrequency) {
+            // Update each paystub individually
             const updatePromises = residentPaystubs.map(stub => 
                 prisma.incomeDocument.update({
                     where: { id: stub.id },
@@ -443,22 +265,35 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             );
             await Promise.all(updatePromises);
 
-            // PHASE 2 ARCHITECTURE: Also update resident-level calculated income
+            // Update resident-level calculated income
             await prisma.$executeRaw`
               UPDATE "Resident" 
               SET "calculatedAnnualizedIncome" = ${Number(analysisResult.annualizedIncome)}::numeric
-              WHERE "id" = ${residentId}
+              WHERE "id" = ${document.residentId}
             `;
             
-            console.log(`Updated resident ${residentId} with calculated annualized income: $${analysisResult.annualizedIncome}`);
+            console.log(`Updated resident ${document.residentId} with calculated annualized income: $${analysisResult.annualizedIncome}`);
+          }
         }
+      }
     }
 
-    const updatedDocument = await prisma.incomeDocument.findUnique({ where: { id: document.id }});
+    return NextResponse.json(document, { status: 201 });
 
-    return NextResponse.json(updatedDocument, { status: 201 });
   } catch (error) {
     console.error('Error uploading document:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
+}
+
+// Helper function to determine pay frequency based on pay period dates
+function determinePayFrequency(startDate: Date, endDate: Date): string {
+  const daysDiff = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+  
+  if (daysDiff <= 7) return 'WEEKLY';
+  if (daysDiff <= 14) return 'BI-WEEKLY';
+  if (daysDiff <= 16) return 'SEMI-MONTHLY';
+  if (daysDiff <= 31) return 'MONTHLY';
+  
+  return 'BI-WEEKLY'; // Default fallback
 }

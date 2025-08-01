@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import Papa from 'papaparse';
+import { format } from 'date-fns';
 
 interface RentRollRow {
   unitNumber?: string;
@@ -70,6 +71,15 @@ export async function POST(
         return NextResponse.json({ error: `CSV must include the following headers: ${requiredHeaders.join(', ')}` }, { status: 400 });
     }
     
+    const discrepancies: Array<{
+      unitNumber: string;
+      newIncome: number;
+      verifiedIncome: number;
+      discrepancy: number;
+      leaseId: string;
+      residentNames: string[];
+    }> = [];
+
     await prisma.$transaction(async (tx) => {
       const rentRoll = await tx.rentRoll.create({
         data: {
@@ -83,17 +93,104 @@ export async function POST(
         if (!unitNumber) continue;
 
         const unit = property.units.find(u => u.unitNumber === unitNumber);
+        if (!unit) continue;
 
-        if (unit) {
-          await tx.tenancy.create({
-            data: {
-              rentRollId: rentRoll.id,
-              unitId: unit.id,
-              residentName: row.residentName || null,
-              leaseRent: row.leaseRent ? parseFloat(row.leaseRent) : null,
-              annualizedIncome: row.annualizedIncome ? parseFloat(row.annualizedIncome) : null,
+        // Check for existing verified income in this unit's leases
+        const existingLeases = await tx.lease.findMany({
+          where: {
+            unitId: unit.id,
+          },
+          include: {
+            residents: {
+              where: { incomeFinalized: true }
             },
+            incomeVerifications: {
+              where: { status: 'FINALIZED' },
+              orderBy: { createdAt: 'desc' },
+              take: 1
+            }
+          }
+        });
+
+        // Calculate verified income for existing leases
+        let verifiedIncome = 0;
+        let leaseWithVerifiedIncome = null;
+        let residentNames: string[] = [];
+
+        for (const lease of existingLeases) {
+          if (lease.residents.length > 0 && lease.incomeVerifications.length > 0) {
+            const totalVerified = lease.residents.reduce((sum, resident) => {
+              return sum + (Number(resident.calculatedAnnualizedIncome) || Number(resident.annualizedIncome) || 0);
+            }, 0);
+            
+            if (totalVerified > 0) {
+              verifiedIncome = totalVerified;
+              leaseWithVerifiedIncome = lease;
+              residentNames = lease.residents.map(r => r.name);
+              break;
+            }
+          }
+        }
+
+        // Find or create a lease for this unit for the rent roll period
+        let lease = await tx.lease.findFirst({
+          where: {
+            unitId: unit.id,
+            name: { contains: `Rent Roll ${format(new Date(date), 'MM/yyyy')}` }
+          }
+        });
+
+        if (!lease) {
+          // Create a lease for this rent roll period
+          lease = await tx.lease.create({
+            data: {
+              name: `Rent Roll ${format(new Date(date), 'MM/yyyy')} - Unit ${unitNumber}`,
+              unitId: unit.id,
+              leaseRent: row.leaseRent ? parseFloat(row.leaseRent) : null,
+              leaseStartDate: new Date(date),
+              leaseEndDate: null, // Rent roll leases are point-in-time snapshots
+            }
           });
+        }
+
+        // Create the tenancy (links RentRoll to Lease)
+        await tx.tenancy.create({
+          data: {
+            rentRollId: rentRoll.id,
+            leaseId: lease.id,
+          },
+        });
+
+        // Create or update the resident
+        if (row.residentName?.trim()) {
+          const residentIncome = row.annualizedIncome ? parseFloat(row.annualizedIncome) : 0;
+          
+          await tx.resident.create({
+            data: {
+              name: row.residentName.trim(),
+              leaseId: lease.id,
+              annualizedIncome: residentIncome,
+            }
+          });
+
+          // Check for income discrepancy
+          if (verifiedIncome > 0 && residentIncome > 0) {
+            const discrepancy = Math.abs(residentIncome - verifiedIncome);
+            
+            // If discrepancy is greater than $1, flag it
+            if (discrepancy > 1.00) {
+              discrepancies.push({
+                unitNumber,
+                newIncome: residentIncome,
+                verifiedIncome,
+                discrepancy,
+                leaseId: leaseWithVerifiedIncome!.id,
+                residentNames
+              });
+
+              console.log(`[RENT ROLL DISCREPANCY] Unit ${unitNumber}: New income $${residentIncome} vs Verified $${verifiedIncome} (diff: $${discrepancy})`);
+            }
+          }
         }
       }
     });
@@ -101,6 +198,7 @@ export async function POST(
     return NextResponse.json({
       message: 'Rent roll snapshot processed successfully.',
       unitsProcessed: parseResult.data.length,
+      discrepancies: discrepancies.length > 0 ? discrepancies : undefined
     });
 
   } catch (error) {
