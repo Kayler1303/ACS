@@ -1463,6 +1463,15 @@ export default function ResidentDetailPage() {
                         const hasDocumentsNeedingReview = residentDocuments.some(doc => doc.status === 'NEEDS_REVIEW');
                         // Allow finalization if there are completed documents (income will be calculated during finalization), need review docs, or no income
                         const canFinalizeResident = (hasCompletedDocuments || hasDocumentsNeedingReview || resident.hasNoIncome) && !isResidentFinalized;
+                        
+                        // Debug logging to see why buttons might not show
+                        console.log(`[DEBUG] Resident ${resident.name}:`, {
+                          isResidentFinalized,
+                          hasNoIncome: resident.hasNoIncome,
+                          showUploadButton: !isResidentFinalized && !resident.hasNoIncome,
+                          showNoIncomeButton: !isResidentFinalized && !resident.hasNoIncome,
+                          canFinalizeResident
+                        });
 
                         return (
                           <div key={resident.id} className="px-6 py-4">
