@@ -61,6 +61,17 @@ export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Da
     totalDocuments: allDocuments.length
   });
   
+  // Debug: Check what resident data we're receiving
+  console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber} - Resident Details:`, 
+    allResidents.map(r => ({
+      id: r.id,
+      name: r.name,
+      hasNoIncome: r.hasNoIncome,
+      incomeFinalized: r.incomeFinalized,
+      calculatedAnnualizedIncome: r.calculatedAnnualizedIncome
+    }))
+  );
+  
   // Check if there's an active income verification in progress
   const activeVerifications = (lease as any).incomeVerifications || [];
   const latestVerification = activeVerifications
