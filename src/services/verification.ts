@@ -79,20 +79,44 @@ export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Da
     }
   }
   
-  // Add null/undefined checks to prevent TypeScript errors
+  // Check if income has been verified for all residents
+  // This can happen through either:
+  // 1. Residents with completed documents, OR
+  // 2. Residents marked as "No Income" (hasNoIncome = true and incomeFinalized = true)
+  
   const verifiedDocuments = allDocuments.filter(d => d && d.status === 'COMPLETED');
+  const residentsWithNoIncomeFinalized = allResidents.filter(r => r.hasNoIncome && r.incomeFinalized);
+  const residentsWithVerifiedDocuments = allResidents.filter(r => 
+    verifiedDocuments.some(doc => doc.residentId === r.id)
+  );
+  
+  const totalResidentsWithVerifiedIncome = new Set([
+    ...residentsWithNoIncomeFinalized.map(r => r.id),
+    ...residentsWithVerifiedDocuments.map(r => r.id)
+  ]).size;
 
   console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}:`, {
     verifiedDocuments: verifiedDocuments.length,
+    residentsWithNoIncomeFinalized: residentsWithNoIncomeFinalized.length,
+    residentsWithVerifiedDocuments: residentsWithVerifiedDocuments.length,
+    totalResidentsWithVerifiedIncome,
+    totalResidents: allResidents.length,
     documentStatuses: allDocuments.map(d => ({ id: d?.id, status: d?.status, type: d?.documentType }))
   });
 
-  if (verifiedDocuments.length === 0) {
-    console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: No verified documents - returning Out of Date Income Documents`);
+  // If no residents have verified income (either through documents or "No Income"), return out of date
+  if (totalResidentsWithVerifiedIncome === 0) {
+    console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: No residents with verified income - returning Out of Date Income Documents`);
+    return "Out of Date Income Documents";
+  }
+  
+  // If not all residents have verified income, return out of date  
+  if (totalResidentsWithVerifiedIncome < allResidents.length) {
+    console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: Not all residents have verified income (${totalResidentsWithVerifiedIncome}/${allResidents.length}) - returning Out of Date Income Documents`);
     return "Out of Date Income Documents";
   }
 
-  // Check timeliness of documents
+  // Check timeliness of documents (only for residents with actual documents, not "No Income" residents)
   const areDocumentsTimely = verifiedDocuments.every(doc => {
     if (!doc || !doc.documentType) {
       console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: Document missing type - failing timeliness check`);
@@ -147,7 +171,7 @@ export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Da
     return "Out of Date Income Documents";
   }
 
-  // Check if names on documents match resident names
+  // Check if names on documents match resident names (only for residents with actual documents, not "No Income" residents)
   const doNamesMatch = verifiedDocuments.every(doc => {
       const resident = allResidents.find(r => r.id === doc.residentId);
       if (!resident || !doc.employeeName) {
@@ -211,13 +235,16 @@ export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Da
   const totalUploadedIncome = allResidents.reduce((acc, r) => acc + (Number(r.annualizedIncome) || 0), 0);
   
   // Calculate total verified income from resident-level calculated income
-  // Only include finalized residents with valid calculatedAnnualizedIncome
+  // Include finalized residents with either:
+  // 1. Valid calculatedAnnualizedIncome from documents, OR
+  // 2. Zero income from "No Income" residents (hasNoIncome = true)
   const totalVerifiedIncome = allResidents.reduce((acc, r) => {
     const amount = r.incomeFinalized 
       ? (Number(r.calculatedAnnualizedIncome) || 0)
       : 0;
     console.log(`[VERIFICATION SERVICE] Resident ${r.id}:`, {
       incomeFinalized: r.incomeFinalized,
+      hasNoIncome: r.hasNoIncome,
       calculatedAnnualizedIncome: r.calculatedAnnualizedIncome,
       annualizedIncome: r.annualizedIncome,
       amount: amount,
