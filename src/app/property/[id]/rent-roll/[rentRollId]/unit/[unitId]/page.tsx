@@ -1729,16 +1729,22 @@ export default function ResidentDetailPage() {
                               {/* Resident Actions */}
                               <div className="ml-4 flex flex-col space-y-2">
                                 {/* Upload Documents button for each resident */}
-                                {verification && !isResidentFinalized && !resident.hasNoIncome && (
+                                {!isResidentFinalized && !resident.hasNoIncome && (
                                   <button
-                                    onClick={() => {
-                                      setUploadDialogData({
-                                        verificationId: verification.id,
-                                        leaseName: period.name,
-                                        residents: [{ id: resident.id, name: resident.name }], // Only this resident
-                                        hasExistingDocuments: !!verification.incomeDocuments?.some(d => d.residentId === resident.id)
-                                      });
-                                      setUploadDialogOpen(true);
+                                    onClick={async () => {
+                                      if (verification) {
+                                        // Verification exists, use it directly
+                                        setUploadDialogData({
+                                          verificationId: verification.id,
+                                          leaseName: period.name,
+                                          residents: [{ id: resident.id, name: resident.name }], // Only this resident
+                                          hasExistingDocuments: !!verification.incomeDocuments?.some(d => d.residentId === resident.id)
+                                        });
+                                        setUploadDialogOpen(true);
+                                      } else {
+                                        // No verification exists, create one first
+                                        await handleStartVerification(period.id, [{ id: resident.id, name: resident.name }]);
+                                      }
                                     }}
                                     className="flex items-center justify-center px-3 py-1 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                                     title={`Upload income documents for ${resident.name}`}
@@ -1748,9 +1754,30 @@ export default function ResidentDetailPage() {
                                 )}
                                 
                                 {/* No Income option for each resident */}
-                                {verification && !isResidentFinalized && !resident.hasNoIncome && (
+                                {!isResidentFinalized && !resident.hasNoIncome && (
                                   <button
-                                    onClick={() => handleMarkNoIncome(period.id, verification.id, resident.id, resident.name)}
+                                    onClick={async () => {
+                                      if (verification) {
+                                        // Verification exists, use it directly
+                                        await handleMarkNoIncome(period.id, verification.id, resident.id, resident.name);
+                                      } else {
+                                        // No verification exists, create one first then mark no income
+                                        try {
+                                          const res = await fetch(`/api/leases/${period.id}/verifications`, {
+                                            method: 'POST',
+                                          });
+                                          if (!res.ok) {
+                                            const data = await res.json();
+                                            throw new Error(data.error || 'Failed to start new verification');
+                                          }
+                                          const newVerification = await res.json();
+                                          await handleMarkNoIncome(period.id, newVerification.id, resident.id, resident.name);
+                                        } catch (error) {
+                                          console.error('Error creating verification:', error);
+                                          alert('Failed to create verification. Please try again.');
+                                        }
+                                      }
+                                    }}
                                     className="flex items-center justify-center px-3 py-1 text-sm bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
                                     title={`Mark ${resident.name} as having no income`}
                                   >
