@@ -1747,7 +1747,7 @@ export default function ResidentDetailPage() {
                                 )}
                                 
                                 {/* No Income option for each resident */}
-                                {isInProgress && !isResidentFinalized && !resident.hasNoIncome && !hasAnyDocuments && (
+                                {isInProgress && !isResidentFinalized && !resident.hasNoIncome && !hasCompletedDocuments && (
                                   <button
                                     onClick={() => handleMarkNoIncome(period.id, verification.id, resident.id, resident.name)}
                                     className="flex items-center justify-center px-3 py-1 text-sm bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"

@@ -370,7 +370,10 @@ export function validateW2Extraction(azureResult: any): W2ValidationResult {
     taxYear: null as string | null,
   };
 
-  if (!azureResult?.documents?.[0]?.fields) {
+  // Handle both possible Azure response structures
+  const documentsArray = azureResult?.analyzeResult?.documents || azureResult?.documents;
+  
+  if (!documentsArray?.[0]?.fields) {
     errors.push("Azure Document Intelligence failed to extract any fields from the document");
     return {
       isValid: false,
@@ -382,7 +385,7 @@ export function validateW2Extraction(azureResult: any): W2ValidationResult {
     };
   }
 
-  const fields = azureResult.documents[0].fields;
+  const fields = documentsArray[0].fields;
 
   function extractNumericValue(field: any): { value: number | null; confidence: number } {
     if (!field) return { value: null, confidence: 0 };

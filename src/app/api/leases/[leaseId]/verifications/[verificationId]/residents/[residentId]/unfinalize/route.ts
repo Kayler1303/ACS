@@ -50,12 +50,14 @@ export async function PATCH(
     }
 
     // Unfinalize the resident's income - set incomeFinalized to false and clear finalizedAt
+    // Reset hasNoIncome to false so they can select "No Income" again if needed
     // Keep calculatedAnnualizedIncome so they don't lose their calculation
     await prisma.$executeRaw`
       UPDATE "Resident" 
       SET 
         "incomeFinalized" = false,
-        "finalizedAt" = NULL
+        "finalizedAt" = NULL,
+        "hasNoIncome" = false
       WHERE "id" = ${residentId}
     `;
 

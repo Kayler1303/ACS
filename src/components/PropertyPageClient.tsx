@@ -1243,7 +1243,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                     className="h-4 w-4 text-brand-blue focus:ring-brand-blue border-gray-300 rounded"
                   />
                   <label htmlFor="include-rent-analysis" className="text-sm font-medium text-gray-700">
-                    💰 Include Rent Analysis
+                    Include Rent Analysis
                   </label>
                 </div>
                 <p className="text-xs text-gray-500 ml-7">
@@ -1269,7 +1269,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                     className="h-4 w-4 text-brand-blue focus:ring-brand-blue border-gray-300 rounded disabled:opacity-50"
                                               />
                   <label htmlFor="include-utility-allowances" className={`text-sm font-medium ${includeRentAnalysis ? 'text-gray-700' : 'text-gray-400'}`}>
-                                                ⚡ Include Utility Allowances
+                                                Non-Discretionary Utilities and Charges
                   </label>
                   {includeUtilityAllowances && includeRentAnalysis && (
                     <button
@@ -1281,7 +1281,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                   )}
                 </div>
                 <p className={`text-xs ml-7 ${includeRentAnalysis ? 'text-gray-500' : 'text-gray-400'}`}>
-                  Subtract utility allowances from max rents (requires rent analysis)
+                  Subtract non-discretionary utilities and charges from max rents (requires rent analysis)
                 </p>
               </div>
             </div>
