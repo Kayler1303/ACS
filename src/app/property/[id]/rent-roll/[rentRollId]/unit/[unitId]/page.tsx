@@ -1411,14 +1411,7 @@ export default function ResidentDetailPage() {
                               🔍 Verify Lease Income
                             </button>
                           )}
-                          {verification && !isInProgress && (
-                            <button 
-                              onClick={() => handleStartVerification(period.id)}
-                              className="text-sm font-semibold text-white bg-orange-600 hover:bg-orange-700 px-4 py-2 rounded-md shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
-                            >
-                              🔄 Start New Verification
-                            </button>
-                          )}
+
                           {period.isProvisional && (
                             <>
                               <button
@@ -1736,7 +1729,7 @@ export default function ResidentDetailPage() {
                               {/* Resident Actions */}
                               <div className="ml-4 flex flex-col space-y-2">
                                 {/* Upload Documents button for each resident */}
-                                {isInProgress && !isResidentFinalized && !resident.hasNoIncome && (
+                                {verification && !isResidentFinalized && !resident.hasNoIncome && (
                                   <button
                                     onClick={() => {
                                       setUploadDialogData({
@@ -1755,7 +1748,7 @@ export default function ResidentDetailPage() {
                                 )}
                                 
                                 {/* No Income option for each resident */}
-                                {isInProgress && !isResidentFinalized && !resident.hasNoIncome && !hasCompletedDocuments && (
+                                {verification && !isResidentFinalized && !resident.hasNoIncome && !hasCompletedDocuments && (
                                   <button
                                     onClick={() => handleMarkNoIncome(period.id, verification.id, resident.id, resident.name)}
                                     className="flex items-center justify-center px-3 py-1 text-sm bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
