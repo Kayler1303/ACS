@@ -1411,6 +1411,14 @@ export default function ResidentDetailPage() {
                               🔍 Verify Lease Income
                             </button>
                           )}
+                          {verification && !isInProgress && (
+                            <button 
+                              onClick={() => handleStartVerification(period.id)}
+                              className="text-sm font-semibold text-white bg-orange-600 hover:bg-orange-700 px-4 py-2 rounded-md shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                            >
+                              🔄 Start New Verification
+                            </button>
+                          )}
                           {period.isProvisional && (
                             <>
                               <button
