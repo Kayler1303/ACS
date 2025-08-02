@@ -83,64 +83,8 @@ export async function GET(
 
     // Process each unit
     for (const unit of property.units) {
-      // Initialize enhanced unit (will be populated later with resident income data)
-      let enhancedUnit = { ...unit };
-      
       // SIMPLIFIED: Only handle current leases (with tenancy)
       const currentLease = unit.leases
-        .filter((l: any) => l.tenancy !== null)
-        .sort((a: any, b: any) => new Date(b.tenancy!.createdAt).getTime() - new Date(a.tenancy!.createdAt).getTime())[0];
-
-      let verificationStatus: any;
-
-      if (!currentLease) {
-        // No active lease = Vacant
-        verificationStatus = 'Vacant';
-      } else {
-        // Check if there's an active income verification in progress  
-        if (currentLease.incomeVerifications.length > 0) {
-          const latestVerification = currentLease.incomeVerifications[0]; // Already sorted by createdAt desc
-          
-          if (latestVerification.status === 'IN_PROGRESS') {
-            // Check if any documents are waiting for admin review
-            const hasDocumentsNeedingReview = currentLease.residents.some((resident: any) => 
-              resident.incomeDocuments.some((doc: any) => doc.status === 'NEEDS_REVIEW')
-            );
-            
-            if (hasDocumentsNeedingReview) {
-              verificationStatus = 'Waiting for Admin Review';
-            } else {
-              verificationStatus = 'In Progress - Finalize to Process';
-            }
-          } else if (latestVerification.status === 'FINALIZED') {
-            // Only check for discrepancies if verification is finalized
-            verificationStatus = getUnitVerificationStatus(enhancedUnit, latestRentRollDate);
-          } else {
-            // Fallback verification status for edge cases
-            verificationStatus = getUnitVerificationStatus(enhancedUnit, latestRentRollDate);
-          }
-        } else {
-          // No verification in progress, check overall unit status
-          verificationStatus = getUnitVerificationStatus(enhancedUnit, latestRentRollDate);
-        }
-      }
-      
-      // Automatically create override request for "Needs Investigation" status
-      if (verificationStatus === 'Needs Investigation') {
-        try {
-          await createAutoOverrideRequest({
-            type: 'INCOME_DISCREPANCY',
-            unitId: unit.id,
-            userId: session.user.id,
-            systemExplanation: `System detected income discrepancy for Unit ${unit.unitNumber}. Verified income does not match compliance income. Admin review required to resolve discrepancy.`
-          });
-        } catch (overrideError) {
-          console.error('Failed to create auto-override request for income discrepancy:', overrideError);
-        }
-      }
-      
-      // Find the active lease (with tenancy)
-      const activeLease = unit.leases
         .filter((l: any) => l.tenancy !== null)
         .sort((a: any, b: any) => new Date(b.tenancy!.createdAt).getTime() - new Date(a.tenancy!.createdAt).getTime())[0];
 
@@ -151,6 +95,7 @@ export async function GET(
 
       // Calculate total verified income using resident-level data and create enhanced unit for verification status
       let totalVerifiedIncome = 0;
+      let enhancedUnit = { ...unit };
       
       if (currentLease) {
         // Batch fetch all resident income data in a single query instead of individual queries
@@ -179,7 +124,7 @@ export async function GET(
             ...resident,
             incomeFinalized: residentIncomeData?.incomeFinalized || false,
             hasNoIncome: residentIncomeData?.hasNoIncome || false,
-            calculatedAnnualizedIncome: residentIncomeData?.calculatedAnnualizedIncome || null
+            calculatedAnnualizedIncome: residentIncomeData?.calculatedAnnualizedIncome ? Number(residentIncomeData.calculatedAnnualizedIncome) : null
           };
           enhancedResidents.push(enhancedResident);
           
@@ -214,6 +159,57 @@ export async function GET(
           )
         };
       }
+
+      // NOW calculate verification status with enhanced unit data
+      let verificationStatus: any;
+
+      if (!currentLease) {
+        // No active lease = Vacant
+        verificationStatus = 'Vacant';
+      } else {
+        // Check if there's an active income verification in progress  
+        if (currentLease.incomeVerifications.length > 0) {
+          const latestVerification = currentLease.incomeVerifications[0]; // Already sorted by createdAt desc
+          
+          if (latestVerification.status === 'IN_PROGRESS') {
+            // Check if any documents are waiting for admin review
+            const hasDocumentsNeedingReview = currentLease.residents.some((resident: any) => 
+              resident.incomeDocuments.some((doc: any) => doc.status === 'NEEDS_REVIEW')
+            );
+            
+            if (hasDocumentsNeedingReview) {
+              verificationStatus = 'Waiting for Admin Review';
+            } else {
+              verificationStatus = 'In Progress - Finalize to Process';
+            }
+          } else if (latestVerification.status === 'FINALIZED') {
+            // Only check for discrepancies if verification is finalized
+            verificationStatus = getUnitVerificationStatus(enhancedUnit as any, latestRentRollDate);
+          } else {
+            // Fallback verification status for edge cases
+            verificationStatus = getUnitVerificationStatus(enhancedUnit as any, latestRentRollDate);
+          }
+        } else {
+          // No verification in progress, check overall unit status
+          verificationStatus = getUnitVerificationStatus(enhancedUnit as any, latestRentRollDate);
+        }
+      }
+      
+      // Automatically create override request for "Needs Investigation" status
+      if (verificationStatus === 'Needs Investigation') {
+        try {
+          await createAutoOverrideRequest({
+            type: 'INCOME_DISCREPANCY',
+            unitId: unit.id,
+            userId: session.user.id,
+            systemExplanation: `System detected income discrepancy for Unit ${unit.unitNumber}. Verified income does not match compliance income. Admin review required to resolve discrepancy.`
+          });
+        } catch (overrideError) {
+          console.error('Failed to create auto-override request for income discrepancy:', overrideError);
+        }
+      }
+      
+      
         
       // Debug logging for Unit 0101
       if (unit.unitNumber === '0101') {
