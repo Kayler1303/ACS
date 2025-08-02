@@ -370,6 +370,37 @@ export default function ResidentDetailPage() {
     }
   };
 
+  // Handler for modifying (unfinalizing) a resident's income
+  const handleModifyResident = async (leaseId: string, verificationId: string, residentId: string, residentName: string) => {
+    if (!window.confirm(`Unfinalize ${residentName}'s income? This will allow you to modify their income verification.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `/api/leases/${leaseId}/verifications/${verificationId}/residents/${residentId}/unfinalize`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to unfinalize resident income');
+      }
+
+      // Refresh the data
+      fetchTenancyData(false);
+      fetchUnitVerificationStatus();
+    } catch (error) {
+      console.error('Error unfinalizing resident income:', error);
+      alert(error instanceof Error ? error.message : 'Failed to unfinalize resident income');
+    }
+  };
+
   // Handler for when a resident is selected from the resident selection dialog
   const handleResidentSelected = (residentId: string) => {
     const { verificationId, leaseName, residents } = residentSelectionDialog;
@@ -1459,19 +1490,19 @@ export default function ResidentDetailPage() {
                         // Show documents if ANY documents exist (not just completed ones with calculated income)
                         const hasAnyDocuments = residentDocuments.length > 0;
                         
-                        // Validation logic for this resident - allow finalization if they have completed documents, documents that need review, OR if they're marked as no income
+                        // Button visibility logic based on resident state
                         const hasDocumentsNeedingReview = residentDocuments.some(doc => doc.status === 'NEEDS_REVIEW');
-                        // Allow finalization if there are completed documents (income will be calculated during finalization), need review docs, or no income
-                        const canFinalizeResident = (hasCompletedDocuments || hasDocumentsNeedingReview || resident.hasNoIncome) && !isResidentFinalized;
+                        const hasAnyValidDocuments = hasCompletedDocuments || hasDocumentsNeedingReview;
                         
-                        // Debug logging to see why buttons might not show
-                        console.log(`[DEBUG] Resident ${resident.name}:`, {
-                          isResidentFinalized,
-                          hasNoIncome: resident.hasNoIncome,
-                          showUploadButton: !isResidentFinalized && !resident.hasNoIncome,
-                          showNoIncomeButton: !isResidentFinalized && !resident.hasNoIncome,
-                          canFinalizeResident
-                        });
+                        // Button conditions:
+                        // - Upload Documents: Always show when not finalized
+                        // - No Income: Only show when no documents AND not finalized  
+                        // - Finalize Income: Only show when has documents AND not finalized
+                        const showUploadButton = !isResidentFinalized;
+                        const showNoIncomeButton = !hasAnyValidDocuments && !isResidentFinalized;
+                        const showFinalizeButton = hasAnyValidDocuments && !isResidentFinalized;
+                        
+
 
                         return (
                           <div key={resident.id} className="px-6 py-4">
@@ -1738,7 +1769,7 @@ export default function ResidentDetailPage() {
                               {/* Resident Actions */}
                               <div className="ml-4 flex flex-col space-y-2">
                                 {/* Upload Documents button for each resident */}
-                                {!isResidentFinalized && !resident.hasNoIncome && (
+                                {showUploadButton && (
                                   <button
                                     onClick={async () => {
                                       if (verification) {
@@ -1763,7 +1794,7 @@ export default function ResidentDetailPage() {
                                 )}
                                 
                                 {/* No Income option for each resident */}
-                                {!isResidentFinalized && !resident.hasNoIncome && (
+                                {showNoIncomeButton && (
                                   <button
                                     onClick={async () => {
                                       if (verification) {
@@ -1795,7 +1826,7 @@ export default function ResidentDetailPage() {
                                 )}
                                 
                                 {/* Finalize button */}
-                                {!isResidentFinalized && canFinalizeResident && (
+                                {showFinalizeButton && (
                                   <button
                                     onClick={() => handleOpenResidentFinalizationDialog(verification!, resident, period.name)}
                                     className="flex items-center justify-center px-3 py-1 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
@@ -1815,7 +1846,7 @@ export default function ResidentDetailPage() {
                                       )}
                                     </div>
                                     <button
-                                      onClick={() => handleOpenResidentFinalizationDialog(verification!, resident, period.name)}
+                                      onClick={() => handleModifyResident(period.id, verification!.id, resident.id, resident.name)}
                                       className="px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-800 border border-blue-300 hover:border-blue-400 rounded-md hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors duration-200"
                                       title={`Modify income verification for ${resident.name}`}
                                     >
