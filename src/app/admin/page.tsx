@@ -1139,30 +1139,40 @@ function OverrideRequestItem({
 
     const { verification } = request.contextualData;
     const documents = verification.IncomeDocument || [];
-    const documentsByResident = documents.reduce((acc: any, doc: any) => {
-      const residentId = doc.Resident?.id || doc.residentId || 'unknown';
-      if (!acc[residentId]) {
-        acc[residentId] = {
-          resident: doc.Resident,
-          documents: []
-        };
-      }
-      acc[residentId].documents.push(doc);
-      return acc;
-    }, {});
+    
+    // Only show documents for the specific resident this override request is for
+    const targetResidentDocuments = documents.filter((doc: any) => {
+      const docResidentId = doc.Resident?.id || doc.residentId;
+      return docResidentId === request.residentId;
+    });
+    
+    if (targetResidentDocuments.length === 0) {
+      return (
+        <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
+          <h4 className="text-sm font-semibold text-blue-800 mb-3">Validation Exception Details</h4>
+          <p className="text-sm text-gray-600">No documents found for the specific resident.</p>
+        </div>
+      );
+    }
+    
+    const residentData = {
+      resident: targetResidentDocuments[0]?.Resident,
+      documents: targetResidentDocuments
+    };
 
     return (
       <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
         <h4 className="text-sm font-semibold text-blue-800 mb-3">Validation Exception Details</h4>
         
         <div className="space-y-4">
-          {Object.values(documentsByResident).map((residentData: any, index: number) => {
+          {/* Only show the specific resident this override request is for */}
+          {(() => {
             const paystubs = residentData.documents.filter((doc: any) => doc.documentType === 'PAYSTUB');
             const w2s = residentData.documents.filter((doc: any) => doc.documentType === 'W2');
             const completedDocs = residentData.documents.filter((doc: any) => doc.status === 'COMPLETED');
             
             return (
-              <div key={index} className="p-3 bg-white rounded border">
+              <div className="p-3 bg-white rounded border">
                 <h5 className="text-sm font-semibold text-gray-700 mb-3">
                   {residentData.resident?.name || 'Unknown Resident'}
                 </h5>
@@ -1325,7 +1335,7 @@ function OverrideRequestItem({
                 </div>
               </div>
             );
-          })}
+          })()}
         </div>
 
         <div className="mt-3 text-xs text-blue-700">
