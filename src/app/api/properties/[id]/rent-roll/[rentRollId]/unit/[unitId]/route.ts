@@ -88,6 +88,20 @@ export async function GET(req: NextRequest, { params }: { params: { id: string, 
                                             }
                                         }
                                     }
+                                },
+                                OverrideRequest: {
+                                    select: {
+                                        id: true,
+                                        status: true,
+                                        type: true,
+                                        adminNotes: true,
+                                        userExplanation: true,
+                                        residentId: true,
+                                        createdAt: true
+                                    },
+                                    orderBy: {
+                                        createdAt: 'desc'
+                                    }
                                 }
                             }
                         },

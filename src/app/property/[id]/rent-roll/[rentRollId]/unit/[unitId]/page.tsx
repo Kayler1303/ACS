@@ -56,6 +56,15 @@ interface IncomeVerification {
   finalizedAt?: string | null;
   calculatedVerifiedIncome: number | null;
   IncomeDocument: IncomeDocument[];
+  OverrideRequest?: Array<{
+    id: string;
+    status: string;
+    type: string;
+    adminNotes?: string;
+    userExplanation?: string;
+    residentId?: string;
+    createdAt: string;
+  }>;
   // Add new lease-period fields
   reason?: string;
   verificationPeriodStart?: string;
@@ -1519,13 +1528,20 @@ export default function ResidentDetailPage() {
                         });
                         const hasAnyValidDocuments = hasCompletedDocuments || hasApprovedNeedsReviewDocuments;
                         
+                        // Check if there are pending validation exception override requests for this resident
+                        const hasPendingValidationException = verification?.OverrideRequest?.some(
+                          (request: any) => request.type === 'VALIDATION_EXCEPTION' && 
+                                   request.residentId === resident.id &&
+                                   request.status === 'PENDING'
+                        ) || false;
+                        
                         // Button conditions:
                         // - Upload Documents: Always show when not finalized
                         // - No Income: Only show when no documents AND not finalized  
-                        // - Finalize Income: Only show when has documents AND not finalized
+                        // - Finalize Income: Only show when has documents AND not finalized AND no pending validation exception
                         const showUploadButton = !isResidentFinalized;
                         const showNoIncomeButton = !hasAnyValidDocuments && !isResidentFinalized;
-                        const showFinalizeButton = hasAnyValidDocuments && !isResidentFinalized;
+                        const showFinalizeButton = hasAnyValidDocuments && !isResidentFinalized && !hasPendingValidationException;
                         
 
 

@@ -207,7 +207,20 @@ export async function GET(
                 verificationStatus = 'Out of Date Income Documents';
               }
             } else {
-              verificationStatus = 'In Progress - Finalize to Process';
+              // Check for pending validation exception override requests
+              const pendingValidationExceptions = await prisma.overrideRequest.findMany({
+                where: {
+                  status: 'PENDING',
+                  type: 'VALIDATION_EXCEPTION',
+                  verificationId: latestVerification.id
+                }
+              });
+              
+              if (pendingValidationExceptions.length > 0) {
+                verificationStatus = 'Waiting for Admin Review';
+              } else {
+                verificationStatus = 'In Progress - Finalize to Process';
+              }
             }
           } else if (latestVerification.status === 'FINALIZED') {
             // Only check for discrepancies if verification is finalized
