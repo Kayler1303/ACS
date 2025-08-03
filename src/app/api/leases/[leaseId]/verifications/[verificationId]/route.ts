@@ -29,11 +29,11 @@ export async function PATCH(
     const verification = await prisma.incomeVerification.findUnique({
       where: { id: verificationId },
       include: { 
-        lease: {
+        Lease: {
           include: {
-            residents: {
+            Resident: {
               include: {
-                incomeDocuments: true,
+                IncomeDocument: true,
               }
             }
           }
@@ -51,8 +51,8 @@ export async function PATCH(
     // New income calculation logic
     let totalVerifiedIncome = 0;
 
-    for (const resident of verification.lease.residents) {
-      const allWages = resident.incomeDocuments.flatMap((doc: IncomeDocument) => 
+    for (const resident of verification.Lease.Resident) {
+      const allWages = resident.IncomeDocument.flatMap((doc: IncomeDocument) => 
         [doc.box1_wages, doc.box3_ss_wages, doc.box5_med_wages]
         .filter((w) => w !== null && w !== undefined)
         .map((w) => typeof w === 'number' ? w : w.toNumber())
@@ -78,22 +78,22 @@ export async function PATCH(
         calculatedVerifiedIncome: totalVerifiedIncome,
       },
       include: {
-        lease: {
+        Lease: {
           include: {
-            residents: true,
-            unit: true
+            Resident: true,
+            Unit: true
           }
         }
       }
     });
 
     // Check for income discrepancy and create auto-override if needed
-    const totalUploadedIncome = updatedVerification.lease.residents.reduce((acc, r) => 
+    const totalUploadedIncome = updatedVerification.Lease.Resident.reduce((acc: number, r: any) => 
       acc + (r.annualizedIncome ? r.annualizedIncome.toNumber() : 0), 0);
     
     try {
       await checkAndCreateIncomeDiscrepancyOverride({
-        unitId: updatedVerification.lease.unit.id,
+        unitId: updatedVerification.Lease.Unit.id,
         verificationId: updatedVerification.id,
         totalUploadedIncome,
         totalVerifiedIncome,
