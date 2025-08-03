@@ -1508,8 +1508,16 @@ export default function ResidentDetailPage() {
                         const hasAnyDocuments = residentDocuments.length > 0;
                         
                         // Button visibility logic based on resident state
-                        const hasDocumentsNeedingReview = residentDocuments.some(doc => doc.status === 'NEEDS_REVIEW');
-                        const hasAnyValidDocuments = hasCompletedDocuments || hasDocumentsNeedingReview;
+                        // Only consider NEEDS_REVIEW documents as "valid" if they don't have pending override requests
+                        // (meaning they were approved by admin, not denied or still pending)
+                        const hasApprovedNeedsReviewDocuments = residentDocuments.some(doc => {
+                          if (doc.status !== 'NEEDS_REVIEW') return false;
+                          const latestOverrideRequest = doc.OverrideRequest?.[0]; // Most recent
+                          const hasPendingRequest = latestOverrideRequest?.status === 'PENDING';
+                          const isDenied = latestOverrideRequest?.status === 'DENIED';
+                          return !hasPendingRequest && !isDenied; // Approved or no override request needed
+                        });
+                        const hasAnyValidDocuments = hasCompletedDocuments || hasApprovedNeedsReviewDocuments;
                         
                         // Button conditions:
                         // - Upload Documents: Always show when not finalized
@@ -1542,7 +1550,11 @@ export default function ResidentDetailPage() {
                                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                                         📋 Ready to Finalize
                                       </span>
-                                    ) : hasDocumentsNeedingReview ? (
+                                    ) : residentDocuments.some(doc => {
+                                      if (doc.status !== 'NEEDS_REVIEW') return false;
+                                      const latestOverrideRequest = doc.OverrideRequest?.[0];
+                                      return latestOverrideRequest?.status === 'PENDING'; // Has pending admin review
+                                    }) ? (
                                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
                                         ⚠️ Review Required
                                       </span>
