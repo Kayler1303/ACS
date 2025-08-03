@@ -243,7 +243,7 @@ function VerificationRow({ verification, lease, onActionComplete }: { verificati
                   <p><strong>Employee:</strong> {doc.employeeName || 'N/A'}</p>
                   <p><strong>Employer:</strong> {doc.employerName || 'N/A'}</p>
                   {doc.payPeriodStartDate && doc.payPeriodEndDate && (
-                    <p><strong>Pay Period:</strong> {format(new Date(doc.payPeriodStartDate), 'MMM d')} - {format(new Date(doc.payPeriodEndDate), 'MMM d, yyyy')}</p>
+                    <p><strong>Pay Period:</strong> {format(new Date(doc.payPeriodStartDate), 'MMM d, yyyy')} - {format(new Date(doc.payPeriodEndDate), 'MMM d, yyyy')}</p>
                   )}
                   <div className="grid grid-cols-2 gap-x-4 pt-1">
                     <p><strong>Gross Pay:</strong> {doc.grossPayAmount ? `$${doc.grossPayAmount.toLocaleString()}` : 'N/A'}</p>
@@ -1688,7 +1688,7 @@ export default function ResidentDetailPage() {
                                                 <div>
                                                   <span className="font-medium text-gray-700">Pay Period:</span>
                                                   <div className="text-gray-600">
-                                                    {format(new Date(doc.payPeriodStartDate), 'MMM d')} - {format(new Date(doc.payPeriodEndDate), 'MMM d')}
+                                                    {format(new Date(doc.payPeriodStartDate), 'MMM d, yyyy')} - {format(new Date(doc.payPeriodEndDate), 'MMM d, yyyy')}
                                                   </div>
                                                 </div>
                                               )}
