@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     // Fetch all override requests with comprehensive related data
     const requests = await (prisma as any).overrideRequest.findMany({
       include: {
-        requester: {
+        User_OverrideRequest_requesterIdToUser: {
           select: {
             id: true,
             name: true,
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
             company: true,
           }
         },
-        reviewer: {
+        User_OverrideRequest_reviewerIdToUser: {
           select: {
             id: true,
             name: true,
@@ -70,19 +70,19 @@ export async function GET(request: NextRequest) {
         const unit = await prisma.unit.findUnique({
           where: { id: request.unitId },
           include: {
-            property: {
+            Property: {
               select: { id: true, name: true, address: true }
             },
-            leases: {
+            Lease: {
               include: {
-                residents: {
+                Resident: {
                   select: { id: true, name: true, annualizedIncome: true, verifiedIncome: true }
                 },
-                incomeVerifications: {
+                IncomeVerification: {
                   include: {
-                    incomeDocuments: {
+                    IncomeDocument: {
                       include: {
-                        resident: { select: { id: true, name: true } }
+                        Resident: { select: { id: true, name: true } }
                       }
                     }
                   },
