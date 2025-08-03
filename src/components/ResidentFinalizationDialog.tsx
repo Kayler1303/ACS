@@ -129,8 +129,42 @@ export default function ResidentFinalizationDialog({
       validationMessage = 'Income calculation is still being processed or no income calculated';
     }
   } else {
-    canFinalize = true;
-    validationMessage = 'Ready to finalize';
+    // Check paystub count requirements (same logic as VerificationFinalizationDialog)
+    const paystubs = residentDocuments.filter((doc: IncomeDocument) => 
+      doc.documentType === 'PAYSTUB' && doc.status === 'COMPLETED'
+    );
+    
+    if (paystubs.length > 0) {
+      const payFrequency = paystubs[0]?.payFrequency;
+      
+      if (payFrequency) {
+        // Calculate required paystubs based on pay frequency
+        const payPeriodDays: Record<string, number> = {
+          'BI-WEEKLY': 14,
+          'WEEKLY': 7,
+          'SEMI-MONTHLY': 15,
+          'MONTHLY': 30,
+          'UNKNOWN': 14
+        };
+        const days = payPeriodDays[payFrequency] || 14;
+        const requiredStubs = Math.ceil(30 / days);
+        
+        if (paystubs.length < requiredStubs) {
+          canFinalize = false;
+          validationMessage = `Need ${requiredStubs - paystubs.length} more paystub${requiredStubs - paystubs.length !== 1 ? 's' : ''} for ${payFrequency.toLowerCase().replace('_', '-')} pay (${paystubs.length}/${requiredStubs} uploaded)`;
+        } else {
+          canFinalize = true;
+          validationMessage = 'Ready to finalize';
+        }
+      } else {
+        canFinalize = false;
+        validationMessage = 'Pay frequency could not be determined from paystubs';
+      }
+    } else {
+      // No paystubs, might be W2 or other document type
+      canFinalize = true;
+      validationMessage = 'Ready to finalize';
+    }
   }
 
   console.log(`[FINALIZATION DIALOG DEBUG] Resident ${resident.id} (${resident.name}):`, {

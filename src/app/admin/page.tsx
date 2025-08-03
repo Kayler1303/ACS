@@ -529,12 +529,15 @@ function OverrideRequestItem({
 
         if (response.ok) {
           console.log('Document review processed successfully');
-          // Refresh the requests after successful document review
-          const refreshResponse = await fetch('/api/admin/override-requests');
-          if (refreshResponse.ok) {
-            const data = await refreshResponse.json();
-            onAction(request.id, actionType, adminNotes); // This will trigger the parent to refresh
-          }
+          // For document reviews, we don't need to call onAction since the document API handles everything
+          // Just close the dialog and the parent will refresh on its own
+          setShowReviewDialog(false);
+          setAdminNotes('');
+          setCorrectedValues({});
+          
+          // Trigger a page refresh to update the admin dashboard
+          window.location.reload();
+          return; // Exit early to avoid calling onAction
         } else {
           const errorData = await response.text();
           console.error('Failed to process document review:', response.status, errorData);

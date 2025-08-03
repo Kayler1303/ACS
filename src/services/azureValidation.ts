@@ -92,7 +92,16 @@ export function validatePaystubExtraction(azureResult: any): PaystubValidationRe
     // Try different value extraction methods
     if (field.valueNumber !== undefined) value = field.valueNumber;
     else if (field.valueCurrency !== undefined) value = field.valueCurrency;
-    else if (field.valueDate !== undefined) value = new Date(field.valueDate);
+    else if (field.valueDate !== undefined) {
+      // Parse date in local timezone to avoid UTC conversion issues
+      // Azure typically returns dates in YYYY-MM-DD format
+      const dateString = field.valueDate;
+      if (dateString && typeof dateString === 'string') {
+        value = new Date(dateString + 'T12:00:00');
+      } else {
+        value = new Date(field.valueDate);
+      }
+    }
     else if (field.valueString !== undefined) value = field.valueString;
     else if (field.content !== undefined) value = field.content;
 

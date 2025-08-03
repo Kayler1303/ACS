@@ -82,8 +82,16 @@ export async function POST(
         if (correctedValues.box5_med_wages) updateData.box5_med_wages = correctedValues.box5_med_wages;
         if (correctedValues.employeeName) updateData.employeeName = correctedValues.employeeName;
         if (correctedValues.employerName) updateData.employerName = correctedValues.employerName;
-        if (correctedValues.payPeriodStartDate) updateData.payPeriodStartDate = new Date(correctedValues.payPeriodStartDate);
-        if (correctedValues.payPeriodEndDate) updateData.payPeriodEndDate = new Date(correctedValues.payPeriodEndDate);
+        if (correctedValues.payPeriodStartDate) {
+          // Parse date in local timezone to avoid UTC conversion issues
+          const startDate = new Date(correctedValues.payPeriodStartDate + 'T12:00:00');
+          updateData.payPeriodStartDate = startDate;
+        }
+        if (correctedValues.payPeriodEndDate) {
+          // Parse date in local timezone to avoid UTC conversion issues  
+          const endDate = new Date(correctedValues.payPeriodEndDate + 'T12:00:00');
+          updateData.payPeriodEndDate = endDate;
+        }
         if (correctedValues.payFrequency) updateData.payFrequency = correctedValues.payFrequency;
       }
 
