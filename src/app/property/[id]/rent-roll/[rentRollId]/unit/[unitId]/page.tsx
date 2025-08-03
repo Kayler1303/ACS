@@ -1623,6 +1623,35 @@ export default function ResidentDetailPage() {
                                     )}
                                   </div>
                                 </div>
+
+                                {/* Show explanation for why admin review is needed */}
+                                {hasPendingValidationException && (() => {
+                                  const pendingRequest = verification?.OverrideRequest?.find(
+                                    (request: any) => request.type === 'VALIDATION_EXCEPTION' && 
+                                             request.residentId === resident.id &&
+                                             request.status === 'PENDING'
+                                  );
+                                  if (pendingRequest?.userExplanation) {
+                                    return (
+                                      <div className="mt-2 p-3 bg-orange-50 border border-orange-200 rounded-md">
+                                        <div className="flex items-start space-x-2">
+                                          <div className="flex-shrink-0 mt-0.5">
+                                            <span className="text-orange-500">ℹ️</span>
+                                          </div>
+                                          <div className="flex-1">
+                                            <p className="text-xs font-medium text-orange-800 mb-1">
+                                              Reason for Admin Review:
+                                            </p>
+                                            <p className="text-xs text-orange-700">
+                                              {pendingRequest.userExplanation}
+                                            </p>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                })()}
                                 
                                 <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
                                   <div>
