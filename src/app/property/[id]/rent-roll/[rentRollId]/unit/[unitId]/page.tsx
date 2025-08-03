@@ -1563,10 +1563,10 @@ export default function ResidentDetailPage() {
                         
                         // Button conditions:
                         // - Upload Documents: Always show when not finalized
-                        // - No Income: Only show when no documents AND not finalized  
-                        // - Finalize Income: Only show when has documents AND not finalized AND no pending validation exception
+                        // - No Income: Only show when NO documents exist at all AND not finalized  
+                        // - Finalize Income: Only show when has valid documents AND not finalized AND no pending validation exception
                         const showUploadButton = !isResidentFinalized;
-                        const showNoIncomeButton = !hasAnyValidDocuments && !isResidentFinalized;
+                        const showNoIncomeButton = !hasAnyDocuments && !isResidentFinalized;
                         const showFinalizeButton = hasAnyValidDocuments && !isResidentFinalized && !hasPendingValidationException;
                         
 
