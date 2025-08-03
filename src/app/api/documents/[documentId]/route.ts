@@ -24,7 +24,7 @@ export async function DELETE(
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
-  const { documentId } = params;
+  const { documentId } = await params;
   if (!documentId) {
     return NextResponse.json({ error: 'Document ID is required' }, { status: 400 });
   }
@@ -33,10 +33,10 @@ export async function DELETE(
     const document = await prisma.incomeDocument.findFirst({
       where: {
         id: documentId,
-        verification: {
-          lease: {
-            unit: {
-              property: {
+        IncomeVerification: {
+          Lease: {
+            Unit: {
+              Property: {
                 ownerId: session.user.id,
               },
             },
