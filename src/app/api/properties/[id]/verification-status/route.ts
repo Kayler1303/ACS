@@ -202,8 +202,9 @@ export async function GET(
                 verificationStatus = 'Waiting for Admin Review';
               } else {
                 // NEEDS_REVIEW documents exist but no pending override requests (denied/approved)
-                // Continue with normal verification logic which will return "Out of Date Income Documents"
-                verificationStatus = getUnitVerificationStatus(enhancedUnit as any, latestRentRollDate);
+                // Return "Out of Date Income Documents" directly to avoid getUnitVerificationStatus
+                // which would return "Waiting for Admin Review" for any NEEDS_REVIEW documents
+                verificationStatus = 'Out of Date Income Documents';
               }
             } else {
               verificationStatus = 'In Progress - Finalize to Process';
