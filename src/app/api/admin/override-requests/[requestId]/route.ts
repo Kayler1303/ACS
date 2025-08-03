@@ -127,12 +127,69 @@ export async function PATCH(
           throw new Error(`Verification ${existingRequest.verificationId} not found`);
         }
 
-        // Finalize the resident's income
+        // Calculate the resident's income from their existing documents before finalizing
+        const residentDocuments = await prisma.incomeDocument.findMany({
+          where: {
+            residentId: existingRequest.residentId,
+            verificationId: existingRequest.verificationId,
+            status: { in: ['COMPLETED', 'NEEDS_REVIEW'] } // Include both completed and admin-approved docs
+          },
+          orderBy: {
+            uploadDate: 'desc'
+          }
+        });
+
+        // Calculate total verified income from all documents
+        let calculatedIncome = 0;
+        
+        // Separate documents by type
+        const paystubs = residentDocuments.filter(doc => doc.documentType === 'PAYSTUB');
+        const w2s = residentDocuments.filter(doc => doc.documentType === 'W2');
+        
+        // Calculate income from paystubs using average method
+        if (paystubs.length > 0) {
+          const validPaystubs = paystubs.filter(p => p.grossPayAmount && Number(p.grossPayAmount) > 0);
+          if (validPaystubs.length > 0) {
+            const totalGrossPay = validPaystubs.reduce((acc, p) => acc + Number(p.grossPayAmount || 0), 0);
+            const averageGrossPay = totalGrossPay / validPaystubs.length;
+            
+            // Get pay frequency (should be same for all paystubs from same resident)
+            const payFrequency = validPaystubs[0]?.payFrequency || 'WEEKLY'; // Default from the 4 weekly paystubs
+            
+            // Calculate annual multiplier
+            const frequencyMultipliers: { [key: string]: number } = {
+              'WEEKLY': 52,
+              'BI-WEEKLY': 26, 
+              'SEMI-MONTHLY': 24,
+              'MONTHLY': 12
+            };
+            
+            const multiplier = frequencyMultipliers[payFrequency] || 52; // Default to weekly for Keshuna
+            calculatedIncome += averageGrossPay * multiplier;
+            
+            console.log(`Calculated paystub income for resident ${existingRequest.residentId}: ${validPaystubs.length} paystubs, avg $${averageGrossPay} ${payFrequency}, annual: $${averageGrossPay * multiplier}`);
+          }
+        }
+        
+        // Add income from W2s (use highest of boxes 1, 3, 5)
+        w2s.forEach(w2 => {
+          const box1 = Number(w2.box1_wages || 0);
+          const box3 = Number(w2.box3_ss_wages || 0);
+          const box5 = Number(w2.box5_med_wages || 0);
+          const highestAmount = Math.max(box1, box3, box5);
+          calculatedIncome += highestAmount;
+        });
+
+        console.log(`Total calculated income for resident ${existingRequest.residentId}: $${calculatedIncome} (${paystubs.length} paystubs + ${w2s.length} W2s)`);
+
+        // Finalize the resident's income with calculated amount
         await prisma.resident.update({
           where: { id: existingRequest.residentId },
           data: {
             incomeFinalized: true,
             finalizedAt: now,
+            calculatedAnnualizedIncome: calculatedIncome, // Set the calculated income!
+            verifiedIncome: calculatedIncome
           }
         });
 
