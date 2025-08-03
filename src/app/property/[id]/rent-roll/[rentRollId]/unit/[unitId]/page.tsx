@@ -324,6 +324,9 @@ export default function ResidentDetailPage() {
     residentsWithDiscrepancies: Resident[];
   }>({ isOpen: false, lease: null, verification: null, residentsWithDiscrepancies: [] });
 
+  // Prevent modal from reopening immediately after closing (anti-loop mechanism)
+  const [discrepancyModalCooldown, setDiscrepancyModalCooldown] = useState(false);
+
   // Verification conflict modal state
   const [verificationConflictModal, setVerificationConflictModal] = useState<{
     isOpen: boolean;
@@ -1504,7 +1507,7 @@ export default function ResidentDetailPage() {
                             const allResidentsFinalized = allResidents.length > 0 && finalizedResidents.length === allResidents.length;
                             const hasIncomeDiscrepancy = currentVerificationStatus === 'Needs Investigation';
                             
-                            if (allResidentsFinalized && hasIncomeDiscrepancy) {
+                            if (allResidentsFinalized && hasIncomeDiscrepancy && !discrepancyModalCooldown) {
                               // Find residents with income discrepancies (rent roll vs verified income)
                               const residentsWithDiscrepancies = allResidents.filter(resident => {
                                 const rentRollIncome = resident.annualizedIncome || 0;
@@ -1527,8 +1530,14 @@ export default function ResidentDetailPage() {
                                     })}
                                     className="text-sm font-semibold text-white bg-yellow-600 hover:bg-yellow-700 px-4 py-2 rounded-md shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2"
                                   >
-                                    💰 Finalize Income
+                                    💰 Finalize Income ({residentsWithDiscrepancies.length} {residentsWithDiscrepancies.length === 1 ? 'resident' : 'residents'})
                                   </button>
+                                );
+                              } else if (discrepancyModalCooldown) {
+                                return (
+                                  <div className="text-sm text-gray-500 bg-gray-100 px-4 py-2 rounded-md">
+                                    ✅ Processing changes...
+                                  </div>
                                 );
                               }
                             }
@@ -2304,14 +2313,27 @@ export default function ResidentDetailPage() {
       {leaseDiscrepancyModal.isOpen && leaseDiscrepancyModal.lease && leaseDiscrepancyModal.verification && (
         <LeaseDiscrepancyResolutionModal
           isOpen={leaseDiscrepancyModal.isOpen}
-          onClose={() => setLeaseDiscrepancyModal({ isOpen: false, lease: null, verification: null, residentsWithDiscrepancies: [] })}
+          onClose={() => {
+            setLeaseDiscrepancyModal({ isOpen: false, lease: null, verification: null, residentsWithDiscrepancies: [] });
+            // Brief cooldown when manually closed to prevent immediate reopening
+            setDiscrepancyModalCooldown(true);
+            setTimeout(() => setDiscrepancyModalCooldown(false), 1000);
+          }}
           lease={leaseDiscrepancyModal.lease}
           verification={leaseDiscrepancyModal.verification}
           residentsWithDiscrepancies={leaseDiscrepancyModal.residentsWithDiscrepancies}
           onResolved={() => {
+            // Start cooldown to prevent immediate reopening
+            setDiscrepancyModalCooldown(true);
+            
             // Refresh data after resolving discrepancies
             fetchTenancyData(false);
             fetchUnitVerificationStatus();
+            
+            // Clear cooldown after data has time to refresh
+            setTimeout(() => {
+              setDiscrepancyModalCooldown(false);
+            }, 2000); // 2 second cooldown
           }}
         />
       )}

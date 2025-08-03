@@ -62,9 +62,11 @@ export default function LeaseDiscrepancyResolutionModal({
 
   const moveToNextResidentOrClose = () => {
     if (isLastResident) {
-      // All discrepancies resolved
-      onResolved();
+      // All discrepancies resolved - close modal and trigger refresh
       onClose();
+      setTimeout(() => {
+        onResolved();
+      }, 100); // Small delay to ensure modal closes before refresh
     } else {
       setCurrentResidentIndex(currentResidentIndex + 1);
       setShowOverrideForm(false);
@@ -74,6 +76,8 @@ export default function LeaseDiscrepancyResolutionModal({
 
   const handleAcceptVerifiedIncome = async () => {
     setIsProcessing(true);
+    console.log(`[DISCREPANCY MODAL] Accepting verified income for ${currentResident.name}: $${verifiedIncome.toFixed(2)}`);
+    
     try {
       const response = await fetch(`/api/leases/${lease.id}/residents/${currentResident.id}/accept-verified-income`, {
         method: 'PATCH',
@@ -87,6 +91,9 @@ export default function LeaseDiscrepancyResolutionModal({
         throw new Error('Failed to accept verified income');
       }
 
+      const result = await response.json();
+      console.log(`[DISCREPANCY MODAL] Successfully accepted verified income for ${currentResident.name}:`, result);
+      
       moveToNextResidentOrClose();
     } catch (error) {
       console.error('Error accepting verified income:', error);
