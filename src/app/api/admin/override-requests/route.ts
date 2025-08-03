@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Check if user is admin
-    const user = await (prisma.user as any).findUnique({
+    const user = await prisma.user.findUnique({
       where: { id: session.user.id },
       select: { role: true }
     });
