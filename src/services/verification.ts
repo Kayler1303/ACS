@@ -212,6 +212,39 @@ export async function checkAndCreateIncomeDiscrepancyOverride(params: {
   const incomeDifference = Math.abs(totalUploadedIncome - totalVerifiedIncome);
   
   if (incomeDifference > 1.00) {
+    // Before creating an override request, check if the user has already accepted the verified income
+    // This happens when "Accept Verified Income" was used, which updates annualizedIncome to match verifiedIncome
+    const { prisma } = await import('@/lib/prisma');
+    
+    // Get all residents for this unit to check if their incomes have been synchronized
+    const lease = await prisma.lease.findFirst({
+      where: { unitId },
+      include: {
+        Resident: {
+          select: {
+            id: true,
+            annualizedIncome: true,
+            verifiedIncome: true,
+            incomeFinalized: true
+          }
+        }
+      }
+    });
+    
+    if (lease) {
+      // Check if the user has already accepted verified income by seeing if annualized and verified incomes match
+      const totalAnnualizedIncome = lease.Resident.reduce((sum, resident) => 
+        sum + (Number(resident.annualizedIncome) || 0), 0);
+      const totalVerifiedIncomeFromResidents = lease.Resident.reduce((sum, resident) => 
+        sum + (Number(resident.verifiedIncome) || 0), 0);
+      
+      const incomesSynchronized = Math.abs(totalAnnualizedIncome - totalVerifiedIncomeFromResidents) <= 1.00;
+      
+      if (incomesSynchronized) {
+        console.log(`Skipping income discrepancy override - user has already accepted verified income (${totalAnnualizedIncome} ≈ ${totalVerifiedIncomeFromResidents})`);
+        return null;
+      }
+    }
     // Import the override service
     const { createAutoOverrideRequest } = await import('@/services/override');
     
