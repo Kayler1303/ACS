@@ -57,7 +57,7 @@ export async function PATCH(
         reviewedAt: new Date(),
       },
       include: {
-        requester: {
+        User_OverrideRequest_requesterIdToUser: {
           select: {
             id: true,
             name: true,
@@ -65,14 +65,14 @@ export async function PATCH(
             company: true,
           }
         },
-        reviewer: {
+        User_OverrideRequest_reviewerIdToUser: {
           select: {
             id: true,
             name: true,
             email: true,
           }
         },
-        property: {
+        Property: {
           select: {
             id: true,
             name: true,
@@ -83,12 +83,12 @@ export async function PATCH(
     });
 
     // Handle property deletion if approved
-    if (action === 'approve' && existingRequest.type === 'PROPERTY_DELETION' && updatedRequest.property) {
+    if (action === 'approve' && existingRequest.type === 'PROPERTY_DELETION' && updatedRequest.Property) {
       try {
         await prisma.property.delete({
-          where: { id: updatedRequest.property.id }
+          where: { id: updatedRequest.Property.id }
         });
-        console.log(`Property ${updatedRequest.property.name} (${updatedRequest.property.id}) deleted by admin ${session.user.id}`);
+        console.log(`Property ${updatedRequest.Property.name} (${updatedRequest.Property.id}) deleted by admin ${session.user.id}`);
       } catch (deleteError) {
         console.error('Error deleting property:', deleteError);
         // Revert the override request status if deletion fails
