@@ -45,6 +45,18 @@ export async function GET(req: NextRequest, { params }: { params: { id: string, 
                                 IncomeDocument: {
                                     orderBy: {
                                         uploadDate: 'desc'
+                                    },
+                                    include: {
+                                        OverrideRequest: {
+                                            where: {
+                                                status: 'PENDING'
+                                            },
+                                            select: {
+                                                id: true,
+                                                status: true,
+                                                type: true
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -57,6 +69,18 @@ export async function GET(req: NextRequest, { params }: { params: { id: string, 
                                 IncomeDocument: {
                                     orderBy: {
                                         uploadDate: 'desc'
+                                    },
+                                    include: {
+                                        OverrideRequest: {
+                                            where: {
+                                                status: 'PENDING'
+                                            },
+                                            select: {
+                                                id: true,
+                                                status: true,
+                                                type: true
+                                            }
+                                        }
                                     }
                                 }
                             }

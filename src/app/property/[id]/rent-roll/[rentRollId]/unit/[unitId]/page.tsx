@@ -38,6 +38,11 @@ interface IncomeDocument {
   grossPayAmount?: number;
   payFrequency?: string;
   calculatedAnnualizedIncome?: number;
+  OverrideRequest?: Array<{
+    id: string;
+    status: string;
+    type: string;
+  }>;
 }
 
 interface IncomeVerification {
@@ -1577,7 +1582,9 @@ export default function ResidentDetailPage() {
                                     <div className="text-xs font-medium text-gray-500 mb-2">Documents ({residentDocuments.length}):</div>
                                     <div className="space-y-2">
                                       {residentDocuments.map(doc => {
-                                        const needsReview = doc.status === 'NEEDS_REVIEW';
+                                        // Check if document truly needs admin review (has pending override requests)
+                                        // vs just being in NEEDS_REVIEW status with denied/approved override requests
+                                        const needsReview = doc.status === 'NEEDS_REVIEW' && (doc.OverrideRequest?.length || 0) > 0;
                                         const containerClasses = needsReview 
                                           ? "p-3 bg-yellow-50 border border-yellow-200 rounded-md"
                                           : "p-3 bg-green-50 border border-green-200 rounded-md";
