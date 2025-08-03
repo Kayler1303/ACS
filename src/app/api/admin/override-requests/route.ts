@@ -147,7 +147,7 @@ export async function GET(request: NextRequest) {
           where: { id: request.documentId },
           include: {
             Resident: { select: { id: true, name: true } },
-            verification: {
+            IncomeVerification: {
               include: {
                 Lease: {
                   include: {
