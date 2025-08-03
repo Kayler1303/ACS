@@ -509,19 +509,26 @@ function OverrideRequestItem({
     // For document review requests, use the admin documents API with corrected values
     if (request.type === 'DOCUMENT_REVIEW' && request.contextualData?.document) {
       try {
+        console.log('Using admin documents API for document review:', {
+          documentId: request.contextualData.document.id,
+          action: actionType === 'deny' ? 'reject' : actionType,
+          correctedValues
+        });
+
         const response = await fetch(`/api/admin/documents/${request.contextualData.document.id}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            action: actionType,
+            action: actionType === 'deny' ? 'reject' : actionType, // Convert 'deny' to 'reject' for API
             adminNotes,
             correctedValues: actionType === 'approve' ? correctedValues : undefined,
           }),
         });
 
         if (response.ok) {
+          console.log('Document review processed successfully');
           // Refresh the requests after successful document review
           const refreshResponse = await fetch('/api/admin/override-requests');
           if (refreshResponse.ok) {
@@ -529,12 +536,16 @@ function OverrideRequestItem({
             onAction(request.id, actionType, adminNotes); // This will trigger the parent to refresh
           }
         } else {
-          console.error('Failed to process document review');
+          const errorData = await response.text();
+          console.error('Failed to process document review:', response.status, errorData);
+          alert(`Failed to process document review: ${response.status} - ${errorData}`);
         }
       } catch (error) {
         console.error('Error processing document review:', error);
+        alert(`Error processing document review: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     } else {
+      console.log('Using override-requests API for request type:', request.type);
       // For other request types, use the existing override-requests API
       onAction(request.id, actionType, adminNotes);
     }
@@ -1376,6 +1387,18 @@ function OverrideRequestItem({
     }
   };
 
+  // Helper function to check if Azure extraction failed for document review
+  const hasAzureExtractionFailed = () => {
+    if (request.type !== 'DOCUMENT_REVIEW' || !request.contextualData?.document) {
+      return false;
+    }
+    
+    const doc = request.contextualData.document;
+    // Consider extraction failed if key fields are missing
+    const hasKeyData = doc.employeeName || doc.employerName || doc.grossPayAmount || doc.payFrequency;
+    return !hasKeyData;
+  };
+
   return (
     <>
       <li className="px-6 py-6">
@@ -1435,7 +1458,10 @@ function OverrideRequestItem({
                 onClick={() => handleAction('approve')}
                 className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium"
               >
-                Approve
+                {request.type === 'DOCUMENT_REVIEW' && hasAzureExtractionFailed() 
+                  ? 'Manually Enter Pay Information' 
+                  : 'Approve'
+                }
               </button>
               <button
                 onClick={() => handleAction('deny')}
@@ -1471,7 +1497,12 @@ function OverrideRequestItem({
           <div className="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
             <div className="mt-3">
               <h3 className="text-lg font-medium text-gray-900 mb-4">
-                {actionType === 'approve' ? 'Approve' : 'Deny'} Override Request
+                {actionType === 'approve' 
+                  ? (request.type === 'DOCUMENT_REVIEW' && hasAzureExtractionFailed() 
+                      ? 'Manually Enter Pay Information' 
+                      : 'Approve Override Request')
+                  : 'Deny Override Request'
+                }
               </h3>
               
               {/* Manual Data Entry for Document Review (only when approving) */}
@@ -1564,7 +1595,12 @@ function OverrideRequestItem({
                   onChange={(e) => setAdminNotes(e.target.value)}
                   rows={4}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder={`Explain why you are ${actionType === 'approve' ? 'approving' : 'denying'} this request...`}
+                  placeholder={actionType === 'approve' 
+                    ? (request.type === 'DOCUMENT_REVIEW' && hasAzureExtractionFailed() 
+                        ? 'Describe the manually entered pay information and any observations from the document...'
+                        : 'Explain why you are approving this request...')
+                    : 'Explain why you are denying this request...'
+                  }
                 />
               </div>
 
@@ -1586,7 +1622,12 @@ function OverrideRequestItem({
                       : 'bg-red-600 hover:bg-red-700'
                   }`}
                 >
-                  {actionType === 'approve' ? 'Approve' : 'Deny'} Request
+                  {actionType === 'approve' 
+                    ? (request.type === 'DOCUMENT_REVIEW' && hasAzureExtractionFailed() 
+                        ? 'Save Pay Information' 
+                        : 'Approve Request')
+                    : 'Deny Request'
+                  }
                 </button>
               </div>
             </div>
