@@ -1061,7 +1061,7 @@ function OverrideRequestItem({
             <span className="font-medium">Action Required:</span> Manual review and data entry needed for failed OCR extraction.
           </div>
           <button
-            onClick={() => window.open(`/api/admin/documents/${document.id}`, '_blank')}
+            onClick={() => window.open(`/api/documents/${document.id}/file`, '_blank')}
             className="px-3 py-1 text-xs font-medium text-orange-600 bg-orange-100 border border-orange-300 rounded hover:bg-orange-200"
           >
             View Document
