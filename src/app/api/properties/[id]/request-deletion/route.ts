@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
+import { randomUUID } from 'crypto';
 
 export async function POST(
   request: NextRequest,
@@ -52,11 +53,13 @@ export async function POST(
     // Create the deletion request
     const deletionRequest = await prisma.overrideRequest.create({
       data: {
+        id: randomUUID(),
         type: 'PROPERTY_DELETION',
         status: 'PENDING',
         userExplanation: reason,
         propertyId: propertyId,
-        requesterId: session.user.id
+        requesterId: session.user.id,
+        updatedAt: new Date()
       }
     });
 
