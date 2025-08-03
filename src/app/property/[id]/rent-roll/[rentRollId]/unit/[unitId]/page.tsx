@@ -1580,6 +1580,10 @@ export default function ResidentDetailPage() {
                                           ✓ Income Finalized
                                         </span>
                                       )
+                                    ) : hasPendingValidationException ? (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                                        ⏳ Waiting for Admin Review
+                                      </span>
                                     ) : hasCompletedDocuments && residentVerifiedIncome > 0 ? (
                                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                                         📋 Ready to Finalize
