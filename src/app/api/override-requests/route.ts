@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
+import { randomUUID } from 'crypto';
 
 export async function POST(request: NextRequest) {
   try {
@@ -35,6 +36,7 @@ export async function POST(request: NextRequest) {
     // Create the override request
     const overrideRequest = await (prisma as any).overrideRequest.create({
       data: {
+        id: randomUUID(),
         type,
         userExplanation: userExplanation.trim(),
         unitId: unitId || null,
@@ -42,10 +44,11 @@ export async function POST(request: NextRequest) {
         verificationId: verificationId || null,
         documentId: documentId || null,
         requesterId: session.user.id,
-        status: 'PENDING'
+        status: 'PENDING',
+        updatedAt: new Date()
       },
       include: {
-        requester: {
+        User_OverrideRequest_requesterIdToUser: {
           select: {
             id: true,
             name: true,
