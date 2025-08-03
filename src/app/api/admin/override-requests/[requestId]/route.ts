@@ -25,7 +25,7 @@ export async function PATCH(
     }
 
     // Check if user is admin
-    const user = await (prisma.user as any).findUnique({
+    const user = await prisma.user.findUnique({
       where: { id: session.user.id },
       select: { role: true }
     });
@@ -35,7 +35,7 @@ export async function PATCH(
     }
 
     // Check if the override request exists and is pending
-    const existingRequest = await (prisma as any).overrideRequest.findUnique({
+    const existingRequest = await prisma.overrideRequest.findUnique({
       where: { id: requestId }
     });
 
@@ -48,7 +48,7 @@ export async function PATCH(
     }
 
     // Update the override request
-    const updatedRequest = await (prisma as any).overrideRequest.update({
+    const updatedRequest = await prisma.overrideRequest.update({
       where: { id: requestId },
       data: {
         status: action === 'approve' ? 'APPROVED' : 'DENIED',
@@ -92,7 +92,7 @@ export async function PATCH(
       } catch (deleteError) {
         console.error('Error deleting property:', deleteError);
         // Revert the override request status if deletion fails
-        await (prisma as any).overrideRequest.update({
+        await prisma.overrideRequest.update({
           where: { id: requestId },
           data: {
             status: 'PENDING',
@@ -103,6 +103,42 @@ export async function PATCH(
         return NextResponse.json({ 
           error: 'Failed to delete property. The request has been reverted to pending status.' 
         }, { status: 500 });
+      }
+    }
+
+    // Handle validation exception approval - automatically finalize resident income
+    if (action === 'approve' && existingRequest.type === 'VALIDATION_EXCEPTION' && existingRequest.residentId) {
+      try {
+        const now = new Date();
+        
+        // Finalize the resident's income
+        await prisma.resident.update({
+          where: { id: existingRequest.residentId },
+          data: {
+            incomeFinalized: true,
+            finalizedAt: now,
+          }
+        });
+
+        // Mark all documents for this resident as COMPLETED (if they're not already)
+        if (existingRequest.verificationId) {
+          await prisma.incomeDocument.updateMany({
+            where: {
+              residentId: existingRequest.residentId,
+              verificationId: existingRequest.verificationId,
+              status: { in: ['NEEDS_REVIEW', 'PROCESSING'] }
+            },
+            data: {
+              status: 'COMPLETED'
+            }
+          });
+        }
+
+        console.log(`Validation exception approved - automatically finalized resident ${existingRequest.residentId} by admin ${session.user.id}`);
+      } catch (finalizationError) {
+        console.error('Error auto-finalizing resident after validation exception approval:', finalizationError);
+        // Note: We don't revert the override request here as the approval was successful
+        // The finalization can be done manually if needed
       }
     }
 
