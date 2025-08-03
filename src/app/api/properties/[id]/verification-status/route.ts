@@ -183,12 +183,28 @@ export async function GET(
           
           if (latestVerification.status === 'IN_PROGRESS') {
             // Check if any documents are waiting for admin review
-            const hasDocumentsNeedingReview = (currentLease.Resident || []).some((resident: any) => 
-              (resident.IncomeDocument || []).some((doc: any) => doc.status === 'NEEDS_REVIEW')
+            const documentsNeedingReview = (currentLease.Resident || []).flatMap((resident: any) => 
+              (resident.IncomeDocument || []).filter((doc: any) => doc.status === 'NEEDS_REVIEW')
             );
             
-            if (hasDocumentsNeedingReview) {
-              verificationStatus = 'Waiting for Admin Review';
+            if (documentsNeedingReview.length > 0) {
+              // Check if there are pending override requests for these documents
+              const pendingOverrideRequests = await prisma.overrideRequest.findMany({
+                where: {
+                  status: 'PENDING',
+                  documentId: {
+                    in: documentsNeedingReview.map((doc: any) => doc.id)
+                  }
+                }
+              });
+              
+              if (pendingOverrideRequests.length > 0) {
+                verificationStatus = 'Waiting for Admin Review';
+              } else {
+                // NEEDS_REVIEW documents exist but no pending override requests (denied/approved)
+                // Continue with normal verification logic which will return "Out of Date Income Documents"
+                verificationStatus = getUnitVerificationStatus(enhancedUnit as any, latestRentRollDate);
+              }
             } else {
               verificationStatus = 'In Progress - Finalize to Process';
             }
