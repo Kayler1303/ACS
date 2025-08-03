@@ -540,24 +540,24 @@ function OverrideRequestItem({
         <div className="grid grid-cols-3 gap-4 mb-4">
           <div className="text-center">
             <div className="text-lg font-bold text-red-600">
-              {formatCurrency(incomeAnalysis.complianceIncome)}
+              {formatCurrency(incomeAnalysis.complianceIncome || 0)}
             </div>
             <div className="text-xs text-gray-600">Compliance Income</div>
             <div className="text-xs text-gray-500">(From Rent Roll)</div>
           </div>
           <div className="text-center">
             <div className="text-lg font-bold text-green-600">
-              {formatCurrency(incomeAnalysis.verifiedIncome)}
+              {formatCurrency(incomeAnalysis.verifiedIncome || 0)}
             </div>
             <div className="text-xs text-gray-600">Verified Income</div>
             <div className="text-xs text-gray-500">(From Documents)</div>
           </div>
           <div className="text-center">
             <div className="text-lg font-bold text-orange-600">
-              {formatCurrency(incomeAnalysis.discrepancy)}
+              {formatCurrency(incomeAnalysis.discrepancy || 0)}
             </div>
             <div className="text-xs text-gray-600">Discrepancy</div>
-            <div className="text-xs text-gray-500">({incomeAnalysis.percentage.toFixed(1)}%)</div>
+            <div className="text-xs text-gray-500">({incomeAnalysis.percentage ? incomeAnalysis.percentage.toFixed(1) : '0.0'}%)</div>
           </div>
         </div>
 
