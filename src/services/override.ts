@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { randomUUID } from 'crypto';
 
 interface CreateAutoOverrideParams {
   type: 'INCOME_DISCREPANCY' | 'DOCUMENT_REVIEW';
@@ -54,6 +55,7 @@ export async function createAutoOverrideRequest(params: CreateAutoOverrideParams
 
     const overrideRequest = await (prisma as any).overrideRequest.create({
       data: {
+        id: randomUUID(),
         type,
         userExplanation: systemExplanation,
         unitId: unitId || null,
@@ -61,7 +63,8 @@ export async function createAutoOverrideRequest(params: CreateAutoOverrideParams
         verificationId: verificationId || null,
         documentId: documentId || null,
         requesterId: userId,
-        status: 'PENDING'
+        status: 'PENDING',
+        updatedAt: new Date()
       },
       include: { 
         requester: { 

@@ -20,23 +20,23 @@ export async function PATCH(
     const lease = await prisma.lease.findUnique({
       where: { id: leaseId },
       include: {
-        unit: {
+        Unit: {
           include: {
-            property: true
+            Property: true
           }
         },
-        residents: true
+        Resident: true
       }
     });
 
-    if (!lease || lease.unit?.property?.ownerId !== session.user.id) {
+    if (!lease || lease.Unit?.Property?.ownerId !== session.user.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // Update all residents in the lease to have the verified income distributed among them
     // For simplicity, we'll update the first resident's income to match the total verified income
     // In a real scenario, you might want to distribute it proportionally
-    const residents = lease.residents;
+    const residents = lease.Resident;
     if (residents.length === 0) {
       return NextResponse.json({ error: 'No residents found in this lease' }, { status: 400 });
     }
