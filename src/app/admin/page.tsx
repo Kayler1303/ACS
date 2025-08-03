@@ -859,7 +859,7 @@ function OverrideRequestItem({
           </div>
           <div>
             <span className="font-medium text-gray-700">Resident:</span>
-            <span className="ml-2">{document.resident?.name || 'Unknown'}</span>
+            <span className="ml-2">{document.Resident?.name || 'Unknown'}</span>
           </div>
           <div>
             <span className="font-medium text-gray-700">Upload Date:</span>
