@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { add, endOfDay, startOfDay, sub } from 'date-fns';
+import { randomUUID } from 'crypto';
 
 export async function POST(
   req: Request,
@@ -23,8 +24,8 @@ export async function POST(
     const lease = await prisma.lease.findFirst({
       where: {
         id: leaseId,
-        unit: {
-          property: {
+        Unit: {
+          Property: {
             ownerId: session.user.id,
           },
         },
@@ -43,7 +44,7 @@ export async function POST(
     const existingInProgressVerification = await prisma.incomeVerification.findFirst({
       where: {
         status: 'IN_PROGRESS',
-        lease: {
+        Lease: {
           unitId: unitId,
         },
       },
@@ -67,11 +68,13 @@ export async function POST(
 
     const newVerification = await prisma.incomeVerification.create({
       data: {
+        id: randomUUID(),
         leaseId: leaseId,
         status: 'IN_PROGRESS',
         verificationPeriodStart,
         verificationPeriodEnd,
         dueDate,
+        updatedAt: now,
       },
     });
 
