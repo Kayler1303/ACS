@@ -178,6 +178,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       try {
         await prisma.overrideRequest.create({
           data: {
+            id: randomUUID(),
             type: 'DOCUMENT_REVIEW',
             status: 'PENDING',
             userExplanation: `Azure Document Intelligence failed to process ${documentType} document. Error: ${azureError instanceof Error ? azureError.message : 'Unknown error'}`,
@@ -185,7 +186,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             verificationId: verificationId,
             residentId: residentId,
             requesterId: session.user.id,
-            propertyId: verification.lease?.unit?.property?.id,
+            propertyId: verification.Lease?.Unit?.Property?.id,
+            updatedAt: new Date(),
           }
         });
       } catch (overrideError) {
@@ -353,14 +355,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       try {
         await prisma.overrideRequest.create({
           data: {
-            type: 'DOCUMENT_VALIDATION',
+            id: randomUUID(),
+            type: 'DOCUMENT_REVIEW',
             status: 'PENDING',
             userExplanation: explanation,
             documentId: document.id,
             verificationId: verificationId,
             residentId: residentId,
             requesterId: session.user.id,
-            propertyId: verification.lease?.unit?.property?.id,
+            propertyId: verification.Lease?.Unit?.Property?.id,
+            updatedAt: new Date(),
           }
         });
 
