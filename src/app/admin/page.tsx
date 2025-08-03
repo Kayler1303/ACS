@@ -489,16 +489,59 @@ function OverrideRequestItem({
   const [adminNotes, setAdminNotes] = useState('');
   const [actionType, setActionType] = useState<'approve' | 'deny'>('approve');
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
+  
+  // Manual data entry state for document review
+  const [correctedValues, setCorrectedValues] = useState<{
+    employeeName?: string;
+    employerName?: string;
+    grossPayAmount?: number;
+    payFrequency?: string;
+    payPeriodStartDate?: string;
+    payPeriodEndDate?: string;
+  }>({});
 
   const handleAction = (action: 'approve' | 'deny') => {
     setActionType(action);
     setShowReviewDialog(true);
   };
 
-  const handleSubmitReview = () => {
-    onAction(request.id, actionType, adminNotes);
+  const handleSubmitReview = async () => {
+    // For document review requests, use the admin documents API with corrected values
+    if (request.type === 'DOCUMENT_REVIEW' && request.contextualData?.document) {
+      try {
+        const response = await fetch(`/api/admin/documents/${request.contextualData.document.id}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: actionType,
+            adminNotes,
+            correctedValues: actionType === 'approve' ? correctedValues : undefined,
+          }),
+        });
+
+        if (response.ok) {
+          // Refresh the requests after successful document review
+          const refreshResponse = await fetch('/api/admin/override-requests');
+          if (refreshResponse.ok) {
+            const data = await refreshResponse.json();
+            onAction(request.id, actionType, adminNotes); // This will trigger the parent to refresh
+          }
+        } else {
+          console.error('Failed to process document review');
+        }
+      } catch (error) {
+        console.error('Error processing document review:', error);
+      }
+    } else {
+      // For other request types, use the existing override-requests API
+      onAction(request.id, actionType, adminNotes);
+    }
+    
     setShowReviewDialog(false);
     setAdminNotes('');
+    setCorrectedValues({});
   };
 
   const toggleSection = (section: string) => {
@@ -1431,6 +1474,87 @@ function OverrideRequestItem({
                 {actionType === 'approve' ? 'Approve' : 'Deny'} Override Request
               </h3>
               
+              {/* Manual Data Entry for Document Review (only when approving) */}
+              {request.type === 'DOCUMENT_REVIEW' && actionType === 'approve' && (
+                <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <h4 className="text-sm font-medium text-green-800 mb-3">Manual Data Entry</h4>
+                  <p className="text-xs text-green-700 mb-4">
+                    Enter the correct values from the document. Leave fields blank to keep Azure's extracted values.
+                  </p>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Employee Name</label>
+                      <input
+                        type="text"
+                        value={correctedValues.employeeName || ''}
+                        onChange={(e) => setCorrectedValues(prev => ({ ...prev, employeeName: e.target.value }))}
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                        placeholder="Enter employee name"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Employer Name</label>
+                      <input
+                        type="text"
+                        value={correctedValues.employerName || ''}
+                        onChange={(e) => setCorrectedValues(prev => ({ ...prev, employerName: e.target.value }))}
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                        placeholder="Enter employer name"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Gross Pay Amount</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={correctedValues.grossPayAmount || ''}
+                        onChange={(e) => setCorrectedValues(prev => ({ ...prev, grossPayAmount: parseFloat(e.target.value) || undefined }))}
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                        placeholder="Enter gross pay amount"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Pay Frequency</label>
+                      <select
+                        value={correctedValues.payFrequency || ''}
+                        onChange={(e) => setCorrectedValues(prev => ({ ...prev, payFrequency: e.target.value }))}
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                      >
+                        <option value="">Select frequency</option>
+                        <option value="WEEKLY">Weekly</option>
+                        <option value="BI-WEEKLY">Bi-Weekly</option>
+                        <option value="SEMI-MONTHLY">Semi-Monthly</option>
+                        <option value="MONTHLY">Monthly</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Pay Period Start</label>
+                      <input
+                        type="date"
+                        value={correctedValues.payPeriodStartDate || ''}
+                        onChange={(e) => setCorrectedValues(prev => ({ ...prev, payPeriodStartDate: e.target.value }))}
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Pay Period End</label>
+                      <input
+                        type="date"
+                        value={correctedValues.payPeriodEndDate || ''}
+                        onChange={(e) => setCorrectedValues(prev => ({ ...prev, payPeriodEndDate: e.target.value }))}
+                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Admin Notes (required)
