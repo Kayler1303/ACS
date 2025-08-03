@@ -11,7 +11,7 @@ import AddResidentDialog from '@/components/AddResidentDialog';
 import RenewalDialog from '@/components/RenewalDialog';
 import InitialAddResidentDialog from '@/components/InitialAddResidentDialog';
 import ResidentFinalizationDialog from '@/components/ResidentFinalizationDialog';
-import IncomeDiscrepancyResolutionModal from '@/components/IncomeDiscrepancyResolutionModal';
+
 import VerificationConflictModal from '@/components/VerificationConflictModal';
 import LeaseDiscrepancyResolutionModal from '@/components/LeaseDiscrepancyResolutionModal';
 import { format } from 'date-fns';
@@ -308,13 +308,7 @@ export default function ResidentDetailPage() {
   } | null>(null);
 
   // Income discrepancy resolution state
-  const [discrepancyModal, setDiscrepancyModal] = useState<{
-    isOpen: boolean;
-    lease: Lease | null;
-    verification: IncomeVerification | null;
-    rentRollIncome: number;
-    verifiedIncome: number;
-  }>({ isOpen: false, lease: null, verification: null, rentRollIncome: 0, verifiedIncome: 0 });
+  // Income discrepancy modal state - REMOVED (replaced with leaseDiscrepancyModal)
 
   // Lease-level income discrepancy resolution state (for multiple residents with discrepancies)
   const [leaseDiscrepancyModal, setLeaseDiscrepancyModal] = useState<{
@@ -1053,136 +1047,55 @@ export default function ResidentDetailPage() {
     }
   };
 
-  // Income discrepancy detection and resolution functions
+  // Income discrepancy detection and resolution functions (UPDATED to use new individual resident modal)
   const checkForIncomeDiscrepancy = useCallback(() => {
-    if (!tenancyData) return;
+    if (!tenancyData || discrepancyModalCooldown) return;
 
-    // Check each lease for income discrepancies
+    // Check each lease for income discrepancies using the new individual resident approach
     tenancyData.unit.Lease.forEach(lease => {
       const verification = lease.IncomeVerification.find(v => v.status === 'IN_PROGRESS') || 
                          lease.IncomeVerification.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
       
-      if (!verification || !verification.calculatedVerifiedIncome) return;
+      if (!verification) return;
 
-      // Get rent roll income (original uploaded income for all residents in this lease)
-      const rentRollIncome = lease.Resident.reduce((sum, resident) => {
-        return sum + (Number(resident.annualizedIncome) || 0);
-      }, 0);
+      // Check if all residents are finalized
+      const allResidents = lease.Resident;
+      const finalizedResidents = allResidents.filter(resident => resident.incomeFinalized);
+      const allResidentsFinalized = allResidents.length > 0 && finalizedResidents.length === allResidents.length;
 
-      const verifiedIncome = verification.calculatedVerifiedIncome;
-      const discrepancy = Math.abs(verifiedIncome - rentRollIncome);
-
-      // If discrepancy is greater than $1 (to account for rounding), show modal
-      if (discrepancy > 1.00 && verification.status === 'FINALIZED') {
-        console.log(`[DISCREPANCY DETECTED] Lease ${lease.id}:`, {
-          rentRollIncome,
-          verifiedIncome,
-          discrepancy
+      // Only show discrepancy modal if all residents are finalized and there are individual discrepancies
+      if (allResidentsFinalized && verification.status === 'FINALIZED') {
+        const residentsWithDiscrepancies = allResidents.filter(resident => {
+          const rentRollIncome = resident.annualizedIncome || 0;
+          const verifiedIncome = resident.calculatedAnnualizedIncome || 0;
+          const discrepancy = Math.abs(rentRollIncome - verifiedIncome);
+          return discrepancy > 1.00; // More than $1 difference
         });
 
-        setDiscrepancyModal({
-          isOpen: true,
-          lease,
-          verification,
-          rentRollIncome,
-          verifiedIncome
-        });
+        if (residentsWithDiscrepancies.length > 0) {
+          console.log(`[INDIVIDUAL DISCREPANCY DETECTED] Lease ${lease.id}: ${residentsWithDiscrepancies.length} residents with discrepancies`);
+          
+          // Use the NEW individual resident modal instead of the old unit-level modal
+          setLeaseDiscrepancyModal({
+            isOpen: true,
+            lease: lease,
+            verification: verification ? {
+              ...verification,
+              incomeDocuments: verification.IncomeDocument || []
+            } : null,
+            residentsWithDiscrepancies: residentsWithDiscrepancies
+          });
+        }
       }
     });
-  }, [tenancyData]);
+  }, [tenancyData, discrepancyModalCooldown]);
 
   // Run discrepancy check when tenancy data changes
   useEffect(() => {
     checkForIncomeDiscrepancy();
   }, [checkForIncomeDiscrepancy]);
 
-  // Handler functions for discrepancy resolution modal
-  const handleAcceptVerifiedIncome = async () => {
-    if (!discrepancyModal.lease || !discrepancyModal.verification) return;
-
-    try {
-      // Update the rent roll income to match the verified income
-      const response = await fetch(`/api/leases/${discrepancyModal.lease.id}/accept-verified-income`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          verifiedIncome: discrepancyModal.verifiedIncome
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to accept verified income');
-      }
-
-      toast.success('Verified income accepted! Rent roll income has been updated.');
-      fetchTenancyData(false);
-      setDiscrepancyModal({ isOpen: false, lease: null, verification: null, rentRollIncome: 0, verifiedIncome: 0 });
-    } catch (error) {
-      console.error('Error accepting verified income:', error);
-      toast.error((error instanceof Error ? error.message : 'An error occurred while accepting verified income.'));
-    }
-  };
-
-  const handleModifyDocuments = async () => {
-    if (!discrepancyModal.lease || !discrepancyModal.verification) return;
-
-    try {
-      // Unfinalize all residents in this lease
-      const response = await fetch(`/api/leases/${discrepancyModal.lease.id}/unfinalize-all-residents`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to unfinalize residents');
-      }
-
-      toast.success('All residents have been unfinalized. You can now modify documents.');
-      fetchTenancyData(false);
-      setDiscrepancyModal({ isOpen: false, lease: null, verification: null, rentRollIncome: 0, verifiedIncome: 0 });
-    } catch (error) {
-      console.error('Error unfinalizing residents:', error);
-      toast.error((error instanceof Error ? error.message : 'An error occurred while unfinalizing residents.'));
-    }
-  };
-
-  const handleSubmitOverrideRequest = async (explanation: string) => {
-    if (!discrepancyModal.lease || !discrepancyModal.verification) return;
-
-    try {
-      // Submit override request to admin using existing API
-      const response = await fetch('/api/override-requests', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          type: 'INCOME_DISCREPANCY',
-          userExplanation: `Income Discrepancy for Unit ${formatUnitNumber(tenancyData?.unit.unitNumber || '')}: ${explanation}\n\nDiscrepancy Details:\n- Rent Roll Income: $${discrepancyModal.rentRollIncome.toFixed(2)}\n- Verified Income: $${discrepancyModal.verifiedIncome.toFixed(2)}\n- Difference: $${Math.abs(discrepancyModal.verifiedIncome - discrepancyModal.rentRollIncome).toFixed(2)}`,
-          unitId: tenancyData?.unit.id,
-          verificationId: discrepancyModal.verification.id,
-          // Note: We don't include leaseId directly as the API schema doesn't have it as a separate field
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to submit override request');
-      }
-
-      toast.success('Override request submitted to admin for review.');
-      setDiscrepancyModal({ isOpen: false, lease: null, verification: null, rentRollIncome: 0, verifiedIncome: 0 });
-    } catch (error) {
-      console.error('Error submitting override request:', error);
-      toast.error((error instanceof Error ? error.message : 'An error occurred while submitting override request.'));
-    }
-  };
+  // Handler functions for discrepancy resolution modal - REMOVED (replaced with new individual resident modal handlers)
 
   // New function to create lease periods based on tenancy data
   const createLeasePeriods = () => {
@@ -2141,18 +2054,7 @@ export default function ResidentDetailPage() {
         />
       )}
 
-      {/* Income Discrepancy Resolution Modal */}
-      <IncomeDiscrepancyResolutionModal
-        isOpen={discrepancyModal.isOpen}
-        onClose={() => setDiscrepancyModal({ isOpen: false, lease: null, verification: null, rentRollIncome: 0, verifiedIncome: 0 })}
-        rentRollIncome={discrepancyModal.rentRollIncome}
-        verifiedIncome={discrepancyModal.verifiedIncome}
-        unitNumber={formatUnitNumber(tenancyData?.unit.unitNumber || '')}
-        residentName={discrepancyModal.lease?.Resident.length === 1 ? discrepancyModal.lease.Resident[0].name : undefined}
-        onAcceptVerifiedIncome={handleAcceptVerifiedIncome}
-        onModifyDocuments={handleModifyDocuments}
-        onSubmitOverrideRequest={handleSubmitOverrideRequest}
-      />
+      {/* OLD Income Discrepancy Resolution Modal - REMOVED, replaced with new individual resident modal */}
 
             {/* Verification Conflict Modal */}
       <VerificationConflictModal
