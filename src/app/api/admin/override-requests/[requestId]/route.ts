@@ -107,10 +107,26 @@ export async function PATCH(
     }
 
     // Handle validation exception approval - automatically finalize resident income
-    if (action === 'approve' && existingRequest.type === 'VALIDATION_EXCEPTION' && existingRequest.residentId) {
+    if (action === 'approve' && existingRequest.type === 'VALIDATION_EXCEPTION' && existingRequest.residentId && existingRequest.verificationId) {
       try {
         const now = new Date();
         
+        // Get verification and lease data for lease auto-finalization check
+        const verification = await prisma.incomeVerification.findUnique({
+          where: { id: existingRequest.verificationId },
+          include: {
+            Lease: {
+              include: {
+                Resident: true
+              }
+            }
+          }
+        });
+
+        if (!verification) {
+          throw new Error(`Verification ${existingRequest.verificationId} not found`);
+        }
+
         // Finalize the resident's income
         await prisma.resident.update({
           where: { id: existingRequest.residentId },
@@ -121,20 +137,61 @@ export async function PATCH(
         });
 
         // Mark all documents for this resident as COMPLETED (if they're not already)
-        if (existingRequest.verificationId) {
-          await prisma.incomeDocument.updateMany({
-            where: {
-              residentId: existingRequest.residentId,
-              verificationId: existingRequest.verificationId,
-              status: { in: ['NEEDS_REVIEW', 'PROCESSING'] }
-            },
-            data: {
-              status: 'COMPLETED'
-            }
-          });
-        }
+        await prisma.incomeDocument.updateMany({
+          where: {
+            residentId: existingRequest.residentId,
+            verificationId: existingRequest.verificationId,
+            status: { in: ['NEEDS_REVIEW', 'PROCESSING'] }
+          },
+          data: {
+            status: 'COMPLETED'
+          }
+        });
 
         console.log(`Validation exception approved - automatically finalized resident ${existingRequest.residentId} by admin ${session.user.id}`);
+
+        // Check if this was the last unfinalized resident - if so, auto-finalize the lease/verification
+        const leaseId = verification.Lease.id;
+        const allResidents = verification.Lease.Resident;
+        const finalizedResidentsCount = await prisma.resident.count({
+          where: {
+            leaseId: leaseId,
+            incomeFinalized: true
+          }
+        });
+
+        const totalResidents = allResidents.length;
+        
+        console.log(`Lease ${leaseId}: ${finalizedResidentsCount} finalized residents out of ${totalResidents} total after admin approval`);
+
+        // If all residents are now finalized, automatically finalize the entire verification
+        if (finalizedResidentsCount === totalResidents) {
+          // Calculate total verified income
+          const totalVerifiedIncomeResult = await prisma.resident.aggregate({
+            where: {
+              leaseId: leaseId,
+              incomeFinalized: true
+            },
+            _sum: {
+              calculatedAnnualizedIncome: true
+            }
+          });
+          
+          const totalVerifiedIncome = totalVerifiedIncomeResult._sum.calculatedAnnualizedIncome?.toNumber() || 0;
+
+          // Finalize the verification
+          await prisma.incomeVerification.update({
+            where: { id: existingRequest.verificationId },
+            data: {
+              status: 'FINALIZED',
+              finalizedAt: now,
+              calculatedVerifiedIncome: totalVerifiedIncome
+            }
+          });
+
+          console.log(`🎉 Admin approval triggered complete lease finalization! Verification ${existingRequest.verificationId} finalized with total income: $${totalVerifiedIncome}`);
+        }
+
       } catch (finalizationError) {
         console.error('Error auto-finalizing resident after validation exception approval:', finalizationError);
         // Note: We don't revert the override request here as the approval was successful
