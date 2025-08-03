@@ -83,6 +83,7 @@ export default function ResidentFinalizationDialog({
 }: ResidentFinalizationDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showOverrideRequest, setShowOverrideRequest] = useState(false);
+  const [overrideRequested, setOverrideRequested] = useState(false);
   const [manualW2Income, setManualW2Income] = useState<string>('');
   const [showManualW2Entry, setShowManualW2Entry] = useState(false);
 
@@ -269,7 +270,9 @@ export default function ResidentFinalizationDialog({
       });
 
       if (response.ok) {
-        // Show success message or handle success
+        // Set the override requested state and close the modal
+        setOverrideRequested(true);
+        setShowOverrideRequest(false);
         alert('Override request submitted successfully. An administrator will review your request.');
       } else {
         throw new Error('Failed to submit override request');
@@ -430,20 +433,30 @@ export default function ResidentFinalizationDialog({
           {/* Action Buttons */}
           <div className="flex justify-end space-x-3 pt-4 border-t">
             <button
-              onClick={onClose}
+              onClick={() => {
+                setOverrideRequested(false); // Reset override requested state when dialog closes
+                onClose();
+              }}
               className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200"
             >
               Cancel
             </button>
             
-            {/* Request Override button - only show when validation fails */}
-            {!canFinalize && (
+            {/* Request Override button or pending message - only show when validation fails */}
+            {!canFinalize && !overrideRequested && (
               <button
                 onClick={() => setShowOverrideRequest(true)}
                 className="px-4 py-2 text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 rounded-md"
               >
                 Request Override
               </button>
+            )}
+            
+            {/* Show pending message when override has been requested */}
+            {!canFinalize && overrideRequested && (
+              <div className="px-4 py-2 text-sm font-medium text-orange-700 bg-orange-100 border border-orange-300 rounded-md">
+                Exception requested, awaiting admin review
+              </div>
             )}
             
             {resident.incomeFinalized && (
