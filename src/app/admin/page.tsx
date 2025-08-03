@@ -17,12 +17,12 @@ interface OverrideRequest {
   documentId?: string;
   createdAt: string;
   reviewedAt?: string;
-  requester: {
+  User_OverrideRequest_requesterIdToUser: {
     name?: string;
     email: string;
     company: string;
   };
-  reviewer?: {
+  User_OverrideRequest_reviewerIdToUser?: {
     name?: string;
     email: string;
   };
@@ -221,16 +221,20 @@ export default function AdminDashboard() {
     
     // Property and unit info
     if (contextualData.unit) {
-      const propertyName = contextualData.unit.property?.name || 'Unknown Property';
+      const propertyName = contextualData.unit.Property?.name || 'Unknown Property';
       const unitNumber = contextualData.unit.unitNumber || 'Unknown Unit';
       context += `${propertyName} - Unit ${unitNumber}`;
-    } else if (contextualData.resident?.lease?.unit) {
-      const propertyName = contextualData.resident.lease.unit.property?.name || 'Unknown Property';
-      const unitNumber = contextualData.resident.lease.unit.unitNumber || 'Unknown Unit';
+    } else if (contextualData.resident?.Lease?.Unit) {
+      const propertyName = contextualData.resident.Lease.Unit.Property?.name || 'Unknown Property';
+      const unitNumber = contextualData.resident.Lease.Unit.unitNumber || 'Unknown Unit';
       context += `${propertyName} - Unit ${unitNumber}`;
-    } else if (contextualData.document?.verification?.lease?.unit) {
-      const propertyName = contextualData.document.verification.lease.unit.property?.name || 'Unknown Property';
-      const unitNumber = contextualData.document.verification.lease.unit.unitNumber || 'Unknown Unit';
+    } else if (contextualData.verification?.Lease?.Unit) {
+      const propertyName = contextualData.verification.Lease.Unit.Property?.name || 'Unknown Property';
+      const unitNumber = contextualData.verification.Lease.Unit.unitNumber || 'Unknown Unit';
+      context += `${propertyName} - Unit ${unitNumber}`;
+    } else if (contextualData.document?.IncomeVerification?.Lease?.Unit) {
+      const propertyName = contextualData.document.IncomeVerification.Lease.Unit.Property?.name || 'Unknown Property';
+      const unitNumber = contextualData.document.IncomeVerification.Lease.Unit.unitNumber || 'Unknown Unit';
       context += `${propertyName} - Unit ${unitNumber}`;
     }
 
@@ -1134,12 +1138,12 @@ function OverrideRequestItem({
     }
 
     const { verification } = request.contextualData;
-    const documents = verification.incomeDocuments || [];
+    const documents = verification.IncomeDocument || [];
     const documentsByResident = documents.reduce((acc: any, doc: any) => {
-      const residentId = doc.resident?.id || 'unknown';
+      const residentId = doc.Resident?.id || doc.residentId || 'unknown';
       if (!acc[residentId]) {
         acc[residentId] = {
-          resident: doc.resident,
+          resident: doc.Resident,
           documents: []
         };
       }

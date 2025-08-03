@@ -264,6 +264,7 @@ export default function ResidentFinalizationDialog({
           userExplanation: explanation,
           residentId: resident.id,
           verificationId: verification.id,
+          leaseId: verification.leaseId, // Include leaseId for better context
         }),
       });
 

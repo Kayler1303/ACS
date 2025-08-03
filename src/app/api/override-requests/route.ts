@@ -17,7 +17,8 @@ export async function POST(request: NextRequest) {
       unitId,
       residentId,
       verificationId,
-      documentId
+      documentId,
+      leaseId
     } = await request.json();
 
     // Validate required fields
@@ -33,13 +34,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Explanation must be at least 20 characters' }, { status: 400 });
     }
 
+    // Extract unitId from leaseId if not provided directly
+    let finalUnitId = unitId;
+    if (!finalUnitId && leaseId) {
+      try {
+        const lease = await prisma.lease.findUnique({
+          where: { id: leaseId },
+          select: { unitId: true }
+        });
+        finalUnitId = lease?.unitId || null;
+      } catch (error) {
+        console.warn('Could not extract unitId from leaseId:', error);
+      }
+    }
+
     // Create the override request
     const overrideRequest = await (prisma as any).overrideRequest.create({
       data: {
         id: randomUUID(),
         type,
         userExplanation: userExplanation.trim(),
-        unitId: unitId || null,
+        unitId: finalUnitId || null,
         residentId: residentId || null,
         verificationId: verificationId || null,
         documentId: documentId || null,
