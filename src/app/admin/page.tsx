@@ -1299,14 +1299,34 @@ function OverrideRequestItem({
                 <div className="mt-3 p-2 bg-yellow-50 rounded">
                   <h6 className="text-xs font-medium text-yellow-700 mb-2">Validation Issues:</h6>
                   <div className="text-xs space-y-1">
-                    {paystubs.length < 3 && paystubs.length > 0 && (
-                      <div className="flex items-center text-yellow-600">
-                        <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                        </svg>
-                        Insufficient paystubs: {paystubs.length}/3 uploaded (need 3 for accurate biweekly calculation)
-                      </div>
-                    )}
+                    {(() => {
+                      // Calculate required paystubs based on actual pay frequency
+                      const payFrequency = paystubs[0]?.payFrequency;
+                      if (paystubs.length > 0 && payFrequency) {
+                        const payPeriodDays: Record<string, number> = {
+                          'BI_WEEKLY': 14,
+                          'WEEKLY': 7,
+                          'SEMI_MONTHLY': 15,
+                          'MONTHLY': 30,
+                          'UNKNOWN': 14
+                        };
+                        const days = payPeriodDays[payFrequency] || 14;
+                        const requiredStubs = Math.ceil(30 / days);
+                        
+                        if (paystubs.length < requiredStubs) {
+                          const frequencyName = payFrequency.toLowerCase().replace('_', '-');
+                          return (
+                            <div className="flex items-center text-yellow-600">
+                              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                              </svg>
+                              Insufficient paystubs: {paystubs.length}/{requiredStubs} uploaded (need {requiredStubs} for accurate {frequencyName} calculation)
+                            </div>
+                          );
+                        }
+                      }
+                      return null;
+                    })()}
                     {paystubs.some((doc: any) => !doc.payFrequency) && (
                       <div className="flex items-center text-yellow-600">
                         <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
@@ -1331,6 +1351,30 @@ function OverrideRequestItem({
                         No income documents uploaded
                       </div>
                     )}
+                    
+                    {/* Show default validation message if no specific issues are detected */}
+                    {(() => {
+                      // Check if any specific validation issues were shown
+                      const payFrequency = paystubs[0]?.payFrequency;
+                      const hasInsufficientPaystubs = paystubs.length > 0 && payFrequency && 
+                        paystubs.length < Math.ceil(30 / (payFrequency === 'WEEKLY' ? 7 : payFrequency === 'BI_WEEKLY' ? 14 : payFrequency === 'SEMI_MONTHLY' ? 15 : 30));
+                      const hasMissingPayFreq = paystubs.some((doc: any) => !doc.payFrequency);
+                      const hasMissingGrossPay = paystubs.some((doc: any) => !doc.grossPayAmount);
+                      const hasNoDocuments = residentData.documents.length === 0;
+                      
+                      // Only show default if no specific issues were detected
+                      if (!hasInsufficientPaystubs && !hasMissingPayFreq && !hasMissingGrossPay && !hasNoDocuments && residentData.documents.length > 0) {
+                        return (
+                          <div className="flex items-center text-blue-600">
+                            <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                            </svg>
+                            User is requesting validation exception to proceed with current documentation
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
                 </div>
               </div>
