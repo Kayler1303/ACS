@@ -46,7 +46,7 @@ interface IncomeVerification {
   id: string;
   status: string;
   createdAt: string;
-  incomeDocuments: IncomeDocument[];
+  IncomeDocument: IncomeDocument[];
   verificationPeriodStart?: string;
   verificationPeriodEnd?: string;
   dueDate?: string;
@@ -89,13 +89,13 @@ export default function ResidentFinalizationDialog({
   if (!isOpen) return null;
 
   // Filter documents for this specific resident - include both COMPLETED and NEEDS_REVIEW
-  const residentDocuments = verification.incomeDocuments.filter(
-    doc => doc.residentId === resident.id && (doc.status === 'COMPLETED' || doc.status === 'NEEDS_REVIEW')
+  const residentDocuments = verification.IncomeDocument.filter(
+    (doc: IncomeDocument) => doc.residentId === resident.id && (doc.status === 'COMPLETED' || doc.status === 'NEEDS_REVIEW')
   );
 
   // Check for W2s that need manual entry (NEEDS_REVIEW with no extracted data)
   const w2DocumentsNeedingManualEntry = residentDocuments.filter(
-    doc => doc.documentType === 'W2' && doc.status === 'NEEDS_REVIEW' && !doc.box1_wages
+    (doc: IncomeDocument) => doc.documentType === 'W2' && doc.status === 'NEEDS_REVIEW' && !doc.box1_wages
   );
 
   // Use resident-level calculated income or manual W2 entry
@@ -110,7 +110,7 @@ export default function ResidentFinalizationDialog({
     : 0;
 
   // Calculate total number of documents uploaded
-  const completedDocumentsCount = residentDocuments.filter(doc => doc.status === 'COMPLETED').length;
+  const completedDocumentsCount = residentDocuments.filter((doc: IncomeDocument) => doc.status === 'COMPLETED').length;
   const hasDocuments = completedDocumentsCount > 0;
   
   // Validation logic for finalization
@@ -321,7 +321,7 @@ export default function ResidentFinalizationDialog({
             <h4 className="text-md font-semibold text-gray-800 mb-3">Verified Documents</h4>
             {residentDocuments.length > 0 ? (
               <div className="space-y-2">
-                {residentDocuments.map(doc => {
+                {residentDocuments.map((doc: IncomeDocument) => {
                   let verifiedAmount = 0;
                   let displayText = doc.documentType;
                   
