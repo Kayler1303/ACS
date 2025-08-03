@@ -1360,9 +1360,21 @@ export default function ResidentDetailPage() {
               const isInProgress = verification?.status === 'IN_PROGRESS';
               
               // Use the fetched verification status that matches the property table logic
-              const currentVerificationStatus = verification?.status === 'IN_PROGRESS' 
-                ? 'In Progress - Finalize to Process' 
-                : unitVerificationStatus;
+              // But first check for pending validation exception override requests
+              let currentVerificationStatus: string;
+              if (verification?.status === 'IN_PROGRESS') {
+                // Check if there are pending validation exception override requests
+                const hasPendingValidationException = verification.OverrideRequest?.some(
+                  (request: any) => request.type === 'VALIDATION_EXCEPTION' && 
+                                   request.status === 'PENDING'
+                );
+                
+                currentVerificationStatus = hasPendingValidationException 
+                  ? 'Waiting for Admin Review' 
+                  : 'In Progress - Finalize to Process';
+              } else {
+                currentVerificationStatus = unitVerificationStatus;
+              }
                 
               const isCompleted = currentVerificationStatus === 'Verified';
               
@@ -1402,6 +1414,12 @@ export default function ResidentDetailPage() {
                                 return (
                                   <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
                                     📝 In Progress - Finalize to Process
+                                  </span>
+                                );
+                              case 'Waiting for Admin Review':
+                                return (
+                                  <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-orange-100 text-orange-800">
+                                    ⏳ Waiting for Admin Review
                                   </span>
                                 );
                               case 'Needs Investigation':
