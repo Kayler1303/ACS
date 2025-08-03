@@ -1726,6 +1726,13 @@ export default function ResidentDetailPage() {
                                               </div>
                                             </div>
                                           )}
+                                          
+                                          {needsReview && latestOverrideRequest?.userExplanation && (
+                                            <div className="mb-2 p-2 bg-yellow-100 border border-yellow-200 rounded text-xs">
+                                              <div className="font-medium text-yellow-800 mb-1">Reason for Review:</div>
+                                              <div className="text-yellow-700">{latestOverrideRequest.userExplanation}</div>
+                                            </div>
+                                          )}
                                           <div className="flex justify-between items-start mb-2">
                                             <div className="flex items-center space-x-2">
                                               <span className={badgeClasses}>
