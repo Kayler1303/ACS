@@ -19,22 +19,22 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         ownerId: session.user.id 
       },
       include: {
-        units: {
+        Unit: {
           orderBy: {
             unitNumber: 'asc',
           },
         },
-        rentRolls: {
+        RentRoll: {
           orderBy: {
             date: 'desc',
           },
           include: {
-            tenancies: {
+            Tenancy: {
               include: {
-                lease: {
+                Lease: {
                   include: {
-                    residents: true,
-                    unit: true,
+                    Resident: true,
+                    Unit: true,
                   },
                 },
               },

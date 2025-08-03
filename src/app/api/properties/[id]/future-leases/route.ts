@@ -39,19 +39,19 @@ export async function GET(
         ownerId: session.user.id 
       },
       include: {
-        units: {
+        Unit: {
           include: {
-            leases: {
+            Lease: {
               where: {
-                tenancy: null // Future leases have no tenancy record
+                Tenancy: null // Future leases have no tenancy record
               },
               include: {
-                residents: {
+                Resident: {
                   include: {
-                    incomeDocuments: true
+                    IncomeDocument: true
                   }
                 },
-                incomeVerifications: {
+                IncomeVerification: {
                   orderBy: {
                     createdAt: 'desc'
                   }
@@ -63,7 +63,7 @@ export async function GET(
             }
           }
         },
-        rentRolls: {
+        RentRoll: {
           orderBy: {
             date: 'desc'
           }
@@ -76,13 +76,13 @@ export async function GET(
     }
 
     // Get the most recent rent roll date for filtering future leases
-    const mostRecentRentRoll = property.rentRolls[0];
+    const mostRecentRentRoll = property.RentRoll[0];
     const rentRollDate = mostRecentRentRoll ? new Date(mostRecentRentRoll.date) : new Date();
 
     const units: UnitFutureLeaseData[] = [];
 
         // Process each unit
-    for (const unit of property.units) {
+    for (const unit of property.Unit) {
       const unitData: UnitFutureLeaseData = {
         unitId: unit.id,
         unitNumber: unit.unitNumber
@@ -91,7 +91,7 @@ export async function GET(
 
 
       // Find future leases (leases that start after rent roll date OR have null start date)
-      const futureLeases = unit.leases.filter((lease: any) => {
+      const futureLeases = unit.Lease.filter((lease: any) => {
         // If start date is null, this could be a future lease (like "August 2025 Lease Renewal")
         if (!lease.leaseStartDate) {
           return true; // Include leases with null start dates as potential future leases
@@ -109,14 +109,14 @@ export async function GET(
           
           // Calculate verification status
           let verificationStatus = 'Pending Verification';
-          if (futureLease.incomeVerifications.length > 0) {
-            const latestVerification = futureLease.incomeVerifications[0];
+          if (futureLease.IncomeVerification.length > 0) {
+            const latestVerification = futureLease.IncomeVerification[0];
             if (latestVerification.status === 'FINALIZED') {
               verificationStatus = 'Verified';
             } else if (latestVerification.status === 'IN_PROGRESS') {
               // Check if any documents are waiting for admin review
-              const hasDocumentsNeedingReview = futureLease.residents.some((resident: any) => 
-                resident.incomeDocuments.some((doc: any) => doc.status === 'NEEDS_REVIEW')
+              const hasDocumentsNeedingReview = (futureLease.Resident || []).some((resident: any) => 
+                (resident.IncomeDocument || []).some((doc: any) => doc.status === 'NEEDS_REVIEW')
               );
               
               if (hasDocumentsNeedingReview) {
@@ -128,12 +128,12 @@ export async function GET(
           }
 
           // Calculate total income
-          const totalIncome = futureLease.residents.reduce((acc: number, resident: any) => {
+          const totalIncome = (futureLease.Resident || []).reduce((acc: number, resident: any) => {
             return acc + (resident.annualizedIncome || 0);
           }, 0);
 
           // Generate lease name (first resident name + others)
-          const residentNames = futureLease.residents.map((r: any) => r.name);
+          const residentNames = (futureLease.Resident || []).map((r: any) => r.name);
           const leaseName = residentNames.length > 1 
             ? `${residentNames[0]} + ${residentNames.length - 1} other${residentNames.length > 2 ? 's' : ''}`
             : residentNames[0] || 'Future Lease';
@@ -144,7 +144,7 @@ export async function GET(
             const hudIncomeLimits = await getHudIncomeLimits(property.county, property.state);
             complianceBucket = getActualAmiBucket(
               totalIncome,
-              futureLease.residents.length,
+              (futureLease.Resident || []).length,
               hudIncomeLimits,
               property.complianceOption || "20% at 50% AMI, 55% at 80% AMI"
             );
@@ -158,7 +158,7 @@ export async function GET(
           complianceBucket,
           leaseStartDate: futureLease.leaseStartDate?.toISOString() || '',
           isToggled: false, // Default to not toggled - will be managed by frontend state
-          residents: futureLease.residents
+          residents: futureLease.Resident
         };
       }
 

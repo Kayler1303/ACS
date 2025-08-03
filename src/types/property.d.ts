@@ -3,17 +3,17 @@ import { Property, Unit, RentRoll, Tenancy, Resident, Lease } from '@prisma/clie
 export type { Unit };
 
 export type FullTenancy = Tenancy & {
-  lease: Lease & {
-    residents: Resident[];
-    unit: Unit;
+  Lease: Lease & {
+    Resident: Resident[];
+    Unit: Unit;
   };
 };
 
 export type FullRentRoll = RentRoll & {
-  tenancies: FullTenancy[];
+  Tenancy: FullTenancy[];
 };
 
 export type FullProperty = Property & {
-  units: Unit[];
-  rentRolls: FullRentRoll[];
+  Unit: Unit[];
+  RentRoll: FullRentRoll[];
 }; 

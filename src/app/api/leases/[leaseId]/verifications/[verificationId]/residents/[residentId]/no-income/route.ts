@@ -14,25 +14,25 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { leaseId, verificationId, residentId } = params;
+    const { leaseId, verificationId, residentId } = await params;
 
     // Verify the user owns this property
     const verification = await prisma.incomeVerification.findFirst({
       where: {
         id: verificationId,
         leaseId: leaseId,
-        lease: {
-          unit: {
-            property: {
+        Lease: {
+          Unit: {
+            Property: {
               ownerId: session.user.id
             }
           }
         }
       },
       include: {
-        lease: {
+        Lease: {
           include: {
-            residents: true
+            Resident: true
           }
         }
       }
@@ -43,7 +43,7 @@ export async function PATCH(
     }
 
     // Find the resident
-    const resident = verification.lease.residents.find(r => r.id === residentId);
+    const resident = verification.Lease.Resident.find((r: any) => r.id === residentId);
     if (!resident) {
       return NextResponse.json({ error: 'Resident not found in this lease' }, { status: 404 });
     }
@@ -67,7 +67,7 @@ export async function PATCH(
       WHERE "leaseId" = ${leaseId} AND "incomeFinalized" = true
     `;
 
-    const totalResidents = verification.lease.residents.length;
+    const totalResidents = verification.Lease.Resident.length;
     const finalizedCount = Number(allResidents[0]?.count || 0);
 
     if (finalizedCount === totalResidents) {

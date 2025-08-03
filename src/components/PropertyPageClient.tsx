@@ -133,7 +133,7 @@ const EditableCell: React.FC<EditableCellProps> = ({ value, onSave, className })
 export default function PropertyPageClient({ initialProperty }: PropertyPageClientProps) {
   const [property, setProperty] = useState(initialProperty);
   const [selectedRentRollId, setSelectedRentRollId] = useState<string | null>(
-    initialProperty.rentRolls[0]?.id || null
+    initialProperty.RentRoll[0]?.id || null
   );
   
 
@@ -577,7 +577,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     
     // Get original bucket (what they qualified for at move-in using 140% rule)
     let originalBucket = 'Market';
-    const residents = tenancy.lease.residents;
+    const residents = tenancy.Lease.Resident;
     if (residents.length > 0) {
       // Calculate what their bucket would have been at that time using current HUD limits
       const totalIncomeAtTime = residents.reduce((acc: number, res: Resident) => acc + Number(res.annualizedIncome || 0), 0);
@@ -589,7 +589,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
           residentCountAtTime, 
           hudIncomeLimits, 
           complianceOption,
-          Number(tenancy?.lease.leaseRent || 0),
+          Number(tenancy?.Lease.leaseRent || 0),
           unit.bedroomCount,
           lihtcRentData,
           utilityAllowances
@@ -616,15 +616,15 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       return;
     }
 
-    const selectedRentRoll = property.rentRolls.find((rr: FullRentRoll) => rr.id === selectedRentRollId);
+    const selectedRentRoll = property.RentRoll.find((rr: FullRentRoll) => rr.id === selectedRentRollId);
     if (!selectedRentRoll) {
       return;
     }
 
     // Process each unit
-    const processed = property.units.map((unit: any) => {
-      const tenancy = selectedRentRoll.tenancies.find((t: FullTenancy) => t.lease.unitId === unit.id);
-      const residents = tenancy?.lease.residents || [];
+    const processed = property.Unit.map((unit: any) => {
+      const tenancy = selectedRentRoll.Tenancy.find((t: FullTenancy) => t.Lease?.unitId === unit.id);
+      const residents = tenancy?.Lease?.Resident || [];
       const residentCount = residents.length;
       const totalIncome = residents.reduce((acc: number, resident: any) => acc + Number(resident.annualizedIncome || 0), 0);
 
@@ -634,7 +634,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
           residentCount,
           hudIncomeLimits,
           complianceOption,
-          Number(tenancy?.lease.leaseRent || 0),
+          Number(tenancy?.Lease.leaseRent || 0),
           unit.bedroomCount,
           lihtcRentData,
           includeUtilityAllowances ? utilityAllowances : {}
@@ -668,7 +668,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
 
     // Apply 140% rule for compliance buckets
     const processedWithCompliance = processed.map((unit: ProcessedUnit) => {
-      const tenancy = selectedRentRoll.tenancies.find((t: FullTenancy) => t.lease.unitId === unit.id);
+      const tenancy = selectedRentRoll.Tenancy.find((t: FullTenancy) => t.Lease.unitId === unit.id);
       const complianceBucket = getComplianceBucket(
         unit,
         tenancy,
@@ -683,7 +683,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
 
     console.log('Final processed tenancies:', processedWithCompliance.length);
     setProcessedTenancies(processedWithCompliance);
-  }, [selectedRentRollId, property.rentRolls, property.units, hudIncomeLimits, complianceOption, includeRentAnalysis, lihtcRentData, includeUtilityAllowances, utilityAllowances, verificationData, provisionalLeases, getActualBucket, getActualBucketWithRentAnalysis, getComplianceBucket]);
+  }, [selectedRentRollId, property.RentRoll, property.Unit, hudIncomeLimits, complianceOption, includeRentAnalysis, lihtcRentData, includeUtilityAllowances, utilityAllowances, verificationData, provisionalLeases, getActualBucket, getActualBucketWithRentAnalysis, getComplianceBucket]);
 
   // Handle provisional lease checkbox changes
   const handleProvisionalLeaseToggle = (leaseId: string) => {
@@ -734,7 +734,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       // Update local state
       setProperty((prev: FullProperty) => ({
         ...prev,
-        units: prev.units.map((unit: Unit) => 
+        Unit: prev.Unit.map((unit: Unit) => 
           unit.id === unitId 
             ? { ...unit, [field]: field === 'unitNumber' ? value : Number(value) }
             : unit
@@ -945,22 +945,22 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
 
     // 🎯 SUMMARY BREAKDOWN FOR USER DEBUG
     if (includeRentAnalysis && selectedRentRollId) {
-      const currentRentRoll = property.rentRolls.find((rr: FullRentRoll) => rr.id === selectedRentRollId);
+      const currentRentRoll = property.RentRoll.find((rr: FullRentRoll) => rr.id === selectedRentRollId);
       
       if (currentRentRoll) {
         const activeLeasesArray = processedTenancies.filter(unit => unit.actualBucket !== 'Vacant');
         
         const incomeOnly60 = activeLeasesArray.filter(unit => {
-          const tenancy = currentRentRoll.tenancies.find((t: FullTenancy) => t.lease.unitId === unit.id);
-          const residents = tenancy?.lease?.residents || [];
+          const tenancy = currentRentRoll.Tenancy.find((t: FullTenancy) => t.Lease.unitId === unit.id);
+          const residents = tenancy?.Lease?.Resident || [];
           const totalIncome = residents.reduce((acc: number, res: Resident) => acc + Number(res.annualizedIncome || 0), 0);
           return hudIncomeLimits && getActualBucket(totalIncome, residents.length, hudIncomeLimits, complianceOption) === '60% AMI';
         }).length;
         
         const rentOnly60 = activeLeasesArray.filter(unit => {
           const maxRent60 = (lihtcRentData?.lihtcMaxRents as any)?.['60percent']?.[`${unit.bedroomCount}br`] || 0;
-          const tenancy = currentRentRoll.tenancies.find((t: FullTenancy) => t.lease.unitId === unit.id);
-          const leaseRent = Number(tenancy?.lease.leaseRent || 0);
+          const tenancy = currentRentRoll.Tenancy.find((t: FullTenancy) => t.Lease.unitId === unit.id);
+          const leaseRent = Number(tenancy?.Lease.leaseRent || 0);
           const utilityAllowance = includeUtilityAllowances ? (utilityAllowances[unit.bedroomCount] || 0) : 0;
           const adjustedMaxRent = maxRent60 + utilityAllowance;
           return leaseRent <= adjustedMaxRent;
@@ -1214,7 +1214,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                     onChange={(e) => setSelectedRentRollId(e.target.value)}
                     className="w-full pl-3 pr-10 py-2.5 text-sm border-gray-300 focus:outline-none focus:ring-brand-blue focus:border-brand-blue rounded-md shadow-sm bg-white"
                                               >
-                    {property.rentRolls.map((rentRoll: FullRentRoll) => (
+                    {property.RentRoll.map((rentRoll: FullRentRoll) => (
                       <option key={rentRoll.id} value={rentRoll.id}>
                         {new Date(rentRoll.date).toLocaleDateString()}
                       </option>
@@ -1767,13 +1767,13 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
           </div>
           
           {/* Floor Plan Summary */}
-          {property.units && property.units.length > 0 && (
+          {property.Unit && property.Unit.length > 0 && (
             <div className="border-t border-gray-200 bg-blue-50">
               <div className="px-6 py-4">
                 <h3 className="text-lg font-medium text-gray-900 mb-3">Floor Plan Summary</h3>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                   {Object.entries(
-                    property.units.reduce((acc: { [key: string]: number }, unit: Unit) => {
+                    property.Unit.reduce((acc: { [key: string]: number }, unit: Unit) => {
                       const sqft = unit.squareFootage || 0;
                       const key = sqft > 0 ? sqft.toString() : 'Unknown';
                       acc[key] = (acc[key] || 0) + 1;
@@ -1804,12 +1804,12 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
           )}
           
           {/* Show unit data even without compliance data */}
-          {property.units && property.units.length > 0 && (
+          {property.Unit && property.Unit.length > 0 && (
             <div className="border-t border-gray-200">
               <div className="bg-gray-50 px-6 py-4">
                 <h3 className="text-lg font-medium text-gray-900">Unit Information</h3>
                 <p className="text-sm text-gray-600 mt-1">
-                  {property.units.length} units configured for this property
+                  {property.Unit.length} units configured for this property
                 </p>
               </div>
               
@@ -1829,7 +1829,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {property.units
+                    {property.Unit
                       .sort((a: Unit, b: Unit) => {
                         // Sort by unit number (handle both numeric and alphanumeric)
                         const aNum = parseInt(a.unitNumber) || 0;
@@ -1906,7 +1906,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
               </p>
 
               <div className="space-y-3">
-                {[...new Set(property.units.map((unit: Unit) => unit.bedroomCount))]
+                {[...new Set(property.Unit.map((unit: Unit) => unit.bedroomCount))]
                   .filter((count): count is number => count !== null && count !== undefined && typeof count === 'number')
                                               .sort((a: number, b: number) => a - b)
                   .map((bedroomCount: number) => (

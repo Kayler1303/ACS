@@ -47,7 +47,7 @@ interface IncomeVerification {
   updatedAt?: string;
   finalizedAt?: string | null;
   calculatedVerifiedIncome: number | null;
-  incomeDocuments: IncomeDocument[];
+  IncomeDocument: IncomeDocument[];
   // Add new lease-period fields
   reason?: string;
   verificationPeriodStart?: string;
@@ -78,7 +78,7 @@ interface Unit {
   unitNumber: string;
   squareFootage: number | null;
   bedroomCount: number | null;
-  leases: Lease[];
+  Lease: Lease[];
 }
 
 interface RentRoll {
@@ -92,9 +92,9 @@ interface Lease {
   leaseStartDate: string;
   leaseEndDate: string;
   leaseRent: string | null;
-  residents: Resident[];
-  incomeVerifications: IncomeVerification[];
-  tenancy?: { id: string; rentRollId: string; unitId: string; date: string }; // Added tenancy property
+  Resident: Resident[];
+  IncomeVerification: IncomeVerification[];
+  Tenancy?: { id: string; rentRollId: string; unitId: string; date: string }; // Added Tenancy property
 }
 
 interface TenancyData {
@@ -131,11 +131,11 @@ const formatPayFrequency = (frequency: string): string => {
 function VerificationRow({ verification, lease, onActionComplete }: { verification: IncomeVerification, lease: Lease, onActionComplete: () => void }) {
   
   const getResidentName = (residentId: string) => {
-    return lease.residents.find(r => r.id === residentId)?.name || 'Unknown Resident';
+    return lease.Resident.find(r => r.id === residentId)?.name || 'Unknown Resident';
   };
 
   // Check if any residents in the lease have finalized income
-  const hasAnyFinalizedResidents = lease.residents.some(resident => resident.incomeFinalized);
+  const hasAnyFinalizedResidents = lease.Resident.some(resident => resident.incomeFinalized);
 
   // Only show verified income if residents have been finalized
   const shouldShowVerifiedIncome = hasAnyFinalizedResidents && verification.calculatedVerifiedIncome;
@@ -185,9 +185,9 @@ function VerificationRow({ verification, lease, onActionComplete }: { verificati
         </div>
       </div>
       
-      {verification.incomeDocuments.length > 0 ? (
+      {verification.IncomeDocument.length > 0 ? (
         <ul className="space-y-3">
-          {verification.incomeDocuments.map((doc) => (
+          {verification.IncomeDocument.map((doc) => (
             <li key={doc.id} className="p-3 border rounded-md bg-white shadow-sm">
               <div className="flex justify-between items-start">
                 <div>
@@ -631,8 +631,8 @@ export default function ResidentDetailPage() {
     if (!tenancyData) return;
     
     // Only show confirmation if there's an existing in-progress verification
-    const lease = tenancyData.unit.leases.find(l => l.id === leaseId);
-    const hasInProgressVerification = lease?.incomeVerifications?.some(v => v.status === 'IN_PROGRESS');
+    const lease = tenancyData.unit.Lease.find(l => l.id === leaseId);
+    const hasInProgressVerification = lease?.IncomeVerification?.some(v => v.status === 'IN_PROGRESS');
     if (hasInProgressVerification && !window.confirm('Are you sure you want to start a new verification period? This will finalize the current in-progress period.')) {
         return;
     }
@@ -666,8 +666,8 @@ export default function ResidentDetailPage() {
           
           // Use setTimeout to ensure React state has updated after fetchTenancyData
           setTimeout(() => {
-            const currentLease = tenancyData?.unit.leases.find(l => l.id === leaseId);
-            const residents = currentLease?.residents.map(r => ({ id: r.id, name: r.name })) || [];
+            const currentLease = tenancyData?.unit.Lease.find(l => l.id === leaseId);
+            const residents = currentLease?.Resident.map(r => ({ id: r.id, name: r.name })) || [];
             
             setResidentSelectionDialog({
               isOpen: true,
@@ -687,8 +687,8 @@ export default function ResidentDetailPage() {
           let existingVerificationId = null;
           
           // Look through all leases in the unit to find the in-progress verification
-          for (const lease of tenancyData?.unit.leases || []) {
-            const inProgressVerification = lease.incomeVerifications?.find(v => v.status === 'IN_PROGRESS');
+          for (const lease of tenancyData?.unit.Lease || []) {
+            const inProgressVerification = lease.IncomeVerification?.find(v => v.status === 'IN_PROGRESS');
             if (inProgressVerification) {
               existingVerificationId = inProgressVerification.id;
               break;
@@ -724,8 +724,8 @@ export default function ResidentDetailPage() {
     try {
       // Find the lease that contains the existing verification
       let existingLeaseId = null;
-      for (const lease of tenancyData?.unit.leases || []) {
-        const verification = lease.incomeVerifications?.find(v => v.id === verificationConflictModal.existingVerificationId);
+      for (const lease of tenancyData?.unit.Lease || []) {
+        const verification = lease.IncomeVerification?.find(v => v.id === verificationConflictModal.existingVerificationId);
         if (verification) {
           existingLeaseId = lease.id;
           break;
@@ -980,8 +980,8 @@ export default function ResidentDetailPage() {
 
   // Updated Effect for polling
   useEffect(() => {
-    const isProcessing = tenancyData?.lease.incomeVerifications.some(v =>
-        v.incomeDocuments.some(d => d.status === 'PROCESSING' || d.status === 'UPLOADED')
+    const isProcessing = tenancyData?.lease.IncomeVerification.some(v =>
+        v.IncomeDocument.some(d => d.status === 'PROCESSING' || d.status === 'UPLOADED')
     );
 
     if (isProcessing) {
@@ -1028,14 +1028,14 @@ export default function ResidentDetailPage() {
     if (!tenancyData) return;
 
     // Check each lease for income discrepancies
-    tenancyData.unit.leases.forEach(lease => {
-      const verification = lease.incomeVerifications.find(v => v.status === 'IN_PROGRESS') || 
-                         lease.incomeVerifications.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+    tenancyData.unit.Lease.forEach(lease => {
+      const verification = lease.IncomeVerification.find(v => v.status === 'IN_PROGRESS') || 
+                         lease.IncomeVerification.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
       
       if (!verification || !verification.calculatedVerifiedIncome) return;
 
       // Get rent roll income (original uploaded income for all residents in this lease)
-      const rentRollIncome = lease.residents.reduce((sum, resident) => {
+      const rentRollIncome = lease.Resident.reduce((sum, resident) => {
         return sum + (Number(resident.annualizedIncome) || 0);
       }, 0);
 
@@ -1163,15 +1163,15 @@ export default function ResidentDetailPage() {
     // implement a mechanism to match provisional leases with new tenancies from rent roll uploads.
     // This could involve a UI where the user can select a provisional lease to link to a new tenancy.
 
-    return tenancyData.unit.leases.map(lease => {
+    return tenancyData.unit.Lease.map(lease => {
       const leaseStart = lease.leaseStartDate ? new Date(lease.leaseStartDate) : null;
       const leaseEnd = lease.leaseEndDate ? new Date(lease.leaseEndDate) : null;
       const currentDate = new Date();
 
-      const verification = lease.incomeVerifications.find(v => v.status === 'IN_PROGRESS') || lease.incomeVerifications.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+      const verification = lease.IncomeVerification.find(v => v.status === 'IN_PROGRESS') || lease.IncomeVerification.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
       const status = getPeriodStatus({ verification });
 
-      const isProvisional = !lease.tenancy;
+      const isProvisional = !lease.Tenancy;
       
       // Fetch AMI bucket data for completed provisional leases
       if (status === 'completed' && isProvisional && !amiBucketData[lease.id]) {
@@ -1185,7 +1185,7 @@ export default function ResidentDetailPage() {
         isCurrentPeriod: leaseStart && leaseEnd && currentDate >= leaseStart && currentDate <= leaseEnd,
         status,
         verification,
-        isProvisional: !lease.tenancy,
+        isProvisional: !lease.Tenancy,
         amiBucketInfo: amiBucketData[lease.id],
       };
     }).sort((a, b) => {
@@ -1367,7 +1367,7 @@ export default function ResidentDetailPage() {
                           )}
                         </div>
                         <div className="text-sm text-gray-500 mt-1">
-                          {period.residents.length} {period.residents.length === 1 ? 'resident' : 'residents'}
+                          {period.Resident.length} {period.Resident.length === 1 ? 'resident' : 'residents'}
                         </div>
                       </div>
                       <div className="flex items-center space-x-3">
@@ -1420,14 +1420,23 @@ export default function ResidentDetailPage() {
                           <p className="text-sm font-medium text-gray-500">Lease Verified Income</p>
                           <p className="text-lg font-semibold text-gray-900">
                             {(() => {
-                              // Calculate verified income for this specific lease
-                              const leaseVerifiedIncome = period.residents.reduce((total, resident) => {
-                                return total + (resident.incomeFinalized ? (resident.calculatedAnnualizedIncome || 0) : 0);
+                              // Check if ALL residents are finalized (not just some)
+                              const allResidents = period.Resident;
+                              const finalizedResidents = allResidents.filter(resident => resident.incomeFinalized);
+                              const allResidentsFinalized = allResidents.length > 0 && finalizedResidents.length === allResidents.length;
+                              
+                              if (!allResidentsFinalized) {
+                                return <span className="text-gray-400">Not Finalized</span>;
+                              }
+                              
+                              // Calculate verified income only when all residents are finalized
+                              const leaseVerifiedIncome = finalizedResidents.reduce((total, resident) => {
+                                return total + (resident.calculatedAnnualizedIncome || 0);
                               }, 0);
                               
                               return leaseVerifiedIncome > 0 
                                 ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(leaseVerifiedIncome)
-                                : <span className="text-gray-400">Not Finalized</span>;
+                                : <span className="text-gray-400">$0.00</span>;
                             })()}
                           </p>
                         </div>
@@ -1468,11 +1477,11 @@ export default function ResidentDetailPage() {
                   </div>
 
                   {/* Residents List */}
-                  {period.residents.length > 0 ? (
+                  {period.Resident.length > 0 ? (
                     <div className="divide-y divide-gray-200">
-                      {period.residents.map((resident) => {
+                      {period.Resident.map((resident) => {
                         // Filter documents for this resident - SHOW ALL DOCUMENTS
-                        const residentDocuments = verification?.incomeDocuments?.filter(
+                        const residentDocuments = verification?.IncomeDocument?.filter(
                           doc => doc.residentId === resident.id
                         ) || [];
                         
@@ -1778,7 +1787,7 @@ export default function ResidentDetailPage() {
                                           verificationId: verification.id,
                                           leaseName: period.name,
                                           residents: [{ id: resident.id, name: resident.name }], // Only this resident
-                                          hasExistingDocuments: !!verification.incomeDocuments?.some(d => d.residentId === resident.id)
+                                          hasExistingDocuments: !!verification.IncomeDocument?.some(d => d.residentId === resident.id)
                                         });
                                         setUploadDialogOpen(true);
                                       } else {
@@ -1904,7 +1913,7 @@ export default function ResidentDetailPage() {
           onClose={handleCloseFinalizationDialog}
           onConfirm={handleFinalizeVerification}
           verification={finalizationDialog.verification}
-          residents={tenancyData?.unit.leases.find(l => l.id === finalizationDialog.verification?.leaseId)?.residents || []}
+          residents={tenancyData?.unit.Lease.find(l => l.id === finalizationDialog.verification?.leaseId)?.Resident || []}
         />
       )}
 
@@ -1927,7 +1936,7 @@ export default function ResidentDetailPage() {
         rentRollIncome={discrepancyModal.rentRollIncome}
         verifiedIncome={discrepancyModal.verifiedIncome}
         unitNumber={formatUnitNumber(tenancyData?.unit.unitNumber || '')}
-        residentName={discrepancyModal.lease?.residents.length === 1 ? discrepancyModal.lease.residents[0].name : undefined}
+        residentName={discrepancyModal.lease?.Resident.length === 1 ? discrepancyModal.lease.Resident[0].name : undefined}
         onAcceptVerifiedIncome={handleAcceptVerifiedIncome}
         onModifyDocuments={handleModifyDocuments}
         onSubmitOverrideRequest={handleSubmitOverrideRequest}
@@ -1986,8 +1995,8 @@ export default function ResidentDetailPage() {
           onAddSelected={handleCopyResidents}
           leaseName={selectedLeaseForResident.name}
           currentResidents={
-            tenancyData.unit.leases.find(l => l.tenancy && l.leaseStartDate)
-              ?.residents || []
+            tenancyData.unit.Lease.find(l => l.Tenancy && l.leaseStartDate)
+              ?.Resident || []
           }
         />
       )}

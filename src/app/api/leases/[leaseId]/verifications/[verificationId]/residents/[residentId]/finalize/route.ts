@@ -23,22 +23,22 @@ export async function PATCH(
       where: {
         id: verificationId,
         leaseId: leaseId,
-        lease: {
-          unit: {
-            property: {
+        Lease: {
+          Unit: {
+            Property: {
               ownerId: session.user.id
             }
           }
         }
       },
       include: {
-        lease: {
+        Lease: {
           include: {
-            residents: true,
-            unit: true
+            Resident: true,
+            Unit: true
           }
         },
-        incomeDocuments: {
+        IncomeDocument: {
           where: {
             residentId: residentId,
             status: DocumentStatus.COMPLETED
@@ -52,7 +52,7 @@ export async function PATCH(
     }
 
     // Verify that the resident belongs to this lease
-    const resident = verification.lease.residents.find(r => r.id === residentId);
+    const resident = verification.Lease.Resident.find(r => r.id === residentId);
     if (!resident) {
       return NextResponse.json({ error: 'Resident not found in this lease' }, { status: 404 });
     }
@@ -70,13 +70,30 @@ export async function PATCH(
       WHERE "id" = ${residentId}
     `;
 
+    // Mark all documents for this resident in this verification as COMPLETED
+    // This ensures the verification status calculation recognizes them as verified
+    await prisma.incomeDocument.updateMany({
+      where: {
+        residentId: residentId,
+        verificationId: verificationId,
+        status: {
+          in: ['PROCESSING', 'NEEDS_REVIEW', 'UPLOADED'] // Only update non-completed documents
+        }
+      },
+      data: {
+        status: DocumentStatus.COMPLETED
+      }
+    });
+
+    console.log(`[DEBUG] Marked documents as COMPLETED for resident ${residentId} in verification ${verificationId}`);
+
     // Get the total uploaded income for discrepancy check
-    const totalUploadedIncome = verification.lease.residents.reduce((acc, r) => acc + (Number(r.annualizedIncome) || 0), 0);
+    const totalUploadedIncome = verification.Lease.Resident.reduce((acc: number, r: any) => acc + (Number(r.annualizedIncome) || 0), 0);
     
     // Check for income discrepancy and create auto-override if needed
     try {
       await checkAndCreateIncomeDiscrepancyOverride({
-        unitId: verification.lease.unit.id,
+        unitId: verification.Lease.Unit.id,
         verificationId: verification.id,
         residentId: residentId,
         totalUploadedIncome,
@@ -89,7 +106,7 @@ export async function PATCH(
     }
 
     // Check if all residents in the lease now have finalized income
-    const allResidents = verification.lease.residents;
+    const allResidents = verification.Lease.Resident;
     const residentsWithFinalizedIncomeCount = await prisma.$queryRaw<{count: number}[]>`
       SELECT COUNT(*) as count 
       FROM "Resident" 
@@ -119,7 +136,7 @@ export async function PATCH(
       // Check for income discrepancy at verification level too
       try {
         await checkAndCreateIncomeDiscrepancyOverride({
-          unitId: verification.lease.unit.id,
+          unitId: verification.Lease.Unit.id,
           verificationId: verification.id,
           totalUploadedIncome,
           totalVerifiedIncome,

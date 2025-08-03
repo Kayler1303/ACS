@@ -30,40 +30,40 @@ export async function GET(req: NextRequest, { params }: { params: { id: string, 
             where: {
                 id: unitId,
                 propertyId: propertyId,
-                property: {
+                Property: {
                     ownerId: session.user.id,
                 }
             },
             include: {
-                leases: {
+                Lease: {
                     include: {
-                        residents: {
+                        Resident: {
                             orderBy: {
                                 annualizedIncome: 'desc'
                             },
                             include: {
-                                incomeDocuments: {
+                                IncomeDocument: {
                                     orderBy: {
                                         uploadDate: 'desc'
                                     }
                                 }
                             }
                         },
-                        incomeVerifications: {
+                        IncomeVerification: {
                             orderBy: {
                                 createdAt: 'desc'
                             },
                             include: {
-                                incomeDocuments: {
+                                IncomeDocument: {
                                     orderBy: {
                                         uploadDate: 'desc'
                                     }
                                 }
                             }
                         },
-                        tenancy: {
+                        Tenancy: {
                             include: {
-                                rentRoll: true
+                                RentRoll: true
                             }
                         }
                     }
@@ -76,10 +76,10 @@ export async function GET(req: NextRequest, { params }: { params: { id: string, 
         }
 
         // Enhance residents with income finalization data using batched Prisma query
-        for (const lease of unitWithLeases.leases) {
-            if (lease.residents.length > 0) {
+        for (const lease of unitWithLeases.Lease) {
+            if (lease.Resident.length > 0) {
                 // Batch fetch all resident data in a single query instead of individual queries
-                const residentIds = lease.residents.map(r => r.id);
+                const residentIds = lease.Resident.map(r => r.id);
                 const residentDataMap = await prisma.resident.findMany({
                     where: { id: { in: residentIds } },
                     select: {
@@ -98,30 +98,47 @@ export async function GET(req: NextRequest, { params }: { params: { id: string, 
                 );
 
                 // Apply the data to each resident
-                for (let i = 0; i < lease.residents.length; i++) {
-                    const residentData = residentDataMap[lease.residents[i].id];
+                for (let i = 0; i < lease.Resident.length; i++) {
+                    const residentData = residentDataMap[lease.Resident[i].id];
                     
                     if (residentData) {
-                        (lease.residents[i] as any).calculatedAnnualizedIncome = residentData.calculatedAnnualizedIncome;
-                        (lease.residents[i] as any).incomeFinalized = residentData.incomeFinalized;
-                        (lease.residents[i] as any).finalizedAt = residentData.finalizedAt;
-                        (lease.residents[i] as any).hasNoIncome = residentData.hasNoIncome;
+                        (lease.Resident[i] as any).calculatedAnnualizedIncome = residentData.calculatedAnnualizedIncome;
+                        (lease.Resident[i] as any).incomeFinalized = residentData.incomeFinalized;
+                        (lease.Resident[i] as any).finalizedAt = residentData.finalizedAt;
+                        (lease.Resident[i] as any).hasNoIncome = residentData.hasNoIncome;
                     }
                 }
             }
         }
 
         // Find the specific tenancy linked to the rent roll
-        const tenancyLease = unitWithLeases.leases.find((l: { tenancy: { rentRollId: string; } | null; }) => l.tenancy?.rentRollId === rentRollId);
+        const tenancyLease = unitWithLeases.Lease.find((l: { Tenancy: { rentRollId: string; } | null; }) => l.Tenancy?.rentRollId === rentRollId);
         const tenancy = tenancyLease ? {
-            id: tenancyLease.tenancy?.id,
+            id: tenancyLease.Tenancy?.id,
             lease: tenancyLease,
             unit: unitWithLeases,
-            rentRoll: tenancyLease.tenancy?.rentRoll,
+            rentRoll: tenancyLease.Tenancy?.RentRoll,
         } : null;
 
         if (!tenancy) {
             return NextResponse.json({ error: 'Tenancy for this rent roll not found' }, { status: 404 });
+        }
+
+        // Explicitly convert Prisma Decimal fields to numbers for proper frontend calculation
+        if (tenancy?.lease?.Resident) {
+            tenancy.lease.Resident = tenancy.lease.Resident.map((resident: any) => ({
+                ...resident,
+                calculatedAnnualizedIncome: resident.calculatedAnnualizedIncome ? Number(resident.calculatedAnnualizedIncome) : null,
+                verifiedIncome: resident.verifiedIncome ? Number(resident.verifiedIncome) : null,
+                annualizedIncome: resident.annualizedIncome ? Number(resident.annualizedIncome) : null,
+            }));
+        }
+
+        if (tenancy?.lease?.IncomeVerification) {
+            tenancy.lease.IncomeVerification = tenancy.lease.IncomeVerification.map((verification: any) => ({
+                ...verification,
+                calculatedVerifiedIncome: verification.calculatedVerifiedIncome ? Number(verification.calculatedVerifiedIncome) : null,
+            }));
         }
 
         return NextResponse.json(tenancy);

@@ -27,10 +27,10 @@ export async function GET(
 
     const provisionalLeases = await prisma.lease.findMany({
       where: {
-        unit: {
+        Unit: {
           propertyId: propertyId,
         },
-        tenancy: null,
+        Tenancy: null,
         // Only include leases that START after the most recent rent roll date
         // This excludes active leases (including month-to-month) and past leases
         leaseStartDate: mostRecentRentRoll ? {
@@ -38,10 +38,10 @@ export async function GET(
         } : undefined,
       },
       include: {
-        unit: true,
-        residents: {
+        Unit: true,
+        Resident: {
           include: {
-            incomeDocuments: {
+            IncomeDocument: {
               where: {
                 status: { in: ['COMPLETED', 'NEEDS_REVIEW'] }
               },
@@ -51,7 +51,7 @@ export async function GET(
             }
           }
         },
-        incomeVerifications: {
+        IncomeVerification: {
           orderBy: {
             createdAt: 'desc'
           },
@@ -63,9 +63,9 @@ export async function GET(
     // Add verification status and resident count to each lease
     const leasesWithVerificationStatus = provisionalLeases.map(lease => ({
       ...lease,
-      isVerificationFinalized: lease.incomeVerifications.length > 0 && 
-        lease.incomeVerifications[0].status === 'FINALIZED',
-      residentCount: lease.residents.length
+      isVerificationFinalized: lease.IncomeVerification.length > 0 && 
+        lease.IncomeVerification[0].status === 'FINALIZED',
+      residentCount: lease.Resident.length
     }));
 
     return NextResponse.json(leasesWithVerificationStatus, { status: 200 });

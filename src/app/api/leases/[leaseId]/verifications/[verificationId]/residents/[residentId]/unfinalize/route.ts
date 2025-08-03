@@ -21,19 +21,19 @@ export async function PATCH(
       where: {
         id: verificationId,
         leaseId: leaseId,
-        lease: {
-          unit: {
-            property: {
+        Lease: {
+          Unit: {
+            Property: {
               ownerId: session.user.id
             }
           }
         }
       },
       include: {
-        lease: {
+        Lease: {
           include: {
-            residents: true,
-            unit: true
+            Resident: true,
+            Unit: true
           }
         }
       }
@@ -44,7 +44,7 @@ export async function PATCH(
     }
 
     // Verify that the resident belongs to this lease
-    const resident = verification.lease.residents.find(r => r.id === residentId);
+    const resident = verification.Lease.Resident.find((r: any) => r.id === residentId);
     if (!resident) {
       return NextResponse.json({ error: 'Resident not found in this lease' }, { status: 404 });
     }
@@ -64,7 +64,7 @@ export async function PATCH(
     console.log(`[DEBUG] Resident ${residentId} income has been unfinalized`);
 
     // Check if verification should be set back to in progress since we removed finalization
-    const allResidents = verification.lease.residents;
+    const allResidents = verification.Lease.Resident;
     const residentsWithFinalizedIncomeCount = await prisma.$queryRaw<{count: number}[]>`
       SELECT COUNT(*) as count 
       FROM "Resident" 

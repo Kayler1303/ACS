@@ -24,13 +24,13 @@ export async function GET(
         ownerId: session.user.id,
       },
       include: {
-        units: {
+        Unit: {
           include: {
-            leases: {
+            Lease: {
               include: {
-                residents: {
+                Resident: {
                   include: {
-                    incomeDocuments: {
+                    IncomeDocument: {
                       where: {
                         status: { in: ['COMPLETED', 'NEEDS_REVIEW'] }, // Include completed and needs review documents
                       },
@@ -40,21 +40,21 @@ export async function GET(
                     },
                   },
                 },
-                incomeVerifications: {
+                IncomeVerification: {
                   orderBy: {
                     createdAt: 'desc',
                   },
                 },
-                tenancy: {
+                Tenancy: {
                   include: {
-                    rentRoll: true,
+                    RentRoll: true,
                   },
                 },
               },
             },
           },
         },
-        rentRolls: {
+        RentRoll: {
           orderBy: {
             date: 'desc',
           },
@@ -67,11 +67,11 @@ export async function GET(
       return NextResponse.json({ error: 'Property not found or access denied' }, { status: 404 });
     }
 
-    if (property.rentRolls.length === 0) {
+    if (property.RentRoll.length === 0) {
       return NextResponse.json({ error: 'No rent rolls found for this property' }, { status: 404 });
     }
 
-    const latestRentRollDate = new Date(property.rentRolls[0].date);
+    const latestRentRollDate = new Date(property.RentRoll[0].date);
     const units: UnitVerificationData[] = [];
     let summary = {
       verified: 0,
@@ -82,15 +82,19 @@ export async function GET(
     };
 
     // Process each unit
-    for (const unit of property.units) {
+    for (const unit of property.Unit) {
       // SIMPLIFIED: Only handle current leases (with tenancy)
-      const currentLease = unit.leases
+      const currentLease = unit.Lease
         .filter((l: any) => l.tenancy !== null)
-        .sort((a: any, b: any) => new Date(b.tenancy!.createdAt).getTime() - new Date(a.tenancy!.createdAt).getTime())[0];
+        .sort((a: any, b: any) => {
+          const aDate = a.tenancy?.createdAt ? new Date(a.tenancy.createdAt).getTime() : 0;
+          const bDate = b.tenancy?.createdAt ? new Date(b.tenancy.createdAt).getTime() : 0;
+          return bDate - aDate;
+        })[0];
 
       // Calculate total uploaded income (from compliance uploads) - only use active lease
       const totalUploadedIncome = currentLease 
-        ? currentLease.residents.reduce((acc: any, r: any) => acc + (r.annualizedIncome || 0), 0)
+        ? (currentLease.Resident || []).reduce((acc: any, r: any) => acc + (r.annualizedIncome || 0), 0)
         : 0;
 
       // Calculate total verified income using resident-level data and create enhanced unit for verification status
@@ -99,7 +103,7 @@ export async function GET(
       
       if (currentLease) {
         // Batch fetch all resident income data in a single query instead of individual queries
-        const residentIds = currentLease.residents.map((r: any) => r.id);
+        const residentIds = (currentLease.Resident || []).map((r: any) => r.id);
         const residentIncomeDataMap = await prisma.resident.findMany({
           where: { id: { in: residentIds } },
           select: {
@@ -117,7 +121,7 @@ export async function GET(
         );
 
         const enhancedResidents = [];
-        for (const resident of currentLease.residents) {
+        for (const resident of currentLease.Resident || []) {
           const residentIncomeData = residentIncomeDataMap[resident.id];
           
           const enhancedResident = {
@@ -151,10 +155,16 @@ export async function GET(
         }
         
         // Create enhanced unit with enhanced residents for verification status calculation
-        const enhancedLease = { ...currentLease, residents: enhancedResidents };
+        const enhancedLease = { 
+          ...currentLease, 
+          Resident: enhancedResidents,
+          // Ensure all original relationships are preserved
+          Tenancy: currentLease.Tenancy,
+          IncomeVerification: currentLease.IncomeVerification
+        };
         enhancedUnit = {
           ...unit,
-          leases: unit.leases.map((lease: any) => 
+          Lease: (unit.Lease || []).map((lease: any) => 
             lease.id === currentLease.id ? enhancedLease : lease
           )
         };
@@ -168,13 +178,13 @@ export async function GET(
         verificationStatus = 'Vacant';
       } else {
         // Check if there's an active income verification in progress  
-        if (currentLease.incomeVerifications.length > 0) {
-          const latestVerification = currentLease.incomeVerifications[0]; // Already sorted by createdAt desc
+        if (currentLease.IncomeVerification.length > 0) {
+          const latestVerification = currentLease.IncomeVerification[0]; // Already sorted by createdAt desc
           
           if (latestVerification.status === 'IN_PROGRESS') {
             // Check if any documents are waiting for admin review
-            const hasDocumentsNeedingReview = currentLease.residents.some((resident: any) => 
-              resident.incomeDocuments.some((doc: any) => doc.status === 'NEEDS_REVIEW')
+            const hasDocumentsNeedingReview = (currentLease.Resident || []).some((resident: any) => 
+              (resident.IncomeDocument || []).some((doc: any) => doc.status === 'NEEDS_REVIEW')
             );
             
             if (hasDocumentsNeedingReview) {
@@ -221,13 +231,13 @@ export async function GET(
 
       // Count documents
       const documentCount = currentLease 
-        ? currentLease.residents.flatMap((r: any) => r.incomeDocuments).length
+        ? (currentLease.Resident || []).flatMap((r: any) => r.IncomeDocument || []).length
         : 0;
 
       // Find last verification update
       const lastVerificationUpdate = currentLease 
-        ? currentLease.residents
-            .flatMap((r: any) => r.incomeDocuments)
+        ? (currentLease.Resident || [])
+            .flatMap((r: any) => r.IncomeDocument || [])
             .reduce((latest: any, doc: any) => {
               const docDate = new Date(doc.uploadDate);
               return !latest || docDate > latest ? docDate : latest;

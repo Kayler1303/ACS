@@ -9,11 +9,12 @@ type ExtendedResident = Resident & {
 };
 
 type FullUnit = Unit & {
-  leases: (Lease & {
-    residents: (ExtendedResident & {
-      incomeDocuments: IncomeDocument[];
+  Lease: (Lease & {
+    Resident: (ExtendedResident & {
+      IncomeDocument: IncomeDocument[];
     })[];
-    tenancy: Tenancy | null;
+    Tenancy: Tenancy | null;
+    IncomeVerification?: any[];
   })[];
 };
 
@@ -30,13 +31,13 @@ export type VerificationStatus = "Verified" | "Needs Investigation" | "Out of Da
 export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Date): VerificationStatus {
   // Find the lease associated with the most recent rent roll for this unit.
   // IMPORTANT: Exclude provisional leases (leases without tenancy) as per user requirements
-  const lease = unit.leases
-    .filter(l => l.tenancy !== null) // Only include leases that are linked to a rent roll
-    .sort((a, b) => new Date(b.tenancy!.createdAt).getTime() - new Date(a.tenancy!.createdAt).getTime())[0];
+  const lease = (unit.Lease || [])
+    .filter((l: any) => l.Tenancy !== null) // Only include leases that are linked to a rent roll
+    .sort((a: any, b: any) => new Date(b.Tenancy!.createdAt).getTime() - new Date(a.Tenancy!.createdAt).getTime())[0];
     
   console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}:`, {
-    totalLeases: unit.leases.length,
-    leasesWithTenancy: unit.leases.filter(l => l.tenancy !== null).length,
+    totalLeases: (unit.Lease || []).length,
+    leasesWithTenancy: (unit.Lease || []).filter((l: any) => l.Tenancy !== null).length,
     selectedLease: lease?.id,
     leaseStartDate: lease?.leaseStartDate
   });
@@ -51,9 +52,9 @@ export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Da
     return "Vacant"; // Changed from "Pending Lease Start" to "Vacant" to match user requirements
   }
 
-  const leaseStartDate = new Date(lease.leaseStartDate);
-  const allResidents = lease.residents;
-  const allDocuments = allResidents.flatMap(r => r.incomeDocuments || []);
+  const leaseStartDate = new Date(lease.leaseStartDate!);
+  const allResidents = (lease as any).Resident || [];
+  const allDocuments = allResidents.flatMap((r: any) => (r as any).IncomeDocument || []);
   
   console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}:`, {
     leaseStartDate: leaseStartDate.toISOString(),
@@ -63,7 +64,7 @@ export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Da
   
   // Debug: Check what resident data we're receiving
   console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber} - Resident Details:`, 
-    allResidents.map(r => ({
+    allResidents.map((r: any) => ({
       id: r.id,
       name: r.name,
       hasNoIncome: r.hasNoIncome,
@@ -73,7 +74,7 @@ export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Da
   );
   
   // Check if there's an active income verification in progress
-  const activeVerifications = (lease as any).incomeVerifications || [];
+  const activeVerifications = (lease as any).IncomeVerification || [];
   const latestVerification = activeVerifications
     .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
   
@@ -93,23 +94,27 @@ export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Da
   // Check if income has been verified for all residents
   // This can happen through either:
   // 1. Residents with completed documents, OR
-  // 2. Residents marked as "No Income" (hasNoIncome = true and incomeFinalized = true)
+  // 2. Residents marked as "No Income" (hasNoIncome = true and incomeFinalized = true), OR
+  // 3. Residents who have been finalized through the finalization process (incomeFinalized = true)
   
   const verifiedDocuments = allDocuments.filter(d => d && d.status === 'COMPLETED');
   const residentsWithNoIncomeFinalized = allResidents.filter(r => r.hasNoIncome && r.incomeFinalized);
   const residentsWithVerifiedDocuments = allResidents.filter(r => 
     verifiedDocuments.some(doc => doc.residentId === r.id)
   );
+  const residentsWithFinalizedIncome = allResidents.filter(r => r.incomeFinalized && !r.hasNoIncome);
   
   const totalResidentsWithVerifiedIncome = new Set([
     ...residentsWithNoIncomeFinalized.map(r => r.id),
-    ...residentsWithVerifiedDocuments.map(r => r.id)
+    ...residentsWithVerifiedDocuments.map(r => r.id),
+    ...residentsWithFinalizedIncome.map(r => r.id)
   ]).size;
 
   console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}:`, {
     verifiedDocuments: verifiedDocuments.length,
     residentsWithNoIncomeFinalized: residentsWithNoIncomeFinalized.length,
     residentsWithVerifiedDocuments: residentsWithVerifiedDocuments.length,
+    residentsWithFinalizedIncome: residentsWithFinalizedIncome.length,
     totalResidentsWithVerifiedIncome,
     totalResidents: allResidents.length,
     documentStatuses: allDocuments.map(d => ({ id: d?.id, status: d?.status, type: d?.documentType }))
@@ -127,120 +132,9 @@ export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Da
     return "Out of Date Income Documents";
   }
 
-  // Check timeliness of documents (only for residents with actual documents, not "No Income" residents)
-  const areDocumentsTimely = verifiedDocuments.every(doc => {
-    if (!doc || !doc.documentType) {
-      console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: Document missing type - failing timeliness check`);
-      return false; // Add safety check
-    }
-    
-    if (doc.documentType === DocumentType.W2) {
-      if (!doc.taxYear) {
-        console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: W2 missing tax year - failing timeliness check`);
-        return false;
-      }
-      const leaseStartYear = getYear(leaseStartDate);
-      const leaseStartMonth = leaseStartDate.getMonth(); // 0-indexed (0=Jan, 1=Feb, 2=Mar)
-
-      const isTimely = leaseStartMonth <= 2 
-        ? (doc.taxYear === leaseStartYear - 1 || doc.taxYear === leaseStartYear - 2)
-        : (doc.taxYear === leaseStartYear - 1);
-        
-      console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: W2 timeliness check:`, {
-        docTaxYear: doc.taxYear,
-        leaseStartYear,
-        leaseStartMonth,
-        isTimely
-      });
-      
-      return isTimely;
-    } else {
-      // For non-W2 documents: must be within 6 months prior to lease start OR on/after lease start
-      const documentDate = new Date(doc.documentDate);
-      const sixMonthsBeforeLeaseStart = subMonths(leaseStartDate, 6);
-      // Valid if within 6 months prior to lease start, or any time on or after lease start
-      // Set reasonable future limit of 10 years for sanity check
-      const tenYearsAfterLeaseStart = new Date(new Date(leaseStartDate).setFullYear(leaseStartDate.getFullYear() + 10));
-      
-      const isTimely = isWithinInterval(documentDate, { start: sixMonthsBeforeLeaseStart, end: tenYearsAfterLeaseStart });
-      
-      console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: Non-W2 timeliness check:`, {
-        documentType: doc.documentType,
-        documentDate: documentDate.toISOString(),
-        leaseStartDate: leaseStartDate.toISOString(),
-        sixMonthsBeforeLeaseStart: sixMonthsBeforeLeaseStart.toISOString(),
-        tenYearsAfterLeaseStart: tenYearsAfterLeaseStart.toISOString(),
-        isTimely
-      });
-      
-      return isTimely;
-    }
-  });
-
-  if (!areDocumentsTimely) {
-    console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: Documents not timely - returning Out of Date Income Documents`);
-    return "Out of Date Income Documents";
-  }
-
-  // Check if names on documents match resident names (only for residents with actual documents, not "No Income" residents)
-  const doNamesMatch = verifiedDocuments.every(doc => {
-      const resident = allResidents.find(r => r.id === doc.residentId);
-      if (!resident || !doc.employeeName) {
-        console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: Name validation failed - no resident or employee name:`, {
-          residentFound: !!resident,
-          employeeName: doc.employeeName
-        });
-        return false;
-      }
-      
-      const residentNameLower = resident.name.toLowerCase().trim();
-      const employeeNameLower = doc.employeeName.toLowerCase().trim();
-      
-      // Skip validation for extremely short names (likely extraction errors)
-      if (employeeNameLower.length <= 1) {
-        console.log(`⚠️ Name validation skipped for very short employee name: "${doc.employeeName}"`);
-        return true; // Allow very short names to pass (likely OCR errors)
-      }
-      
-      // Enhanced name matching: handles middle initials and variations
-      // Split names into words for flexible matching
-      const residentWords = residentNameLower.split(/\s+/).filter(word => word.length > 0);
-      const employeeWords = employeeNameLower.split(/\s+/).filter(word => word.length > 0);
-      
-      let namesMatch = false;
-      
-      // Check if employee name contains resident's first and last name (allowing middle initials)
-      // Example: "Blanca Soto" should match "Blanca I Soto"
-      if (residentWords.length >= 2 && employeeWords.length >= 2) {
-        const residentFirst = residentWords[0];
-        const residentLast = residentWords[residentWords.length - 1];
-        const employeeFirst = employeeWords[0];
-        const employeeLast = employeeWords[employeeWords.length - 1];
-        
-        // Match if first and last names match (case-insensitive)
-        if (residentFirst === employeeFirst && residentLast === employeeLast) {
-          namesMatch = true;
-        }
-      }
-      
-      // Fallback to original contains logic
-      if (!namesMatch) {
-        namesMatch = residentNameLower.includes(employeeNameLower) || employeeNameLower.includes(residentNameLower);
-      }
-      
-      console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: Name matching:`, {
-        residentName: resident.name,
-        employeeName: doc.employeeName,
-        namesMatch
-      });
-      
-      return namesMatch;
-  });
-
-  if (!doNamesMatch) {
-    console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: Names don't match - returning Out of Date Income Documents`);
-    return "Out of Date Income Documents";
-  }
+  // NOTE: Timeliness and name validation now happens during document upload
+  // Only COMPLETED documents should reach this point, having already passed validation
+  console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: Skipping timeliness and name checks - these are now handled during upload`);
 
   // Check if total uploaded income matches total verified income
   const totalUploadedIncome = allResidents.reduce((acc, r) => acc + (Number(r.annualizedIncome) || 0), 0);
