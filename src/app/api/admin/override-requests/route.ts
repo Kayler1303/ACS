@@ -102,11 +102,11 @@ export async function GET(request: NextRequest) {
         const resident = await prisma.resident.findUnique({
           where: { id: request.residentId },
           include: {
-            lease: {
+            Lease: {
               include: {
-                unit: {
+                Unit: {
                   include: {
-                    property: { select: { id: true, name: true, address: true } }
+                    Property: { select: { id: true, name: true, address: true } }
                   }
                 }
               }
@@ -121,19 +121,19 @@ export async function GET(request: NextRequest) {
         const verification = await prisma.incomeVerification.findUnique({
           where: { id: request.verificationId },
           include: {
-            incomeDocuments: {
+            IncomeDocument: {
               include: {
-                resident: { select: { id: true, name: true } }
+                Resident: { select: { id: true, name: true } }
               }
             },
-            lease: {
+            Lease: {
               include: {
-                unit: {
+                Unit: {
                   include: {
-                    property: { select: { id: true, name: true, address: true } }
+                    Property: { select: { id: true, name: true, address: true } }
                   }
                 },
-                residents: true
+                Resident: true
               }
             }
           }
@@ -146,14 +146,14 @@ export async function GET(request: NextRequest) {
         const document = await prisma.incomeDocument.findUnique({
           where: { id: request.documentId },
           include: {
-            resident: { select: { id: true, name: true } },
+            Resident: { select: { id: true, name: true } },
             verification: {
               include: {
-                lease: {
+                Lease: {
                   include: {
-                    unit: {
+                    Unit: {
                       include: {
-                        property: { select: { id: true, name: true, address: true } }
+                        Property: { select: { id: true, name: true, address: true } }
                       }
                     }
                   }
