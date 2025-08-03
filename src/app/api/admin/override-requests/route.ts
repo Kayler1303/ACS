@@ -167,10 +167,10 @@ export async function GET(request: NextRequest) {
 
       // Calculate income discrepancy details for INCOME_DISCREPANCY requests
       if (request.type === 'INCOME_DISCREPANCY' && contextualData.unit) {
-        const lease = contextualData.unit.leases[0]; // Most recent lease
+        const lease = contextualData.unit.Lease[0]; // Most recent lease
         if (lease) {
-          const complianceIncome = lease.residents.reduce((sum: number, r: any) => sum + (r.annualizedIncome || 0), 0);
-          const verifiedIncome = lease.residents.reduce((sum: number, r: any) => sum + (r.verifiedIncome || 0), 0);
+          const complianceIncome = lease.Resident.reduce((sum: number, r: any) => sum + (r.annualizedIncome || 0), 0);
+          const verifiedIncome = lease.Resident.reduce((sum: number, r: any) => sum + (r.verifiedIncome || 0), 0);
           const discrepancy = Math.abs(complianceIncome - verifiedIncome);
           
           contextualData.incomeAnalysis = {
