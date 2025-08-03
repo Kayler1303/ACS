@@ -1535,16 +1535,24 @@ export default function ResidentDetailPage() {
                         const hasAnyDocuments = residentDocuments.length > 0;
                         
                         // Button visibility logic based on resident state
-                        // Only consider NEEDS_REVIEW documents as "valid" if they don't have pending override requests
-                        // (meaning they were approved by admin, not denied or still pending)
-                        const hasApprovedNeedsReviewDocuments = residentDocuments.some(doc => {
+                        // Check if there are any documents still pending admin review
+                        const hasPendingDocuments = residentDocuments.some(doc => {
                           if (doc.status !== 'NEEDS_REVIEW') return false;
                           const latestOverrideRequest = doc.OverrideRequest?.[0]; // Most recent
                           const hasPendingRequest = latestOverrideRequest?.status === 'PENDING';
-                          const isDenied = latestOverrideRequest?.status === 'DENIED';
-                          return !hasPendingRequest && !isDenied; // Approved or no override request needed
+                          return hasPendingRequest; // True if document is pending admin review
                         });
-                        const hasAnyValidDocuments = hasCompletedDocuments || hasApprovedNeedsReviewDocuments;
+                        
+                        // Check if there are any denied documents that need to be replaced
+                        const hasDeniedDocuments = residentDocuments.some(doc => {
+                          if (doc.status !== 'NEEDS_REVIEW') return false;
+                          const latestOverrideRequest = doc.OverrideRequest?.[0]; // Most recent
+                          const isDenied = latestOverrideRequest?.status === 'DENIED';
+                          return isDenied; // True if document was denied by admin
+                        });
+                        
+                        // Only allow finalization if we have documents and none are pending/denied admin review
+                        const hasAnyValidDocuments = hasCompletedDocuments && !hasPendingDocuments && !hasDeniedDocuments;
                         
                         // Check if there are pending validation exception override requests for this resident
                         const hasPendingValidationException = verification?.OverrideRequest?.some(
@@ -1584,17 +1592,17 @@ export default function ResidentDetailPage() {
                                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
                                         ⏳ Waiting for Admin Review
                                       </span>
+                                    ) : hasPendingDocuments ? (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                                        ⏳ Waiting for Admin Review
+                                      </span>
+                                    ) : hasDeniedDocuments ? (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                        ❌ Document Denied
+                                      </span>
                                     ) : hasCompletedDocuments && residentVerifiedIncome > 0 ? (
                                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                                         📋 Ready to Finalize
-                                      </span>
-                                    ) : residentDocuments.some(doc => {
-                                      if (doc.status !== 'NEEDS_REVIEW') return false;
-                                      const latestOverrideRequest = doc.OverrideRequest?.[0];
-                                      return latestOverrideRequest?.status === 'PENDING'; // Has pending admin review
-                                    }) ? (
-                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                                        ⚠️ Review Required
                                       </span>
                                     ) : hasCompletedDocuments ? (
                                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
