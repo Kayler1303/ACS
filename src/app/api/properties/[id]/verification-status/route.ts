@@ -208,6 +208,7 @@ export async function GET(
               }
             } else {
               // Check for pending validation exception override requests
+              console.log(`[VERIFICATION STATUS DEBUG] Checking for pending validation exceptions for verification ${latestVerification.id}`);
               const pendingValidationExceptions = await prisma.overrideRequest.findMany({
                 where: {
                   status: 'PENDING',
@@ -216,9 +217,13 @@ export async function GET(
                 }
               });
               
+              console.log(`[VERIFICATION STATUS DEBUG] Found ${pendingValidationExceptions.length} pending validation exceptions:`, pendingValidationExceptions);
+              
               if (pendingValidationExceptions.length > 0) {
+                console.log(`[VERIFICATION STATUS DEBUG] Setting status to 'Waiting for Admin Review' due to pending validation exceptions`);
                 verificationStatus = 'Waiting for Admin Review';
               } else {
+                console.log(`[VERIFICATION STATUS DEBUG] No pending validation exceptions found, setting status to 'In Progress - Finalize to Process'`);
                 verificationStatus = 'In Progress - Finalize to Process';
               }
             }
@@ -228,6 +233,24 @@ export async function GET(
           } else {
             // Fallback verification status for edge cases
             verificationStatus = getUnitVerificationStatus(enhancedUnit as any, latestRentRollDate);
+          }
+          
+          // IMPORTANT: After setting verification status through other means, check for pending validation exceptions
+          // This must come AFTER the other status checks to avoid being overridden
+          if (latestVerification && latestVerification.status === 'IN_PROGRESS') {
+            console.log(`[VERIFICATION STATUS DEBUG] Final check for pending validation exceptions for verification ${latestVerification.id}`);
+            const finalPendingValidationExceptions = await prisma.overrideRequest.findMany({
+              where: {
+                status: 'PENDING',
+                type: 'VALIDATION_EXCEPTION',
+                verificationId: latestVerification.id
+              }
+            });
+            
+            if (finalPendingValidationExceptions.length > 0) {
+              console.log(`[VERIFICATION STATUS DEBUG] FINAL: Overriding status to 'Waiting for Admin Review' due to ${finalPendingValidationExceptions.length} pending validation exceptions`);
+              verificationStatus = 'Waiting for Admin Review';
+            }
           }
         } else {
           // No verification in progress, check overall unit status
