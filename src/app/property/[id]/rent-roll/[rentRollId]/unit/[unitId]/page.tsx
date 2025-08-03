@@ -13,6 +13,7 @@ import InitialAddResidentDialog from '@/components/InitialAddResidentDialog';
 import ResidentFinalizationDialog from '@/components/ResidentFinalizationDialog';
 import IncomeDiscrepancyResolutionModal from '@/components/IncomeDiscrepancyResolutionModal';
 import VerificationConflictModal from '@/components/VerificationConflictModal';
+import LeaseDiscrepancyResolutionModal from '@/components/LeaseDiscrepancyResolutionModal';
 import { format } from 'date-fns';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -56,6 +57,7 @@ interface IncomeVerification {
   finalizedAt?: string | null;
   calculatedVerifiedIncome: number | null;
   IncomeDocument: IncomeDocument[];
+  incomeDocuments: IncomeDocument[]; // Add for compatibility with VerificationFinalizationDialog
   OverrideRequest?: Array<{
     id: string;
     status: string;
@@ -86,7 +88,7 @@ interface Resident {
   updatedAt: string;
   calculatedAnnualizedIncome?: number; // Add calculatedAnnualizedIncome to Resident interface
   incomeFinalized?: boolean; // Add incomeFinalized field
-  finalizedAt?: string | null; // Add finalizedAt field
+  finalizedAt?: string; // Add finalizedAt field (compatible with ResidentFinalizationDialog)
   hasNoIncome?: boolean; // Add hasNoIncome field
 }
 
@@ -313,6 +315,14 @@ export default function ResidentDetailPage() {
     rentRollIncome: number;
     verifiedIncome: number;
   }>({ isOpen: false, lease: null, verification: null, rentRollIncome: 0, verifiedIncome: 0 });
+
+  // Lease-level income discrepancy resolution state (for multiple residents with discrepancies)
+  const [leaseDiscrepancyModal, setLeaseDiscrepancyModal] = useState<{
+    isOpen: boolean;
+    lease: Lease | null;
+    verification: IncomeVerification | null;
+    residentsWithDiscrepancies: Resident[];
+  }>({ isOpen: false, lease: null, verification: null, residentsWithDiscrepancies: [] });
 
   // Verification conflict modal state
   const [verificationConflictModal, setVerificationConflictModal] = useState<{
@@ -1487,6 +1497,44 @@ export default function ResidentDetailPage() {
                             </button>
                           )}
 
+                          {/* Lease-Level Finalize Income Button - Show when all residents finalized but status is "Needs Investigation" */}
+                          {(() => {
+                            const allResidents = period.Resident;
+                            const finalizedResidents = allResidents.filter(resident => resident.incomeFinalized);
+                            const allResidentsFinalized = allResidents.length > 0 && finalizedResidents.length === allResidents.length;
+                            const hasIncomeDiscrepancy = currentVerificationStatus === 'Needs Investigation';
+                            
+                            if (allResidentsFinalized && hasIncomeDiscrepancy) {
+                              // Find residents with income discrepancies (rent roll vs verified income)
+                              const residentsWithDiscrepancies = allResidents.filter(resident => {
+                                const rentRollIncome = resident.annualizedIncome || 0;
+                                const verifiedIncome = resident.calculatedAnnualizedIncome || 0;
+                                const discrepancy = Math.abs(rentRollIncome - verifiedIncome);
+                                return discrepancy > 1.00; // More than $1 difference
+                              });
+                              
+                              if (residentsWithDiscrepancies.length > 0) {
+                                return (
+                                  <button 
+                                    onClick={() => setLeaseDiscrepancyModal({
+                                      isOpen: true,
+                                      lease: period,
+                                      verification: verification ? {
+                                        ...verification,
+                                        incomeDocuments: verification.IncomeDocument || []
+                                      } : null,
+                                      residentsWithDiscrepancies: residentsWithDiscrepancies
+                                    })}
+                                    className="text-sm font-semibold text-white bg-yellow-600 hover:bg-yellow-700 px-4 py-2 rounded-md shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2"
+                                  >
+                                    💰 Finalize Income
+                                  </button>
+                                );
+                              }
+                            }
+                            return null;
+                          })()}
+
                           {period.isProvisional && (
                             <>
                               <button
@@ -2249,6 +2297,22 @@ export default function ResidentDetailPage() {
           resident={residentFinalizationDialog.resident}
           leaseName={residentFinalizationDialog.leaseName}
           onDataRefresh={() => fetchTenancyData(false)} // Pass the refresh callback
+        />
+      )}
+
+      {/* Lease-Level Discrepancy Resolution Modal */}
+      {leaseDiscrepancyModal.isOpen && leaseDiscrepancyModal.lease && leaseDiscrepancyModal.verification && (
+        <LeaseDiscrepancyResolutionModal
+          isOpen={leaseDiscrepancyModal.isOpen}
+          onClose={() => setLeaseDiscrepancyModal({ isOpen: false, lease: null, verification: null, residentsWithDiscrepancies: [] })}
+          lease={leaseDiscrepancyModal.lease}
+          verification={leaseDiscrepancyModal.verification}
+          residentsWithDiscrepancies={leaseDiscrepancyModal.residentsWithDiscrepancies}
+          onResolved={() => {
+            // Refresh data after resolving discrepancies
+            fetchTenancyData(false);
+            fetchUnitVerificationStatus();
+          }}
         />
       )}
       </div>
