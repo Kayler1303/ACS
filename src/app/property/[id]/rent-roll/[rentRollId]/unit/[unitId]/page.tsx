@@ -42,6 +42,9 @@ interface IncomeDocument {
     id: string;
     status: string;
     type: string;
+    adminNotes?: string;
+    userExplanation?: string;
+    createdAt: string;
   }>;
 }
 
@@ -1582,24 +1585,58 @@ export default function ResidentDetailPage() {
                                     <div className="text-xs font-medium text-gray-500 mb-2">Documents ({residentDocuments.length}):</div>
                                     <div className="space-y-2">
                                       {residentDocuments.map(doc => {
-                                        // Check if document truly needs admin review (has pending override requests)
-                                        // vs just being in NEEDS_REVIEW status with denied/approved override requests
-                                        const needsReview = doc.status === 'NEEDS_REVIEW' && (doc.OverrideRequest?.length || 0) > 0;
-                                        const containerClasses = needsReview 
-                                          ? "p-3 bg-yellow-50 border border-yellow-200 rounded-md"
-                                          : "p-3 bg-green-50 border border-green-200 rounded-md";
-                                        const badgeClasses = needsReview
-                                          ? "inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-yellow-100 text-yellow-800"
-                                          : "inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-green-100 text-green-800";
+                                        // Check override request status to determine document state
+                                        const latestOverrideRequest = doc.OverrideRequest?.[0]; // Most recent (due to orderBy createdAt desc)
+                                        const hasPendingRequest = latestOverrideRequest?.status === 'PENDING';
+                                        const isDenied = latestOverrideRequest?.status === 'DENIED';
+                                        const isApproved = latestOverrideRequest?.status === 'APPROVED' || doc.status === 'COMPLETED';
+                                        
+                                        const needsReview = doc.status === 'NEEDS_REVIEW' && hasPendingRequest;
+                                        
+                                        // Determine UI styling based on document status
+                                        let containerClasses, badgeClasses, statusText, statusIcon;
+                                        
+                                        if (isDenied) {
+                                          containerClasses = "p-3 bg-red-50 border border-red-200 rounded-md";
+                                          badgeClasses = "inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-red-100 text-red-800";
+                                          statusText = "Denied by Admin";
+                                          statusIcon = "❌";
+                                        } else if (needsReview) {
+                                          containerClasses = "p-3 bg-yellow-50 border border-yellow-200 rounded-md";
+                                          badgeClasses = "inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-yellow-100 text-yellow-800";
+                                          statusText = "Waiting for Admin Review";
+                                          statusIcon = "⚠️";
+                                        } else if (isApproved) {
+                                          containerClasses = "p-3 bg-green-50 border border-green-200 rounded-md";
+                                          badgeClasses = "inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-green-100 text-green-800";
+                                          statusText = "Approved";
+                                          statusIcon = "✅";
+                                        } else {
+                                          // Default/neutral state
+                                          containerClasses = "p-3 bg-gray-50 border border-gray-200 rounded-md";
+                                          badgeClasses = "inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-800";
+                                          statusText = "Processing";
+                                          statusIcon = "⏳";
+                                        }
                                         
                                         return (
                                           <div key={doc.id} className={containerClasses}>
-                                          {needsReview && (
-                                            <div className="mb-2 text-xs text-yellow-700 font-medium flex items-center">
-                                              <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                                              </svg>
-                                              Waiting for Admin Review
+                                          {(needsReview || isDenied) && (
+                                            <div className={`mb-2 text-xs font-medium flex items-center ${
+                                              isDenied ? 'text-red-700' : 'text-yellow-700'
+                                            }`}>
+                                              <span className="mr-1">{statusIcon}</span>
+                                              {statusText}
+                                            </div>
+                                          )}
+                                          
+                                          {isDenied && latestOverrideRequest?.adminNotes && (
+                                            <div className="mb-2 p-2 bg-red-100 border border-red-200 rounded text-xs">
+                                              <div className="font-medium text-red-800 mb-1">Admin Reason:</div>
+                                              <div className="text-red-700">{latestOverrideRequest.adminNotes}</div>
+                                              <div className="mt-2 text-red-800 font-medium">
+                                                📋 Action Required: Delete this document, upload correct documents, and re-finalize resident income.
+                                              </div>
                                             </div>
                                           )}
                                           <div className="flex justify-between items-start mb-2">

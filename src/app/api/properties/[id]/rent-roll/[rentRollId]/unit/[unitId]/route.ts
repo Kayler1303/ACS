@@ -48,13 +48,16 @@ export async function GET(req: NextRequest, { params }: { params: { id: string, 
                                     },
                                     include: {
                                         OverrideRequest: {
-                                            where: {
-                                                status: 'PENDING'
-                                            },
                                             select: {
                                                 id: true,
                                                 status: true,
-                                                type: true
+                                                type: true,
+                                                adminNotes: true,
+                                                userExplanation: true,
+                                                createdAt: true
+                                            },
+                                            orderBy: {
+                                                createdAt: 'desc'
                                             }
                                         }
                                     }
@@ -72,13 +75,16 @@ export async function GET(req: NextRequest, { params }: { params: { id: string, 
                                     },
                                     include: {
                                         OverrideRequest: {
-                                            where: {
-                                                status: 'PENDING'
-                                            },
                                             select: {
                                                 id: true,
                                                 status: true,
-                                                type: true
+                                                type: true,
+                                                adminNotes: true,
+                                                userExplanation: true,
+                                                createdAt: true
+                                            },
+                                            orderBy: {
+                                                createdAt: 'desc'
                                             }
                                         }
                                     }
