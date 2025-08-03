@@ -208,6 +208,12 @@ export async function checkAndCreateIncomeDiscrepancyOverride(params: {
 }) {
   const { unitId, verificationId, residentId, totalUploadedIncome, totalVerifiedIncome, userId } = params;
   
+  // Skip discrepancy check if no rent roll income data (likely a future lease)
+  if (totalUploadedIncome === 0) {
+    console.log(`Skipping income discrepancy check - no rent roll income data (future lease or pre-rent-roll)`);
+    return null;
+  }
+  
   // Check if there's an income discrepancy (same logic as verification status)
   const incomeDifference = Math.abs(totalUploadedIncome - totalVerifiedIncome);
   
@@ -217,6 +223,7 @@ export async function checkAndCreateIncomeDiscrepancyOverride(params: {
     const { prisma } = await import('@/lib/prisma');
     
     // Get all residents for this unit to check if their incomes have been synchronized
+    // Also include Tenancy to detect future leases
     const lease = await prisma.lease.findFirst({
       where: { unitId },
       include: {
@@ -227,9 +234,16 @@ export async function checkAndCreateIncomeDiscrepancyOverride(params: {
             verifiedIncome: true,
             incomeFinalized: true
           }
-        }
+        },
+        Tenancy: true
       }
     });
+    
+    // Skip discrepancy check for future leases (no tenancy record)
+    if (lease && !lease.Tenancy) {
+      console.log(`Skipping income discrepancy check - future lease detected (no tenancy record)`);
+      return null;
+    }
     
     if (lease) {
       // Check if the user has already accepted verified income by seeing if annualized and verified incomes match
