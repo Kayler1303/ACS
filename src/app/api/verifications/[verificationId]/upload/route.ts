@@ -10,6 +10,7 @@ import { join } from 'path';
 import { existsSync } from 'fs';
 import { DocumentType, DocumentStatus } from '@prisma/client';
 import { isWithinInterval, subMonths, getYear } from 'date-fns';
+import { randomUUID } from 'crypto';
 
 // Helper functions for document validation
 function validateDocumentTimeliness(doc: any, leaseStartDate: Date): { isValid: boolean, reason?: string } {
@@ -112,11 +113,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const verification = await prisma.incomeVerification.findUnique({
       where: { id: verificationId },
       include: {
-        lease: {
+        Lease: {
           include: {
-            unit: {
+            Unit: {
               include: {
-                property: true
+                Property: true
               }
             }
           }
@@ -124,7 +125,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       }
     });
 
-    if (!verification || verification.lease?.unit?.property?.ownerId !== session.user.id) {
+    if (!verification || verification.Lease?.Unit?.Property?.ownerId !== session.user.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -145,6 +146,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
          // Create initial document record
      let document = await prisma.incomeDocument.create({
        data: {
+         id: randomUUID(),
          documentType,
          documentDate: new Date(), // Required field for document date
          uploadDate: new Date(),
