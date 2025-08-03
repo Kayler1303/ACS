@@ -71,6 +71,7 @@ interface ResidentFinalizationDialogProps {
   verification: IncomeVerification;
   resident: Resident;
   leaseName: string;
+  onDataRefresh?: () => void; // Add callback to refresh parent data
 }
 
 export default function ResidentFinalizationDialog({
@@ -80,6 +81,7 @@ export default function ResidentFinalizationDialog({
   verification,
   resident,
   leaseName,
+  onDataRefresh,
 }: ResidentFinalizationDialogProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showOverrideRequest, setShowOverrideRequest] = useState(false);
@@ -274,6 +276,11 @@ export default function ResidentFinalizationDialog({
         setOverrideRequested(true);
         setShowOverrideRequest(false);
         alert('Override request submitted successfully. An administrator will review your request.');
+        
+        // Refresh parent data to include the new override request
+        if (onDataRefresh) {
+          onDataRefresh();
+        }
       } else {
         throw new Error('Failed to submit override request');
       }

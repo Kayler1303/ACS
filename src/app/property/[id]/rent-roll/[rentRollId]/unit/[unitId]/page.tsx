@@ -1931,7 +1931,14 @@ export default function ResidentDetailPage() {
                                 {/* Finalize button */}
                                 {showFinalizeButton && (
                                   <button
-                                    onClick={() => handleOpenResidentFinalizationDialog(verification!, resident, period.name)}
+                                    onClick={() => {
+                                      setResidentFinalizationDialog({
+                                        isOpen: true,
+                                        verification: verification!,
+                                        resident: resident,
+                                        leaseName: period.name
+                                      });
+                                    }}
                                     className="flex items-center justify-center px-3 py-1 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
                                     title={`Finalize income verification for ${resident.name}`}
                                   >
@@ -2148,6 +2155,47 @@ export default function ResidentDetailPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Resident Finalization Dialog */}
+      {residentFinalizationDialog.isOpen && residentFinalizationDialog.verification && residentFinalizationDialog.resident && (
+        <ResidentFinalizationDialog
+          isOpen={residentFinalizationDialog.isOpen}
+          onClose={() => setResidentFinalizationDialog({ isOpen: false, verification: null, resident: null, leaseName: '' })}
+          onConfirm={async (calculatedIncome: number) => {
+            if (!residentFinalizationDialog.verification || !residentFinalizationDialog.resident) return;
+            
+            try {
+              const response = await fetch(
+                `/api/leases/${residentFinalizationDialog.verification.leaseId}/verifications/${residentFinalizationDialog.verification.id}/residents/${residentFinalizationDialog.resident.id}/finalize`,
+                {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ calculatedIncome })
+                }
+              );
+
+              if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to finalize resident income');
+              }
+
+              // Refresh the data
+              fetchTenancyData(false);
+              fetchUnitVerificationStatus();
+              
+              // Close the dialog
+              setResidentFinalizationDialog({ isOpen: false, verification: null, resident: null, leaseName: '' });
+            } catch (error) {
+              console.error('Error finalizing resident income:', error);
+              alert(error instanceof Error ? error.message : 'Failed to finalize resident income');
+            }
+          }}
+          verification={residentFinalizationDialog.verification}
+          resident={residentFinalizationDialog.resident}
+          leaseName={residentFinalizationDialog.leaseName}
+          onDataRefresh={() => fetchTenancyData(false)} // Pass the refresh callback
+        />
       )}
       </div>
     </div>
