@@ -418,7 +418,7 @@ export default function AdminDashboard() {
           <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
             <div className="mt-3">
               <h3 className="text-lg font-medium text-gray-900 mb-4">
-                Send Message to {selectedRequest.requester?.name || 'User'}
+                Send Message to {selectedRequest.User_OverrideRequest_requesterIdToUser?.name || 'User'}
               </h3>
               
               <div className="mb-4">
@@ -1353,8 +1353,8 @@ function OverrideRequestItem({
             <div className="mt-2">
               <p className="text-sm text-gray-600 font-medium">{formatRequestContext(request)}</p>
               <p className="text-sm text-gray-500 mt-1">
-                <strong>Requester:</strong> {request.requester.name || request.requester.email} 
-                ({request.requester.company})
+                <strong>Requester:</strong> {request.User_OverrideRequest_requesterIdToUser.name || request.User_OverrideRequest_requesterIdToUser.email} 
+                ({request.User_OverrideRequest_requesterIdToUser.company})
               </p>
             </div>
 
@@ -1377,9 +1377,9 @@ function OverrideRequestItem({
                   <strong>Admin Notes:</strong><br />
                   {request.adminNotes}
                 </p>
-                {request.reviewer && (
+                {request.User_OverrideRequest_reviewerIdToUser && (
                   <p className="text-xs text-blue-600 mt-1">
-                    Reviewed by {request.reviewer.name || request.reviewer.email}
+                    Reviewed by {request.User_OverrideRequest_reviewerIdToUser.name || request.User_OverrideRequest_reviewerIdToUser.email}
                   </p>
                 )}
               </div>
