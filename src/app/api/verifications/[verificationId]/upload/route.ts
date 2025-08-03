@@ -253,6 +253,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       try {
         await prisma.overrideRequest.create({
           data: {
+            id: randomUUID(),
             type: 'DOCUMENT_REVIEW',
             status: 'PENDING',
             userExplanation: explanation,
@@ -260,7 +261,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             verificationId: verificationId,
             residentId: residentId,
             requesterId: session.user.id,
-            propertyId: verification.lease?.unit?.property?.id,
+            propertyId: verification.Lease?.Unit?.Property?.id,
+            updatedAt: new Date(),
           }
         });
 
