@@ -39,12 +39,12 @@ export async function POST(
     const document = await prisma.incomeDocument.findUnique({
       where: { id: documentId },
       include: {
-        resident: true,
-        verification: {
+        Resident: true,
+        IncomeVerification: {
           include: {
-            lease: {
+            Lease: {
               include: {
-                unit: true
+                Unit: true
               }
             }
           }
@@ -218,7 +218,7 @@ export async function GET(
     const document = await prisma.incomeDocument.findUnique({
       where: { id: documentId },
       include: {
-        resident: {
+        Resident: {
           select: {
             id: true,
             name: true,
@@ -226,14 +226,14 @@ export async function GET(
             calculatedAnnualizedIncome: true
           }
         },
-        verification: {
+        IncomeVerification: {
           include: {
-            lease: {
+            Lease: {
               include: {
-                unit: {
+                Unit: {
                   select: {
                     unitNumber: true,
-                    property: {
+                    Property: {
                       select: {
                         name: true,
                         address: true
