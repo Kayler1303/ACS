@@ -79,11 +79,12 @@ export default function IncomeVerificationDocumentUploadForm({
   const [leaseTypeDialogOpen, setLeaseTypeDialogOpen] = useState(false);
   const [residentSelectionDialogOpen, setResidentSelectionDialogOpen] = useState(false);
   const [addResidentDialogOpen, setAddResidentDialogOpen] = useState(false);
-  const [documentAssignmentDialogOpen, setDocumentAssignmentDialogOpen] = useState(false); // NEW
+  const [documentAssignmentDialogOpen, setDocumentAssignmentDialogOpen] = useState(false);
+  const [newLeaseResidents, setNewLeaseResidents] = useState<Array<{ id: string; name: string }>>([]);
   const [newLeaseId, setNewLeaseId] = useState<string | null>(null);
-  const [newLeaseData, setNewLeaseData] = useState<{ id: string; name: string } | null>(null);
+  const [newVerificationId, setNewVerificationId] = useState<string | null>(null);
   const [pendingFileUpload, setPendingFileUpload] = useState<DateDiscrepancyData | null>(null);
-  const [newLeaseResidents, setNewLeaseResidents] = useState<Array<{ id: string; name: string }>>([]);  // NEW
+  const [newLeaseData, setNewLeaseData] = useState<{ id: string; name: string } | null>(null);
 
   const router = useRouter();
 
@@ -256,6 +257,7 @@ export default function IncomeVerificationDocumentUploadForm({
     setResidentSelectionDialogOpen(false);
     setNewLeaseData(null);
     setPendingFileUpload(null);
+    setNewVerificationId(null);
     setIsSubmitting(false);
   };
 
@@ -327,6 +329,7 @@ export default function IncomeVerificationDocumentUploadForm({
 
       const newVerification = await verificationResponse.json();
       console.log('[NEW LEASE WORKFLOW] Created verification:', newVerification.id);
+      setNewVerificationId(newVerification.id);
       
       // Store residents and open document assignment dialog instead of uploading immediately
       setNewLeaseResidents(createdResidents.map(r => ({ id: r.id, name: r.name })));
@@ -345,6 +348,7 @@ export default function IncomeVerificationDocumentUploadForm({
   const handleCloseLease = () => {
     setCreateLeaseDialogOpen(false);
     setPendingFileUpload(null);
+    setNewVerificationId(null);
     setIsSubmitting(false);
   };
 
@@ -352,11 +356,12 @@ export default function IncomeVerificationDocumentUploadForm({
     setAddResidentDialogOpen(false);
     setNewLeaseData(null);
     setPendingFileUpload(null);
+    setNewVerificationId(null);
     setIsSubmitting(false);
   };
 
   const handleAssignDocuments = async (selectedResidentId: string) => {
-    if (!newLeaseId || !pendingFileUpload) return;
+    if (!newLeaseId || !newVerificationId || !pendingFileUpload) return;
 
     try {
       setIsSubmitting(true);
@@ -364,19 +369,13 @@ export default function IncomeVerificationDocumentUploadForm({
       // Upload ALL the documents with forceUpload to bypass date check
       const allFiles = pendingFileUpload.allSelectedFiles || [pendingFileUpload.fileData];
       console.log('[NEW LEASE WORKFLOW] Uploading documents to selected resident:', {
-        verificationId: newLeaseId, // Using the verification we created
+        verificationId: newVerificationId,
         residentId: selectedResidentId,
         fileCount: allFiles.length,
         fileNames: allFiles.map(f => f.file.name)
       });
 
-      // Get the verification ID (we need to store it during resident creation)
-      // For now, we'll need to fetch it or store it better
-      const verificationResponse = await fetch(`/api/leases/${newLeaseId}/verifications`);
-      const verifications = await verificationResponse.json();
-      const verification = verifications[0]; // Get the latest verification
-
-      // Upload each file
+      // Upload each file using the stored verification ID
       for (const fileData of allFiles) {
         const formData = new FormData();
         formData.append('file', fileData.file);
@@ -384,7 +383,7 @@ export default function IncomeVerificationDocumentUploadForm({
         formData.append('residentId', selectedResidentId);
         formData.append('forceUpload', 'true');
 
-        const uploadResponse = await fetch(`/api/verifications/${verification.id}/upload`, {
+        const uploadResponse = await fetch(`/api/verifications/${newVerificationId}/upload`, {
           method: 'POST',
           body: formData,
         });
@@ -407,6 +406,7 @@ export default function IncomeVerificationDocumentUploadForm({
       // Clean up state
       setPendingFileUpload(null);
       setNewLeaseId(null);
+      setNewVerificationId(null);
       setNewLeaseResidents([]);
       
     } catch (err: unknown) {
