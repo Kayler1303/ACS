@@ -36,6 +36,12 @@ interface DateDiscrepancyData {
     documentType: string;
     id: string;
   };
+  allSelectedFiles?: {
+    file: File;
+    documentType: string;
+    id: string;
+  }[];
+  selectedResident?: string;
 }
 
 export default function IncomeVerificationDocumentUploadForm({
@@ -87,21 +93,30 @@ export default function IncomeVerificationDocumentUploadForm({
     try {
       setIsSubmitting(true);
       
-      // Re-upload with forceUpload flag
-      const formData = new FormData();
-      formData.append('file', dateDiscrepancyModal.data.fileData.file);
-      formData.append('documentType', dateDiscrepancyModal.data.fileData.documentType);
-      formData.append('residentId', selectedResident);
-      formData.append('forceUpload', 'true');
+      // Re-upload ALL files with forceUpload flag
+      const allFiles = dateDiscrepancyModal.data.allSelectedFiles || [dateDiscrepancyModal.data.fileData];
+      const residentId = dateDiscrepancyModal.data.selectedResident || selectedResident;
+      
+      console.log('[NEW LEASE WORKFLOW] Re-uploading files with forceUpload:', allFiles.length);
+      
+      for (const fileData of allFiles) {
+        const formData = new FormData();
+        formData.append('file', fileData.file);
+        formData.append('documentType', fileData.documentType);
+        formData.append('residentId', residentId);
+        formData.append('forceUpload', 'true');
 
-      const response = await fetch(`/api/verifications/${verificationId}/upload`, {
-        method: 'POST',
-        body: formData,
-      });
+        const response = await fetch(`/api/verifications/${verificationId}/upload`, {
+          method: 'POST',
+          body: formData,
+        });
 
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Upload failed');
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || `Failed to upload ${fileData.file.name}`);
+        }
+        
+        console.log('[NEW LEASE WORKFLOW] Successfully re-uploaded:', fileData.file.name);
       }
 
       setDateDiscrepancyModal({ isOpen: false, data: null });
@@ -233,26 +248,34 @@ export default function IncomeVerificationDocumentUploadForm({
         }
       }
 
-      // Upload the document with forceUpload to bypass date check
-      console.log('[NEW LEASE WORKFLOW] Uploading document to new verification:', {
+      // Upload ALL the documents with forceUpload to bypass date check
+      const allFiles = pendingFileUpload.allSelectedFiles || [pendingFileUpload.fileData];
+      console.log('[NEW LEASE WORKFLOW] Uploading documents to new verification:', {
         verificationId: newVerification.id,
         residentId: targetResident.id,
-        fileName: pendingFileUpload.fileData.file.name
-      });
-      const formData = new FormData();
-      formData.append('file', pendingFileUpload.fileData.file);
-      formData.append('documentType', pendingFileUpload.fileData.documentType);
-      formData.append('residentId', targetResident.id);
-      formData.append('forceUpload', 'true');
-
-      const uploadResponse = await fetch(`/api/verifications/${newVerification.id}/upload`, {
-        method: 'POST',
-        body: formData,
+        fileCount: allFiles.length,
+        fileNames: allFiles.map(f => f.file.name)
       });
 
-      if (!uploadResponse.ok) {
-        const data = await uploadResponse.json();
-        throw new Error(data.error || 'Failed to upload document to new lease');
+      // Upload each file
+      for (const fileData of allFiles) {
+        const formData = new FormData();
+        formData.append('file', fileData.file);
+        formData.append('documentType', fileData.documentType);
+        formData.append('residentId', targetResident.id);
+        formData.append('forceUpload', 'true');
+
+        const uploadResponse = await fetch(`/api/verifications/${newVerification.id}/upload`, {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!uploadResponse.ok) {
+          const data = await uploadResponse.json();
+          throw new Error(data.error || `Failed to upload ${fileData.file.name} to new lease`);
+        }
+        
+        console.log('[NEW LEASE WORKFLOW] Successfully uploaded:', fileData.file.name);
       }
 
       setAddResidentDialogOpen(false);
@@ -355,13 +378,16 @@ export default function IncomeVerificationDocumentUploadForm({
         
         // Check if date confirmation is required
         if (result.requiresDateConfirmation) {
+          console.log('[NEW LEASE WORKFLOW] Date discrepancy detected - storing ALL selected files');
           setDateDiscrepancyModal({
             isOpen: true,
             data: {
               leaseStartDate: result.leaseStartDate,
               documentDate: result.documentDate,
               monthsDifference: result.monthsDifference,
-              fileData: fileData
+              fileData: fileData,  // The specific file that triggered discrepancy
+              allSelectedFiles: selectedFiles,  // Store ALL selected files
+              selectedResident: selectedResident  // Store the selected resident
             }
           });
           setIsSubmitting(false);
@@ -390,7 +416,8 @@ export default function IncomeVerificationDocumentUploadForm({
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+    <>
+      <form onSubmit={handleSubmit} className="space-y-6 bg-white p-6 rounded-lg shadow-sm border border-gray-200">
       {error && <div className="p-3 bg-red-100 text-red-700 rounded-md">{error}</div>}
       {success && <div className="p-3 bg-green-100 text-green-700 rounded-md">{success}</div>}
       
@@ -502,31 +529,34 @@ export default function IncomeVerificationDocumentUploadForm({
         </button>
       </div>
       
-      {/* Date Discrepancy Modal */}
-      <DateDiscrepancyModal
-        isOpen={dateDiscrepancyModal.isOpen}
-        onClose={handleCloseModal}
-        leaseStartDate={dateDiscrepancyModal.data?.leaseStartDate || ''}
-        documentDate={dateDiscrepancyModal.data?.documentDate || ''}
-        onConfirmCurrentLease={handleConfirmCurrentLease}
-        onCreateNewLease={handleCreateNewLease}
-      />
-      
-      {/* Lease Creation Dialog */}
-      <CreateLeaseDialog
-        isOpen={createLeaseDialogOpen}
-        onClose={handleCloseLease}
-        onSubmit={handleLeaseCreated}
-        unitId={unitId}
-      />
-      
-      {/* Add Resident Dialog */}
-      <AddResidentDialog
-        isOpen={addResidentDialogOpen}
-        onClose={handleCloseResident}
-        onSubmit={handleResidentsAdded}
-        leaseName="New Lease"
-      />
     </form>
+    
+    {/* Dialogs outside form to prevent nesting */}
+    {/* Date Discrepancy Modal */}
+    <DateDiscrepancyModal
+      isOpen={dateDiscrepancyModal.isOpen}
+      onClose={() => setDateDiscrepancyModal({ isOpen: false, data: null })}
+      leaseStartDate={dateDiscrepancyModal.data?.leaseStartDate || ''}
+      documentDate={dateDiscrepancyModal.data?.documentDate || ''}
+      onConfirmCurrentLease={handleConfirmCurrentLease}
+      onCreateNewLease={handleCreateNewLease}
+    />
+    
+    {/* Lease Creation Dialog */}
+    <CreateLeaseDialog
+      isOpen={createLeaseDialogOpen}
+      onClose={handleCloseLease}
+      onSubmit={handleLeaseCreated}
+      unitId={unitId}
+    />
+    
+    {/* Add Resident Dialog */}
+    <AddResidentDialog
+      isOpen={addResidentDialogOpen}
+      onClose={handleCloseResident}
+      onSubmit={handleResidentsAdded}
+      leaseName="New Lease"
+    />
+    </>
   );
 } 

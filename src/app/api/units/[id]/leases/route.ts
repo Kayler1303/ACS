@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { randomUUID } from 'crypto';
 
 export async function POST(
   req: Request,
@@ -24,18 +25,22 @@ export async function POST(
 
   try {
     const data: {
+      id: string;
       name: string;
-      unit: { connect: { id: string } };
+      Unit: { connect: { id: string } };
       leaseStartDate?: Date;
       leaseEndDate?: Date;
       leaseRent?: number;
+      updatedAt: Date;
     } = {
+      id: randomUUID(),
       name,
-      unit: {
+      Unit: {
         connect: {
           id: unitId,
         },
       },
+      updatedAt: new Date(),
     };
 
     if (leaseStartDate) {
