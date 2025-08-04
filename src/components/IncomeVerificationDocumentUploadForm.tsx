@@ -469,6 +469,47 @@ export default function IncomeVerificationDocumentUploadForm({
     setSuccess(null);
 
     try {
+      // STEP 1: Check dates BEFORE uploading any files
+      const firstFile = selectedFiles[0];
+      const checkFormData = new FormData();
+      checkFormData.append('file', firstFile.file);
+      checkFormData.append('documentType', firstFile.documentType);
+
+      console.log('[NEW LEASE WORKFLOW] Checking dates before upload...');
+      
+      const checkResponse = await fetch(`/api/verifications/${verificationId}/check-dates`, {
+        method: 'POST',
+        body: checkFormData,
+      });
+
+      if (!checkResponse.ok) {
+        const data = await checkResponse.json();
+        throw new Error(data.error || 'Date check failed');
+      }
+      
+      const checkResult = await checkResponse.json();
+      
+      // If date confirmation is required, show modal WITHOUT uploading anything
+      if (checkResult.requiresDateConfirmation) {
+        console.log('[NEW LEASE WORKFLOW] Date discrepancy detected - showing modal WITHOUT uploading files');
+        setDateDiscrepancyModal({
+          isOpen: true,
+          data: {
+            leaseStartDate: checkResult.leaseStartDate,
+            documentDate: checkResult.documentDate,
+            monthsDifference: checkResult.monthsDifference,
+            fileData: firstFile,  // The specific file that triggered discrepancy
+            allSelectedFiles: selectedFiles,  // Store ALL selected files
+            selectedResident: selectedResident  // Store the selected resident
+          }
+        });
+        setIsSubmitting(false);
+        return; // Stop here - NO FILES UPLOADED YET!
+      }
+
+      // STEP 2: If no date discrepancy, proceed with normal upload
+      console.log('[NEW LEASE WORKFLOW] No date discrepancy - proceeding with upload');
+      
       // Upload each file individually
       for (const fileData of selectedFiles) {
         const formData = new FormData();
@@ -484,26 +525,6 @@ export default function IncomeVerificationDocumentUploadForm({
         if (!response.ok) {
           const data = await response.json();
           throw new Error(data.error || 'Upload failed');
-        }
-        
-        const result = await response.json();
-        
-        // Check if date confirmation is required
-        if (result.requiresDateConfirmation) {
-          console.log('[NEW LEASE WORKFLOW] Date discrepancy detected - storing ALL selected files');
-          setDateDiscrepancyModal({
-            isOpen: true,
-            data: {
-              leaseStartDate: result.leaseStartDate,
-              documentDate: result.documentDate,
-              monthsDifference: result.monthsDifference,
-              fileData: fileData,  // The specific file that triggered discrepancy
-              allSelectedFiles: selectedFiles,  // Store ALL selected files
-              selectedResident: selectedResident  // Store the selected resident
-            }
-          });
-          setIsSubmitting(false);
-          return; // Stop processing and show modal
         }
       }
 
