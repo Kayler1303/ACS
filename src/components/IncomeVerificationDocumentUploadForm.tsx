@@ -202,6 +202,7 @@ export default function IncomeVerificationDocumentUploadForm({
   // Lease type selection handlers
   const handleSelectRenewal = () => {
     console.log('[NEW LEASE WORKFLOW] User selected lease renewal - showing resident selection');
+    console.log('[NEW LEASE WORKFLOW] Available residents for selection:', residents.map(r => ({ id: r.id, name: r.name })));
     setLeaseTypeDialogOpen(false);
     setResidentSelectionDialogOpen(true);
   };
@@ -223,6 +224,12 @@ export default function IncomeVerificationDocumentUploadForm({
     console.log('[NEW LEASE WORKFLOW] Selected residents for renewal:', selectedResidents);
     setResidentSelectionDialogOpen(false);
     
+    if (selectedResidents.length === 0) {
+      // No residents selected, go straight to add residents dialog
+      setAddResidentDialogOpen(true);
+      return;
+    }
+    
     try {
       setIsSubmitting(true);
       await handleResidentsAdded(selectedResidents);
@@ -230,6 +237,12 @@ export default function IncomeVerificationDocumentUploadForm({
       setError(err instanceof Error ? err.message : 'Failed to copy selected residents');
       setIsSubmitting(false);
     }
+  };
+
+  const handleAddAdditionalResidents = () => {
+    console.log('[NEW LEASE WORKFLOW] User wants to add additional residents');
+    setResidentSelectionDialogOpen(false);
+    setAddResidentDialogOpen(true);
   };
 
   const handleCloseResidentSelection = () => {
@@ -615,6 +628,7 @@ export default function IncomeVerificationDocumentUploadForm({
       onSubmit={handleResidentSelectionSubmit}
       currentResidents={residents}
       leaseName={newLeaseData?.name || 'New Lease'}
+      onAddAdditionalResidents={handleAddAdditionalResidents}
     />
     
     {/* Add Resident Dialog */}

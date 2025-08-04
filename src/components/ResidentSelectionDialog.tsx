@@ -12,6 +12,7 @@ interface ResidentSelectionDialogProps {
   onSubmit: (selectedResidents: Array<{ name: string; annualizedIncome: number | null }>) => void;
   currentResidents: Resident[];
   leaseName: string;
+  onAddAdditionalResidents?: () => void;
 }
 
 export default function ResidentSelectionDialog({
@@ -19,15 +20,15 @@ export default function ResidentSelectionDialog({
   onClose,
   onSubmit,
   currentResidents,
-  leaseName
+  leaseName,
+  onAddAdditionalResidents
 }: ResidentSelectionDialogProps) {
   const [selectedResidents, setSelectedResidents] = useState<
-    Array<{ id: string; name: string; annualizedIncome: number | null; selected: boolean }>
+    Array<{ id: string; name: string; selected: boolean }>
   >(
     currentResidents.map(resident => ({
       id: resident.id,
       name: resident.name,
-      annualizedIncome: resident.annualizedIncome || null,
       selected: true // Default to selecting all residents
     }))
   );
@@ -44,23 +45,12 @@ export default function ResidentSelectionDialog({
     );
   };
 
-  const handleIncomeChange = (residentId: string, income: string) => {
-    const numericIncome = income === '' ? null : parseFloat(income);
-    setSelectedResidents(prev =>
-      prev.map(resident =>
-        resident.id === residentId
-          ? { ...resident, annualizedIncome: numericIncome }
-          : resident
-      )
-    );
-  };
-
   const handleSubmit = () => {
     const residentsToSubmit = selectedResidents
       .filter(resident => resident.selected)
       .map(resident => ({
         name: resident.name,
-        annualizedIncome: resident.annualizedIncome
+        annualizedIncome: null // No pre-set income for renewals
       }));
 
     onSubmit(residentsToSubmit);
@@ -86,7 +76,7 @@ export default function ResidentSelectionDialog({
             Renewal lease: <span className="font-semibold">{leaseName}</span>
           </p>
           <p className="text-gray-600 text-sm">
-            Select which residents to copy to the new lease and set their expected annualized income.
+            Select which residents to copy to the new lease. Income will be verified through document uploads.
           </p>
         </div>
 
@@ -102,23 +92,8 @@ export default function ResidentSelectionDialog({
                 />
                 <div className="flex-1">
                   <div className="font-medium text-gray-900">{resident.name}</div>
-                  <div className="mt-2">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Expected Annual Income (Optional)
-                    </label>
-                    <input
-                      type="number"
-                      value={resident.annualizedIncome || ''}
-                      onChange={(e) => handleIncomeChange(resident.id, e.target.value)}
-                      placeholder="e.g., 45000"
-                      disabled={!resident.selected}
-                      className={`mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-brand-blue focus:border-brand-blue sm:text-sm ${
-                        !resident.selected ? 'bg-gray-100 text-gray-400' : ''
-                      }`}
-                    />
-                    <p className="mt-1 text-xs text-gray-500">
-                      Leave blank if unknown - can be set during verification
-                    </p>
+                  <div className="mt-1 text-sm text-gray-500">
+                    Income will be verified through document uploads
                   </div>
                 </div>
               </div>
@@ -126,9 +101,20 @@ export default function ResidentSelectionDialog({
           ))}
         </div>
 
+        {onAddAdditionalResidents && (
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            <button
+              onClick={onAddAdditionalResidents}
+              className="w-full px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-brand-blue hover:text-brand-blue transition-colors"
+            >
+              + Add Additional Residents (beyond current lease)
+            </button>
+          </div>
+        )}
+
         <div className="mt-6 flex justify-between items-center">
           <div className="text-sm text-gray-600">
-            {selectedCount} of {selectedResidents.length} residents selected
+            {selectedCount} of {selectedResidents.length} current residents selected
           </div>
           <div className="flex space-x-3">
             <button
@@ -146,7 +132,7 @@ export default function ResidentSelectionDialog({
                   : 'bg-brand-blue hover:bg-blue-700'
               }`}
             >
-              Add {selectedCount} Resident{selectedCount !== 1 ? 's' : ''}
+              Copy {selectedCount} Resident{selectedCount !== 1 ? 's' : ''}
             </button>
           </div>
         </div>
