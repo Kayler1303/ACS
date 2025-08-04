@@ -142,15 +142,14 @@ export default function ResidentFinalizationDialog({
       
       if (payFrequency) {
         // Calculate required paystubs based on pay frequency
-        const payPeriodDays: Record<string, number> = {
-          'BI-WEEKLY': 14,
-          'WEEKLY': 7,
-          'SEMI-MONTHLY': 15,
-          'MONTHLY': 30,
-          'UNKNOWN': 14
+        const requiredStubsMap: Record<string, number> = {
+          'BI-WEEKLY': 2,   // Updated: reduced from 3 to 2
+          'WEEKLY': 4,      // Updated: reduced from 5 to 4
+          'SEMI-MONTHLY': 2, // Math.ceil(30 / 15) = 2
+          'MONTHLY': 1,     // Math.ceil(30 / 30) = 1
+          'UNKNOWN': 2      // Default to bi-weekly equivalent
         };
-        const days = payPeriodDays[payFrequency] || 14;
-        const requiredStubs = Math.ceil(30 / days);
+        const requiredStubs = requiredStubsMap[payFrequency] || 2;
         
         if (paystubs.length < requiredStubs) {
           canFinalize = false;
