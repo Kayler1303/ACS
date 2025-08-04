@@ -10,6 +10,15 @@ interface IncomeVerificationUploadDialogProps {
   residents: Array<{ id: string; name: string }>;
   hasExistingDocuments: boolean;
   leaseName: string;
+  unitId: string;
+  propertyId: string;
+  rentRollId: string;
+  currentLease?: {
+    id: string;
+    name: string;
+    leaseStartDate?: string;
+    leaseEndDate?: string;
+  };
 }
 
 export default function IncomeVerificationUploadDialog({
@@ -20,6 +29,10 @@ export default function IncomeVerificationUploadDialog({
   residents,
   hasExistingDocuments,
   leaseName,
+  unitId,
+  propertyId,
+  rentRollId,
+  currentLease,
 }: IncomeVerificationUploadDialogProps) {
   const handleUploadComplete = () => {
     onUploadComplete();
@@ -79,6 +92,10 @@ export default function IncomeVerificationUploadDialog({
             onUploadComplete={onUploadComplete}
             residents={residents}
             hasExistingDocuments={hasExistingDocuments}
+            unitId={unitId}
+            propertyId={propertyId}
+            rentRollId={rentRollId}
+            currentLease={currentLease}
           />
         </div>
 

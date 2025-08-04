@@ -305,6 +305,12 @@ export default function ResidentDetailPage() {
     leaseName: string;
     residents: Array<{ id: string; name: string }>;
     hasExistingDocuments: boolean;
+    lease?: {
+      id: string;
+      name: string;
+      leaseStartDate?: string;
+      leaseEndDate?: string;
+    };
   } | null>(null);
 
   // Income discrepancy resolution state
@@ -445,7 +451,8 @@ export default function ResidentDetailPage() {
       verificationId: verificationId,
       leaseName: leaseName,
       residents: [selectedResident], // Only the selected resident
-      hasExistingDocuments: false
+      hasExistingDocuments: false,
+      lease: undefined
     });
     setUploadDialogOpen(true);
   };
@@ -676,7 +683,13 @@ export default function ResidentDetailPage() {
             verificationId: newVerification.id,
             leaseName: lease?.name || 'Unknown Lease',
             residents: overrideResidents,
-            hasExistingDocuments: false
+            hasExistingDocuments: false,
+            lease: lease ? {
+              id: lease.id,
+              name: lease.name,
+              leaseStartDate: lease.leaseStartDate,
+              leaseEndDate: lease.leaseEndDate
+            } : undefined
           });
           setUploadDialogOpen(true);
           fetchTenancyData(false); // Refresh data in background
@@ -1894,7 +1907,13 @@ export default function ResidentDetailPage() {
                                           verificationId: verification.id,
                                           leaseName: period.name,
                                           residents: [{ id: resident.id, name: resident.name }], // Only this resident
-                                          hasExistingDocuments: !!verification.IncomeDocument?.some(d => d.residentId === resident.id)
+                                          hasExistingDocuments: !!verification.IncomeDocument?.some(d => d.residentId === resident.id),
+                                          lease: {
+                                            id: period.id,
+                                            name: period.name,
+                                            leaseStartDate: period.leaseStartDate,
+                                            leaseEndDate: period.leaseEndDate
+                                          }
                                         });
                                         setUploadDialogOpen(true);
                                       } else {
@@ -2113,6 +2132,10 @@ export default function ResidentDetailPage() {
           residents={uploadDialogData.residents}
           hasExistingDocuments={uploadDialogData.hasExistingDocuments}
           leaseName={uploadDialogData.leaseName}
+          unitId={unitId as string}
+          propertyId={propertyId as string}
+          rentRollId={rentRollId as string}
+          currentLease={uploadDialogData.lease}
         />
       )}
 
