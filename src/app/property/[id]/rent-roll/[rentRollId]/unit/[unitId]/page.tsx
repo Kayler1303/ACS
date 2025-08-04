@@ -651,15 +651,11 @@ export default function ResidentDetailPage() {
     return unitNumber.replace(/^0+/, '') || '0';
   };
 
+  // Simplified verification creation (now only used internally by Upload Documents buttons)
   const handleStartVerification = async (leaseId: string, overrideResidents?: Array<{ id: string; name: string }>) => {
     if (!tenancyData) return;
     
-    // Only show confirmation if there's an existing in-progress verification
     const lease = tenancyData.unit.Lease.find(l => l.id === leaseId);
-    const hasInProgressVerification = lease?.IncomeVerification?.some(v => v.status === 'IN_PROGRESS');
-    if (hasInProgressVerification && !window.confirm('Are you sure you want to start a new verification period? This will finalize the current in-progress period.')) {
-        return;
-    }
     
     try {
         const res = await fetch(`/api/leases/${leaseId}/verifications`, {
@@ -1404,14 +1400,7 @@ export default function ResidentDetailPage() {
                         
                         {/* Lease Actions */}
                         <div className="flex flex-col space-y-1">
-                          {!verification && (
-                            <button 
-                              onClick={() => handleStartVerification(period.id)}
-                              className="text-sm font-semibold text-white bg-red-600 hover:bg-red-700 px-4 py-2 rounded-md shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
-                            >
-                              🔍 Verify Lease Income
-                            </button>
-                          )}
+                          {/* Removed redundant "Verify Lease Income" button - Upload Documents buttons now auto-create verification */}
 
                           {/* Lease-Level Finalize Income Button - Show when all residents finalized but status is "Needs Investigation" */}
                           {(() => {
