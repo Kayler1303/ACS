@@ -8,6 +8,7 @@ interface IncomeVerificationUploadDialogProps {
   verificationId: string;
   onUploadComplete: () => void;
   residents: Array<{ id: string; name: string }>;
+  allCurrentLeaseResidents?: Array<{ id: string; name: string }>;
   hasExistingDocuments: boolean;
   leaseName: string;
   unitId: string;
@@ -27,6 +28,7 @@ export default function IncomeVerificationUploadDialog({
   verificationId,
   onUploadComplete,
   residents,
+  allCurrentLeaseResidents,
   hasExistingDocuments,
   leaseName,
   unitId,
@@ -91,6 +93,7 @@ export default function IncomeVerificationUploadDialog({
             verificationId={verificationId}
             onUploadComplete={onUploadComplete}
             residents={residents}
+            allCurrentLeaseResidents={allCurrentLeaseResidents}
             hasExistingDocuments={hasExistingDocuments}
             unitId={unitId}
             propertyId={propertyId}

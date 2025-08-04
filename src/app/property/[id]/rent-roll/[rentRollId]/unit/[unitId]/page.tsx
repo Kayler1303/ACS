@@ -2163,6 +2163,10 @@ export default function ResidentDetailPage() {
           verificationId={uploadDialogData.verificationId}
           onUploadComplete={() => fetchTenancyData(false)}
           residents={uploadDialogData.residents}
+          allCurrentLeaseResidents={
+            tenancyData?.unit.Lease.find(l => l.Tenancy && l.leaseStartDate)
+              ?.Resident || []
+          }
           hasExistingDocuments={uploadDialogData.hasExistingDocuments}
           leaseName={uploadDialogData.leaseName}
           unitId={unitId as string}
