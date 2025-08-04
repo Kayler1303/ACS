@@ -301,11 +301,26 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       }
     });
 
-    if (!lease || !lease.leaseStartDate) {
+    if (!lease) {
       return NextResponse.json(
-        { error: 'Could not find lease information for validation' }, 
+        { error: 'Could not find lease for validation' }, 
         { status: 400 }
       );
+    }
+
+    // Skip timeliness validation for future leases without start dates
+    if (!lease.leaseStartDate) {
+      console.log(`⏭️ Skipping timeliness validation for future lease ${lease.name} (no start date set)`);
+      
+      // Just mark as completed - skip validation for future leases
+      document = await prisma.incomeDocument.update({
+        where: { id: document.id },
+        data: {
+          status: DocumentStatus.COMPLETED,
+        }
+      });
+
+      return NextResponse.json(document, { status: 201 });
     }
 
     const resident = lease.Resident.find(r => r.id === residentId);
