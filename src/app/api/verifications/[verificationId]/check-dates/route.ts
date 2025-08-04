@@ -78,9 +78,16 @@ export async function POST(
       analyzeResult = await analyzeIncomeDocument(buffer, modelId);
     } catch (azureError) {
       console.error('Azure analysis failed for date check:', azureError);
+      
+      // Since we can't extract dates automatically, ask user to decide
+      // This prevents documents from going to wrong lease when Azure fails
       return NextResponse.json({
-        requiresDateConfirmation: false,
-        message: 'Could not extract date for validation - Azure analysis failed'
+        requiresDateConfirmation: true,
+        leaseStartDate: lease.leaseStartDate,
+        documentDate: new Date().toISOString(), // Use current date as placeholder
+        monthsDifference: 12, // Arbitrary large number to trigger modal
+        message: 'Could not extract date automatically - please confirm which lease these documents are for',
+        reason: 'azure_failed'
       });
     }
 
@@ -96,9 +103,14 @@ export async function POST(
     }
 
     if (!validationResult.isValid) {
+      // Similar logic - if validation fails, ask user to decide
       return NextResponse.json({
-        requiresDateConfirmation: false,
-        message: 'Could not extract date for validation - extraction failed'
+        requiresDateConfirmation: true,
+        leaseStartDate: lease.leaseStartDate,
+        documentDate: new Date().toISOString(),
+        monthsDifference: 12,
+        message: 'Could not extract date reliably - please confirm which lease these documents are for',
+        reason: 'validation_failed'
       });
     }
 
@@ -119,9 +131,14 @@ export async function POST(
     }
 
     if (!documentDate) {
+      // If we can't determine document date, ask user to decide
       return NextResponse.json({
-        requiresDateConfirmation: false,
-        message: 'Could not determine document date'
+        requiresDateConfirmation: true,
+        leaseStartDate: lease.leaseStartDate,
+        documentDate: new Date().toISOString(),
+        monthsDifference: 12,
+        message: 'Could not determine document date - please confirm which lease these documents are for',
+        reason: 'no_date_found'
       });
     }
 

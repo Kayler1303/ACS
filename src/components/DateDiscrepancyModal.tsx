@@ -8,6 +8,8 @@ interface DateDiscrepancyModalProps {
   documentDate: string;
   onConfirmCurrentLease: () => void;
   onCreateNewLease: () => void;
+  reason?: string; // New prop to distinguish between different scenarios
+  message?: string; // Custom message from API
 }
 
 export default function DateDiscrepancyModal({
@@ -16,7 +18,9 @@ export default function DateDiscrepancyModal({
   leaseStartDate,
   documentDate,
   onConfirmCurrentLease,
-  onCreateNewLease
+  onCreateNewLease,
+  reason,
+  message
 }: DateDiscrepancyModalProps) {
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -29,6 +33,10 @@ export default function DateDiscrepancyModal({
       year: 'numeric'
     });
   };
+
+  // Determine if this is a date discrepancy or inability to determine date
+  const isDateDiscrepancy = !reason || reason === 'date_discrepancy';
+  const isProcessingIssue = reason === 'azure_failed' || reason === 'validation_failed' || reason === 'no_date_found';
 
   const handleConfirmCurrentLease = async () => {
     setIsProcessing(true);
@@ -54,16 +62,29 @@ export default function DateDiscrepancyModal({
           {/* Modal Content */}
           <div className="mt-2 px-7 py-3">
             <h3 className="text-lg font-medium text-center text-gray-900">
-              Document Date Discrepancy
+              {isDateDiscrepancy ? 'Document Date Discrepancy' : 'Choose Lease Instance'}
             </h3>
             <div className="mt-2 px-7 py-3">
-              <p className="text-sm text-gray-500 text-center">
-                The lease start date for this lease was <span className="font-semibold">{formatDate(leaseStartDate)}</span>, 
-                but you are uploading income documents for <span className="font-semibold">{formatDate(documentDate)}</span>.
-              </p>
-              <p className="text-sm text-gray-500 text-center mt-3">
-                Are you sure these documents are for this lease instance?
-              </p>
+              {isDateDiscrepancy ? (
+                <>
+                  <p className="text-sm text-gray-500 text-center">
+                    The lease start date for this lease was <span className="font-semibold">{formatDate(leaseStartDate)}</span>, 
+                    but you are uploading income documents for <span className="font-semibold">{formatDate(documentDate)}</span>.
+                  </p>
+                  <p className="text-sm text-gray-500 text-center mt-3">
+                    Are you sure these documents are for this lease instance?
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-gray-500 text-center">
+                    {message || 'Could not automatically determine which lease these documents are for.'}
+                  </p>
+                  <p className="text-sm text-gray-500 text-center mt-3">
+                    Please choose whether these documents are for the current lease or if you need to create a new lease instance.
+                  </p>
+                </>
+              )}
               
               {/* New explanation about auto-finalization */}
               <div className="mt-4 p-3 bg-blue-50 rounded-md">

@@ -46,6 +46,8 @@ interface DateDiscrepancyData {
     id: string;
   }[];
   selectedResident?: string;
+  reason?: string; // Why the modal is being shown
+  message?: string; // Custom message from API
 }
 
 export default function IncomeVerificationDocumentUploadForm({
@@ -500,7 +502,9 @@ export default function IncomeVerificationDocumentUploadForm({
             monthsDifference: checkResult.monthsDifference,
             fileData: firstFile,  // The specific file that triggered discrepancy
             allSelectedFiles: selectedFiles,  // Store ALL selected files
-            selectedResident: selectedResident  // Store the selected resident
+            selectedResident: selectedResident,  // Store the selected resident
+            reason: checkResult.reason, // Why the modal is being shown
+            message: checkResult.message // Custom message from API
           }
         });
         setIsSubmitting(false);
@@ -673,6 +677,8 @@ export default function IncomeVerificationDocumentUploadForm({
       documentDate={dateDiscrepancyModal.data?.documentDate || ''}
       onConfirmCurrentLease={handleConfirmCurrentLease}
       onCreateNewLease={handleCreateNewLease}
+      reason={dateDiscrepancyModal.data?.reason}
+      message={dateDiscrepancyModal.data?.message}
     />
     
     {/* Lease Creation Dialog */}
