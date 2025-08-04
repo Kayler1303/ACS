@@ -124,10 +124,12 @@ export default function IncomeVerificationDocumentUploadForm({
 
   const handleCreateNewLease = () => {
     // Store the file data and start lease creation workflow
+    console.log('[NEW LEASE WORKFLOW] Starting new lease creation workflow', dateDiscrepancyModal.data);
     if (dateDiscrepancyModal.data) {
       setPendingFileUpload(dateDiscrepancyModal.data);
       setDateDiscrepancyModal({ isOpen: false, data: null });
       setCreateLeaseDialogOpen(true);
+      console.log('[NEW LEASE WORKFLOW] Opening lease creation dialog');
     }
   };
 
@@ -143,6 +145,7 @@ export default function IncomeVerificationDocumentUploadForm({
     leaseEndDate: string; 
     leaseRent: number | null 
   }) => {
+    console.log('[NEW LEASE WORKFLOW] Creating lease with data:', leaseData);
     try {
       setIsSubmitting(true);
       
@@ -161,11 +164,13 @@ export default function IncomeVerificationDocumentUploadForm({
       }
 
       const newLease = await leaseResponse.json();
+      console.log('[NEW LEASE WORKFLOW] Lease created successfully:', newLease);
       setNewLeaseId(newLease.id);
       setCreateLeaseDialogOpen(false);
       
       // Next step: add residents to the new lease
       setAddResidentDialogOpen(true);
+      console.log('[NEW LEASE WORKFLOW] Opening resident creation dialog');
       
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to create lease');
@@ -229,6 +234,11 @@ export default function IncomeVerificationDocumentUploadForm({
       }
 
       // Upload the document with forceUpload to bypass date check
+      console.log('[NEW LEASE WORKFLOW] Uploading document to new verification:', {
+        verificationId: newVerification.id,
+        residentId: targetResident.id,
+        fileName: pendingFileUpload.fileData.file.name
+      });
       const formData = new FormData();
       formData.append('file', pendingFileUpload.fileData.file);
       formData.append('documentType', pendingFileUpload.fileData.documentType);
@@ -247,6 +257,7 @@ export default function IncomeVerificationDocumentUploadForm({
 
       setAddResidentDialogOpen(false);
       setSuccess('New lease created successfully with document uploaded!');
+      console.log('[NEW LEASE WORKFLOW] Workflow completed successfully, redirecting to unit page');
       
       // Redirect to the new lease page
       router.push(`/property/${propertyId}/rent-roll/${rentRollId}/unit/${unitId}`);
@@ -256,6 +267,7 @@ export default function IncomeVerificationDocumentUploadForm({
       setNewLeaseId(null);
       
     } catch (err: unknown) {
+      console.error('[NEW LEASE WORKFLOW] Error in workflow:', err);
       setError(err instanceof Error ? err.message : 'Failed to complete lease creation workflow');
     } finally {
       setIsSubmitting(false);

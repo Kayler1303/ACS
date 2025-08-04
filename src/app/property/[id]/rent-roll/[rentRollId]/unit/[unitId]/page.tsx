@@ -1000,31 +1000,42 @@ export default function ResidentDetailPage() {
     }
   }, [propertyId, rentRollId, unitId]);
 
+  // Initial data fetch with stable dependencies  
   useEffect(() => {
     fetchTenancyData();
-  }, [fetchTenancyData]);
+  }, [propertyId, rentRollId, unitId]); // Only re-fetch when URL params change
 
-  // Call fetchUnitVerificationStatus when tenancyData is available
+  // Call fetchUnitVerificationStatus when tenancyData is available (optimized to prevent loops)
   useEffect(() => {
     if (tenancyData) {
       fetchUnitVerificationStatus();
     }
-  }, [tenancyData]);
+  }, [tenancyData?.unit?.id]); // Only re-run if we get a different unit
 
-  // Updated Effect for polling
+  // Optimized polling - only poll when documents are actively being processed
   useEffect(() => {
-    const isProcessing = tenancyData?.lease.IncomeVerification.some(v =>
-        v.IncomeDocument.some(d => d.status === 'PROCESSING' || d.status === 'UPLOADED')
+    if (!tenancyData) return;
+    
+    // Only poll if there are documents that are ACTUALLY being processed right now
+    const isActivelyProcessing = tenancyData.lease.IncomeVerification.some(v =>
+        v.IncomeDocument.some(d => d.status === 'PROCESSING')
     );
 
-    if (isProcessing) {
+    console.log('[POLLING] Active processing:', isActivelyProcessing);
+
+    if (isActivelyProcessing) {
+      console.log('[POLLING] Starting 5-second polling for PROCESSING documents');
       const interval = setInterval(() => {
+        console.log('[POLLING] Fetching updated data...');
         fetchTenancyData(false);
-        fetchUnitVerificationStatus();
-      }, 3000);
-      return () => clearInterval(interval);
+      }, 5000); // Reduced frequency to 5 seconds
+      
+      return () => {
+        console.log('[POLLING] Cleaning up polling interval');
+        clearInterval(interval);
+      };
     }
-  }, [tenancyData, fetchTenancyData]);
+  }, [tenancyData?.lease.IncomeVerification]); // More stable dependency
 
   // Function to fetch AMI bucket data for a completed lease
   const fetchAmiBucketData = async (leaseId: string) => {
