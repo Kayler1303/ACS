@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import OverrideRequestModal from './OverrideRequestModal';
+import IndividualIncomeDiscrepancyModal from './IndividualIncomeDiscrepancyModal';
 
 // Helper function to format pay frequency for display
 const formatPayFrequency = (frequency: string): string => {
@@ -88,6 +89,12 @@ export default function ResidentFinalizationDialog({
   const [overrideRequested, setOverrideRequested] = useState(false);
   const [manualW2Income, setManualW2Income] = useState<string>('');
   const [showManualW2Entry, setShowManualW2Entry] = useState(false);
+  const [showDiscrepancyModal, setShowDiscrepancyModal] = useState(false);
+  const [discrepancyData, setDiscrepancyData] = useState<{
+    rentRollIncome: number;
+    calculatedIncome: number;
+    difference: number;
+  } | null>(null);
 
   if (!isOpen) return null;
 
@@ -104,13 +111,71 @@ export default function ResidentFinalizationDialog({
   // Use resident-level calculated income or manual W2 entry
   const manualW2Value = manualW2Income ? parseFloat(manualW2Income) : 0;
   
-  // Calculate available income for finalization (used for validation)
-  const availableIncomeForFinalization = resident.calculatedAnnualizedIncome || manualW2Value || 0;
+  // Calculate income from documents in real-time (FIXED: Don't rely on potentially-null resident.calculatedAnnualizedIncome)
+  const calculateIncomeFromDocuments = () => {
+    let totalIncome = 0;
+    
+    console.log(`[REAL-TIME CALC] ${resident.name} documents:`, residentDocuments.map(doc => ({
+      id: doc.id,
+      type: doc.documentType,
+      status: doc.status,
+      grossPay: doc.grossPayAmount,
+      box1: doc.box1_wages
+    })));
+    
+    // Process W2 documents - take highest of boxes 1, 3, 5 (include any status with extracted data)
+    const w2Documents = residentDocuments.filter(doc => doc.documentType === 'W2');
+    w2Documents.forEach(doc => {
+      const amounts = [doc.box1_wages, doc.box3_ss_wages, doc.box5_med_wages]
+        .filter((amount): amount is number => amount !== null && amount !== undefined && amount > 0);
+      if (amounts.length > 0) {
+        totalIncome += Math.max(...amounts);
+      }
+    });
+    
+    // Process paystub documents - average and annualize (include any status with extracted data)
+    const paystubDocuments = residentDocuments.filter(doc => 
+      doc.documentType === 'PAYSTUB' && doc.grossPayAmount && doc.grossPayAmount > 0
+    );
+    if (paystubDocuments.length > 0) {
+      const totalGrossPay = paystubDocuments.reduce((sum, doc) => sum + (doc.grossPayAmount || 0), 0);
+      const averageGrossPay = totalGrossPay / paystubDocuments.length;
+      
+      // Get pay frequency (should be consistent across paystubs)
+      const payFrequency = paystubDocuments[0]?.payFrequency || 'BI-WEEKLY';
+      const frequencyMultipliers: Record<string, number> = {
+        'WEEKLY': 52,
+        'BI-WEEKLY': 26,
+        'SEMI-MONTHLY': 24,
+        'MONTHLY': 12,
+        'YEARLY': 1
+      };
+      
+      const multiplier = frequencyMultipliers[payFrequency] || 26;
+      const paystubIncome = averageGrossPay * multiplier;
+      totalIncome += paystubIncome;
+      
+      console.log(`[REAL-TIME CALC] ${resident.name} paystub calculation:`, {
+        paystubCount: paystubDocuments.length,
+        averageGrossPay,
+        payFrequency,
+        multiplier,
+        paystubIncome
+      });
+    }
+    
+    console.log(`[REAL-TIME CALC] ${resident.name} total calculated income: $${totalIncome}`);
+    return totalIncome;
+  };
   
-  // Calculate verified income display (only show if already finalized)
+  // Calculate available income for finalization - prioritize stored value, then real-time calculation, then manual entry
+  const calculatedIncomeFromDocs = calculateIncomeFromDocuments();
+  const availableIncomeForFinalization = resident.calculatedAnnualizedIncome || calculatedIncomeFromDocs || manualW2Value || 0;
+  
+  // Calculate verified income display - show calculated income from stored value or real-time calculation
   const residentVerifiedIncome = resident.incomeFinalized 
-    ? (resident.calculatedAnnualizedIncome || manualW2Value || 0)
-    : 0;
+    ? (resident.calculatedAnnualizedIncome || calculatedIncomeFromDocs || manualW2Value || 0)
+    : (resident.calculatedAnnualizedIncome || calculatedIncomeFromDocs || manualW2Value || 0);
 
   // Calculate total number of documents uploaded
   const completedDocumentsCount = residentDocuments.filter((doc: IncomeDocument) => doc.status === 'COMPLETED').length;
@@ -124,13 +189,9 @@ export default function ResidentFinalizationDialog({
     // Already finalized - show unfinalize option
     canFinalize = false; // We'll show unfinalize button instead
     validationMessage = 'Income has been finalized';
-  } else if (availableIncomeForFinalization <= 0) {
+  } else if (!hasDocuments && !w2DocumentsNeedingManualEntry.length) {
     canFinalize = false;
-    if (!hasDocuments) {
-      validationMessage = 'No income documents uploaded yet';
-    } else {
-      validationMessage = 'Income calculation is still being processed or no income calculated';
-    }
+    validationMessage = 'No income documents uploaded yet';
   } else {
     // Check paystub count requirements (same logic as VerificationFinalizationDialog)
     const paystubs = residentDocuments.filter((doc: IncomeDocument) => 
@@ -171,8 +232,11 @@ export default function ResidentFinalizationDialog({
 
   console.log(`[FINALIZATION DIALOG DEBUG] Resident ${resident.id} (${resident.name}):`, {
     incomeFinalized: resident.incomeFinalized,
-    calculatedAnnualizedIncome: resident.calculatedAnnualizedIncome,
-    annualizedIncome: resident.annualizedIncome,
+    storedCalculatedAnnualizedIncome: resident.calculatedAnnualizedIncome,
+    storedAnnualizedIncome: resident.annualizedIncome, // rent roll income
+    realTimeCalculatedIncome: calculatedIncomeFromDocs,
+    availableIncomeForFinalization: availableIncomeForFinalization,
+    residentDocumentsCount: residentDocuments.length,
     shouldShowVerifiedIncome: resident.incomeFinalized,
     whatWillBeDisplayed: resident.incomeFinalized 
       ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(residentVerifiedIncome)
@@ -186,6 +250,8 @@ export default function ResidentFinalizationDialog({
     
     // Add comprehensive debugging
     console.log(`[FINALIZATION DEBUG] Starting finalization for resident ${resident.id} (${resident.name})`);
+    console.log(`[FINALIZATION DEBUG] Stored calculatedAnnualizedIncome: $${resident.calculatedAnnualizedIncome || 'NULL'}`);
+    console.log(`[FINALIZATION DEBUG] Real-time calculated income: $${calculatedIncomeFromDocs}`);
     console.log(`[FINALIZATION DEBUG] Available income for finalization: $${availableIncomeForFinalization}`);
     console.log(`[FINALIZATION DEBUG] Manual W2 value: $${manualW2Value}`);
     console.log(`[FINALIZATION DEBUG] Documents count:`, residentDocuments.length);
@@ -193,7 +259,36 @@ export default function ResidentFinalizationDialog({
     console.log(`[FINALIZATION DEBUG] Validation message:`, validationMessage);
     
     try {
-      // If we have manual W2 entry, we need to handle it specially
+      // Determine the income we're going to use for finalization
+      const incomeToUse = (w2DocumentsNeedingManualEntry.length > 0 && manualW2Income) 
+        ? manualW2Value 
+        : availableIncomeForFinalization;
+
+      console.log(`[FINALIZATION DEBUG] Income to use: $${incomeToUse}`);
+
+      // Check for discrepancy between calculated income and rent roll income
+      const rentRollIncome = Number(resident.annualizedIncome || 0);
+      const calculatedIncome = incomeToUse;
+      const difference = Math.abs(rentRollIncome - calculatedIncome);
+      const discrepancyThreshold = 5; // $5 threshold
+
+      console.log(`[DISCREPANCY CHECK] Rent Roll: $${rentRollIncome}, Calculated: $${calculatedIncome}, Difference: $${difference}`);
+
+      if (difference >= discrepancyThreshold) {
+        // Show discrepancy modal instead of direct finalization
+        console.log(`[DISCREPANCY CHECK] Discrepancy detected (>= $${discrepancyThreshold}), showing modal`);
+        setDiscrepancyData({
+          rentRollIncome,
+          calculatedIncome,
+          difference
+        });
+        setShowDiscrepancyModal(true);
+        setIsSubmitting(false);
+        return;
+      }
+
+      // No significant discrepancy - proceed with normal finalization
+      console.log(`[DISCREPANCY CHECK] No significant discrepancy, proceeding with finalization`);
       if (w2DocumentsNeedingManualEntry.length > 0 && manualW2Income) {
         console.log(`[FINALIZATION DEBUG] Using manual W2 income: $${manualW2Value}`);
         await onConfirm(manualW2Value);
@@ -286,6 +381,97 @@ export default function ResidentFinalizationDialog({
     } catch (error) {
       console.error('Error submitting override request:', error);
       alert('Error submitting override request. Please try again.');
+    }
+  };
+
+  // Handler for accepting verified income (updates rent roll to match calculated)
+  const handleAcceptVerifiedIncome = async () => {
+    if (!discrepancyData) return;
+    
+    setIsSubmitting(true);
+    try {
+      console.log(`[ACCEPT VERIFIED] Updating rent roll income from $${discrepancyData.rentRollIncome} to $${discrepancyData.calculatedIncome}`);
+      
+      // Call API to update the resident's annualizedIncome to match calculatedAnnualizedIncome and finalize
+      const response = await fetch(`/api/leases/${verification.leaseId}/residents/${resident.id}/accept-verified-income`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          verifiedIncome: discrepancyData.calculatedIncome
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to accept verified income');
+      }
+
+      console.log(`[ACCEPT VERIFIED] Successfully updated and finalized ${resident.name}`);
+      
+      // Close all modals and refresh data
+      setShowDiscrepancyModal(false);
+      setDiscrepancyData(null);
+      onClose();
+      
+      if (onDataRefresh) {
+        onDataRefresh();
+      }
+    } catch (error) {
+      console.error('Error accepting verified income:', error);
+      alert(error instanceof Error ? error.message : 'Failed to accept verified income');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Handler for modifying documents
+  const handleModifyDocuments = () => {
+    console.log(`[MODIFY DOCS] User chose to modify documents for ${resident.name}`);
+    setShowDiscrepancyModal(false);
+    setDiscrepancyData(null);
+    onClose(); // Close dialog so user can upload new documents
+  };
+
+  // Handler for requesting income discrepancy exception
+  const handleRequestIncomeException = async (explanation: string) => {
+    if (!discrepancyData) return;
+    
+    setIsSubmitting(true);
+    try {
+      console.log(`[INCOME EXCEPTION] Submitting income discrepancy exception for ${resident.name}`);
+      
+      const response = await fetch('/api/override-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'INCOME_DISCREPANCY',
+          userExplanation: `Income discrepancy: Rent roll shows $${discrepancyData.rentRollIncome}, documents show $${discrepancyData.calculatedIncome}. Difference: $${discrepancyData.difference}. User explanation: ${explanation}`,
+          residentId: resident.id,
+          verificationId: verification.id,
+          leaseId: verification.leaseId
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to submit income exception request');
+      }
+
+      console.log(`[INCOME EXCEPTION] Successfully submitted for ${resident.name}`);
+      
+      // Close all modals and refresh data
+      setShowDiscrepancyModal(false);
+      setDiscrepancyData(null);
+      onClose();
+      
+      if (onDataRefresh) {
+        onDataRefresh();
+      }
+    } catch (error) {
+      console.error('Error submitting income exception:', error);
+      alert(error instanceof Error ? error.message : 'Failed to submit income exception request');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -398,8 +584,8 @@ export default function ResidentFinalizationDialog({
                 <div className="border-t pt-3 flex justify-between items-center font-semibold text-lg">
                   <span>Total Annualized Verified Income:</span>
                   <span className={resident.incomeFinalized ? "text-green-600" : "text-blue-600"}>
-                    {availableIncomeForFinalization > 0
-                      ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(availableIncomeForFinalization)
+                    {(resident.calculatedAnnualizedIncome && resident.calculatedAnnualizedIncome > 0) || availableIncomeForFinalization > 0
+                      ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(resident.calculatedAnnualizedIncome || availableIncomeForFinalization)
                       : <span className="text-gray-400">No income calculated</span>
                     }
                   </span>
@@ -506,6 +692,25 @@ export default function ResidentFinalizationDialog({
           verificationId: verification.id,
         }}
       />
+
+      {/* Individual Income Discrepancy Modal */}
+      {showDiscrepancyModal && discrepancyData && (
+        <IndividualIncomeDiscrepancyModal
+          isOpen={showDiscrepancyModal}
+          onClose={() => {
+            setShowDiscrepancyModal(false);
+            setDiscrepancyData(null);
+          }}
+          residentName={resident.name}
+          rentRollIncome={discrepancyData.rentRollIncome}
+          calculatedIncome={discrepancyData.calculatedIncome}
+          difference={discrepancyData.difference}
+          onAcceptVerified={handleAcceptVerifiedIncome}
+          onModifyDocuments={handleModifyDocuments}
+          onRequestException={handleRequestIncomeException}
+          isProcessing={isSubmitting}
+        />
+      )}
     </div>
   );
 }

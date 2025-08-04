@@ -17,6 +17,8 @@ export async function PATCH(
 
     const { leaseId, verificationId, residentId } = await params;
     const { calculatedVerifiedIncome } = await request.json();
+    
+    console.log(`[FINALIZE DEBUG] Frontend sent calculatedVerifiedIncome: $${calculatedVerifiedIncome}`);
 
     // Verify that the user owns this property through the lease verification
     const verification = await prisma.incomeVerification.findFirst({
@@ -40,16 +42,71 @@ export async function PATCH(
         },
         IncomeDocument: {
           where: {
-            residentId: residentId,
-            status: DocumentStatus.COMPLETED
+            residentId: residentId
           }
         }
       }
     });
-
+    
     if (!verification) {
       return NextResponse.json({ error: 'Verification not found or access denied' }, { status: 404 });
     }
+
+    // Calculate income from resident's documents instead of trusting frontend value
+    let serverCalculatedIncome = 0;
+    
+    // Get all completed documents for this resident
+    const residentDocuments = verification.IncomeDocument.filter(doc => 
+      doc.status === 'COMPLETED' || doc.status === 'NEEDS_REVIEW'
+    );
+    
+    console.log(`[FINALIZE DEBUG] Found ${residentDocuments.length} documents for resident ${residentId}`);
+    
+    // Process W2 documents - take highest of boxes 1, 3, 5
+    const w2Documents = residentDocuments.filter(doc => doc.documentType === 'W2');
+    w2Documents.forEach(doc => {
+      const amounts = [doc.box1_wages, doc.box3_ss_wages, doc.box5_med_wages]
+        .filter(amount => amount !== null && amount !== undefined && Number(amount) > 0)
+        .map(amount => Number(amount));
+      if (amounts.length > 0) {
+        const highestAmount = Math.max(...amounts);
+        serverCalculatedIncome += highestAmount;
+        console.log(`[FINALIZE DEBUG] W2 document: highest amount $${highestAmount}`);
+      }
+    });
+    
+    // Process paystub documents - average and annualize
+    const paystubDocuments = residentDocuments.filter(doc => 
+      doc.documentType === 'PAYSTUB' && doc.grossPayAmount && Number(doc.grossPayAmount) > 0
+    );
+    
+    if (paystubDocuments.length > 0) {
+      const totalGrossPay = paystubDocuments.reduce((sum, doc) => sum + Number(doc.grossPayAmount), 0);
+      const averageGrossPay = totalGrossPay / paystubDocuments.length;
+      
+      // Get pay frequency (should be consistent across paystubs)
+      const payFrequency = paystubDocuments[0]?.payFrequency || 'BI-WEEKLY';
+      const frequencyMultipliers: Record<string, number> = {
+        'WEEKLY': 52,
+        'BI-WEEKLY': 26,
+        'SEMI-MONTHLY': 24,
+        'MONTHLY': 12,
+        'YEARLY': 1
+      };
+      
+      const multiplier = frequencyMultipliers[payFrequency] || 26;
+      const paystubIncome = averageGrossPay * multiplier;
+      serverCalculatedIncome += paystubIncome;
+      
+      console.log(`[FINALIZE DEBUG] Paystub calculation: ${paystubDocuments.length} paystubs, average $${averageGrossPay.toFixed(2)} × ${multiplier} = $${paystubIncome.toFixed(2)}`);
+    }
+    
+    console.log(`[FINALIZE DEBUG] Server calculated income: $${serverCalculatedIncome}`);
+    console.log(`[FINALIZE DEBUG] Frontend sent income: $${calculatedVerifiedIncome}`);
+    
+    // Use server-calculated income instead of frontend value
+    const finalIncomeToUse = serverCalculatedIncome || Number(calculatedVerifiedIncome) || 0;
+    console.log(`[FINALIZE DEBUG] Final income to use: $${finalIncomeToUse}`);
 
     // Verify that the resident belongs to this lease
     const resident = verification.Lease.Resident.find(r => r.id === residentId);
@@ -57,9 +114,8 @@ export async function PATCH(
       return NextResponse.json({ error: 'Resident not found in this lease' }, { status: 404 });
     }
 
-    // Update the resident's finalized income using the new architecture
-    // Temporary workaround: Use prisma.$executeRaw to update new fields until client is updated
-    const numericVerifiedIncome = Number(calculatedVerifiedIncome);
+    // Update the resident's finalized income using server-calculated value (NOT frontend value)
+    const numericVerifiedIncome = finalIncomeToUse;
     await prisma.$executeRaw`
       UPDATE "Resident" 
       SET 
@@ -97,7 +153,7 @@ export async function PATCH(
         verificationId: verification.id,
         residentId: residentId,
         totalUploadedIncome,
-        totalVerifiedIncome: calculatedVerifiedIncome,
+        totalVerifiedIncome: finalIncomeToUse,
         userId: session.user.id
       });
     } catch (error) {

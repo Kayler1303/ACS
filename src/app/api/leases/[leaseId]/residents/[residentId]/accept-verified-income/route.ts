@@ -39,17 +39,55 @@ export async function PATCH(
       return NextResponse.json({ error: 'Resident not found in this lease' }, { status: 404 });
     }
 
-    // Update the specific resident's annualizedIncome to match the verified income
-    // This ensures that future rent roll uploads will match
+    // Update the specific resident's annualizedIncome to match the verified income AND finalize them
+    // This ensures that future rent roll uploads will match and the resident is finalized
     await prisma.resident.update({
       where: { id: residentId },
       data: {
         annualizedIncome: verifiedIncome,
-        verifiedIncome: verifiedIncome
+        verifiedIncome: verifiedIncome,
+        incomeFinalized: true,
+        finalizedAt: new Date()
       }
     });
 
-    console.log(`[ACCEPT VERIFIED INCOME] Updated resident ${residentId} in lease ${leaseId} - annualizedIncome set to: $${verifiedIncome}`);
+    console.log(`[ACCEPT VERIFIED INCOME] Updated and finalized resident ${residentId} in lease ${leaseId} - annualizedIncome set to: $${verifiedIncome}`);
+
+    // Check if all residents in the lease are now finalized
+    const allResidents = lease.Resident;
+    const finalizedResidents = allResidents.filter(r => r.id === residentId || r.incomeFinalized);
+    
+    if (finalizedResidents.length === allResidents.length) {
+      console.log(`[ACCEPT VERIFIED INCOME] All residents in lease ${leaseId} are now finalized, finalizing verification`);
+      
+      // Find the active verification for this lease
+      const activeVerification = await prisma.incomeVerification.findFirst({
+        where: {
+          leaseId: leaseId,
+          status: 'IN_PROGRESS'
+        }
+      });
+
+      if (activeVerification) {
+        // Calculate total verified income from all finalized residents
+        const totalVerifiedIncome = allResidents.reduce((sum, resident) => {
+          const residentIncome = resident.id === residentId ? verifiedIncome : (resident.calculatedAnnualizedIncome || 0);
+          return sum + Number(residentIncome);
+        }, 0);
+
+        // Finalize the verification
+        await prisma.incomeVerification.update({
+          where: { id: activeVerification.id },
+          data: {
+            status: 'FINALIZED',
+            finalizedAt: new Date(),
+            calculatedVerifiedIncome: totalVerifiedIncome
+          }
+        });
+
+        console.log(`[ACCEPT VERIFIED INCOME] Finalized verification ${activeVerification.id} with total income: $${totalVerifiedIncome}`);
+      }
+    }
 
     return NextResponse.json({ 
       message: 'Individual resident verified income accepted successfully',
