@@ -1045,8 +1045,32 @@ export default function ResidentDetailPage() {
 
     if (processingDocCount > 0) {
       console.log('[POLLING] ⚠️  Starting 5-second polling for', processingDocCount, 'PROCESSING documents');
-      const interval = setInterval(() => {
-        console.log('[POLLING] 🔄 Fetching updated data... (auto-polling active)');
+      
+      let pollCount = 0;
+      const maxPolls = 60; // 5 minutes max (60 * 5 seconds = 300 seconds)
+      
+      const interval = setInterval(async () => {
+        pollCount++;
+        console.log('[POLLING] 🔄 Fetching updated data... (auto-polling active, attempt', pollCount, '/', maxPolls, ')');
+        
+        // If we've been polling for too long, clean up stuck documents
+        if (pollCount >= maxPolls) {
+          console.log('[POLLING] ⚠️  Polling timeout reached - attempting to fix stuck documents');
+          
+          try {
+            // Call cleanup API to fix stuck documents
+            const cleanupResponse = await fetch('/api/admin/cleanup-stuck-documents', { method: 'POST' });
+            if (cleanupResponse.ok) {
+              console.log('[POLLING] ✅ Stuck documents cleanup completed');
+            }
+          } catch (cleanupError) {
+            console.error('[POLLING] ❌ Failed to cleanup stuck documents:', cleanupError);
+          }
+          
+          clearInterval(interval);
+          return;
+        }
+        
         fetchTenancyData(false);
       }, 5000);
       

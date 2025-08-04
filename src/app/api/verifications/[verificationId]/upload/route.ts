@@ -533,6 +533,25 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   } catch (error) {
     console.error('Error uploading document:', error);
+    
+    // Critical: If we have a document ID, ensure it's not left in PROCESSING status
+    if (document?.id) {
+      try {
+        console.log(`🚨 [RECOVERY] Document ${document.id} encountered error - updating status to prevent stuck state`);
+        
+        await prisma.incomeDocument.update({
+          where: { id: document.id },
+          data: { 
+            status: DocumentStatus.NEEDS_REVIEW  // Mark for admin review rather than leaving stuck
+          }
+        });
+        
+        console.log(`✅ [RECOVERY] Document ${document.id} marked as NEEDS_REVIEW to prevent stuck state`);
+      } catch (recoveryError) {
+        console.error(`❌ [RECOVERY] Failed to update stuck document ${document.id}:`, recoveryError);
+      }
+    }
+    
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
