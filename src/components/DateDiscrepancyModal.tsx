@@ -64,6 +64,15 @@ export default function DateDiscrepancyModal({
               <p className="text-sm text-gray-500 text-center mt-3">
                 Are you sure these documents are for this lease instance?
               </p>
+              
+              {/* New explanation about auto-finalization */}
+              <div className="mt-4 p-3 bg-blue-50 rounded-md">
+                <p className="text-xs text-blue-700 text-center">
+                  💡 <strong>Note:</strong> If you choose to create a new lease instance, 
+                  any current income verification in progress will be automatically finalized 
+                  to make way for the new lease.
+                </p>
+              </div>
             </div>
           </div>
           
@@ -82,7 +91,7 @@ export default function DateDiscrepancyModal({
               disabled={isProcessing}
               className="w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 sm:text-sm"
             >
-              {isProcessing ? 'Processing...' : 'These income documents are for a different lease instance - create a new lease instance'}
+              {isProcessing ? 'Processing...' : 'Create New Lease Instance (auto-finalize current verification)'}
             </button>
             
             <button

@@ -289,6 +289,28 @@ export default function IncomeVerificationDocumentUploadForm({
       const createdResidents = await Promise.all(residentPromises);
       console.log('[NEW LEASE WORKFLOW] Created residents:', createdResidents.map(r => ({ id: r.id, name: r.name })));
       
+      // IMPORTANT: Before creating verification for new lease, auto-finalize any existing IN_PROGRESS verification
+      console.log('[NEW LEASE WORKFLOW] Checking for existing IN_PROGRESS verification to auto-finalize...');
+      try {
+        const finalizeResponse = await fetch(`/api/units/${unitId}/auto-finalize-verification`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ reason: 'Auto-finalized due to new lease creation' }),
+        });
+        
+        if (finalizeResponse.ok) {
+          const finalizeResult = await finalizeResponse.json();
+          console.log('[NEW LEASE WORKFLOW] Auto-finalized existing verification:', finalizeResult.message);
+        } else {
+          console.log('[NEW LEASE WORKFLOW] No existing verification to finalize or already finalized');
+        }
+      } catch (finalizeError) {
+        console.error('[NEW LEASE WORKFLOW] Error auto-finalizing existing verification:', finalizeError);
+        // Continue anyway - the verification creation might still work
+      }
+      
       // Create income verification for the new lease
       const verificationResponse = await fetch(`/api/leases/${newLeaseId}/verifications`, {
         method: 'POST',
