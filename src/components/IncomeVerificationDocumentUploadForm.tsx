@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import DateDiscrepancyModal from './DateDiscrepancyModal';
 
 interface Resident {
   id: string;
@@ -13,6 +14,17 @@ interface IncomeVerificationDocumentUploadFormProps {
   residents: Resident[];
   verificationId: string;
   hasExistingDocuments: boolean;
+}
+
+interface DateDiscrepancyData {
+  leaseStartDate: string;
+  documentDate: string;
+  monthsDifference: number;
+  fileData: {
+    file: File;
+    documentType: string;
+    id: string;
+  };
 }
 
 export default function IncomeVerificationDocumentUploadForm({
@@ -30,6 +42,10 @@ export default function IncomeVerificationDocumentUploadForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [dateDiscrepancyModal, setDateDiscrepancyModal] = useState<{
+    isOpen: boolean;
+    data: DateDiscrepancyData | null;
+  }>({ isOpen: false, data: null });
 
   const router = useRouter();
 
@@ -42,6 +58,64 @@ export default function IncomeVerificationDocumentUploadForm({
 
   // Generate unique ID for file tracking
   const generateFileId = () => Math.random().toString(36).substr(2, 9);
+
+  // Handle date discrepancy modal actions
+  const handleConfirmCurrentLease = async () => {
+    if (!dateDiscrepancyModal.data) return;
+
+    try {
+      setIsSubmitting(true);
+      
+      // Re-upload with forceUpload flag
+      const formData = new FormData();
+      formData.append('file', dateDiscrepancyModal.data.fileData.file);
+      formData.append('documentType', dateDiscrepancyModal.data.fileData.documentType);
+      formData.append('residentId', selectedResident);
+      formData.append('forceUpload', 'true');
+
+      const response = await fetch(`/api/verifications/${verificationId}/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Upload failed');
+      }
+
+      setDateDiscrepancyModal({ isOpen: false, data: null });
+      setSuccess('Document uploaded successfully with date confirmation.');
+      
+      // Reset form
+      setSelectedFiles([]);
+      if (residents.length > 1) {
+        setSelectedResident('');
+      }
+      
+      onUploadComplete();
+      
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCreateNewLease = () => {
+    // Store the file data and redirect to lease creation
+    if (dateDiscrepancyModal.data) {
+      // For now, just close modal and show message
+      // TODO: Implement actual lease creation workflow
+      setDateDiscrepancyModal({ isOpen: false, data: null });
+      setError('Creating new lease feature is not yet implemented. Please create a new lease manually and then upload the documents.');
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCloseModal = () => {
+    setDateDiscrepancyModal({ isOpen: false, data: null });
+    setIsSubmitting(false);
+  };
 
   // Handle multiple file selection
   const handleFileSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -91,7 +165,7 @@ export default function IncomeVerificationDocumentUploadForm({
 
     try {
       // Upload each file individually
-      const uploadPromises = selectedFiles.map(async (fileData) => {
+      for (const fileData of selectedFiles) {
         const formData = new FormData();
         formData.append('file', fileData.file);
         formData.append('documentType', fileData.documentType);
@@ -107,10 +181,23 @@ export default function IncomeVerificationDocumentUploadForm({
           throw new Error(data.error || 'Upload failed');
         }
         
-        return await response.json();
-      });
-
-      await Promise.all(uploadPromises);
+        const result = await response.json();
+        
+        // Check if date confirmation is required
+        if (result.requiresDateConfirmation) {
+          setDateDiscrepancyModal({
+            isOpen: true,
+            data: {
+              leaseStartDate: result.leaseStartDate,
+              documentDate: result.documentDate,
+              monthsDifference: result.monthsDifference,
+              fileData: fileData
+            }
+          });
+          setIsSubmitting(false);
+          return; // Stop processing and show modal
+        }
+      }
 
       setSuccess(`Successfully uploaded ${selectedFiles.length} document${selectedFiles.length > 1 ? 's' : ''}. Analysis has started.`);
       
@@ -244,6 +331,16 @@ export default function IncomeVerificationDocumentUploadForm({
           }
         </button>
       </div>
+      
+      {/* Date Discrepancy Modal */}
+      <DateDiscrepancyModal
+        isOpen={dateDiscrepancyModal.isOpen}
+        onClose={handleCloseModal}
+        leaseStartDate={dateDiscrepancyModal.data?.leaseStartDate || ''}
+        documentDate={dateDiscrepancyModal.data?.documentDate || ''}
+        onConfirmCurrentLease={handleConfirmCurrentLease}
+        onCreateNewLease={handleCreateNewLease}
+      />
     </form>
   );
 } 

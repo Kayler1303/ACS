@@ -9,8 +9,21 @@ import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
 import { DocumentType, DocumentStatus } from '@prisma/client';
-import { isWithinInterval, subMonths, getYear } from 'date-fns';
+import { isWithinInterval, subMonths, getYear, addMonths } from 'date-fns';
 import { randomUUID } from 'crypto';
+
+// Helper function to check if document date is more than 5 months after lease start
+function checkDateDiscrepancy(documentDate: Date, leaseStartDate: Date): { hasDiscrepancy: boolean, monthsDifference: number } {
+  const fiveMonthsAfterLease = addMonths(leaseStartDate, 5);
+  const hasDiscrepancy = documentDate > fiveMonthsAfterLease;
+  
+  // Calculate difference in months for logging
+  const yearDiff = documentDate.getFullYear() - leaseStartDate.getFullYear();
+  const monthDiff = documentDate.getMonth() - leaseStartDate.getMonth();
+  const monthsDifference = yearDiff * 12 + monthDiff;
+  
+  return { hasDiscrepancy, monthsDifference };
+}
 
 // Helper functions for document validation
 function validateDocumentTimeliness(doc: any, leaseStartDate: Date): { isValid: boolean, reason?: string } {
@@ -104,6 +117,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const file = formData.get('file') as File;
     const documentType = formData.get('documentType') as DocumentType;
     const residentId = formData.get('residentId') as string;
+    const forceUpload = formData.get('forceUpload') === 'true'; // Allow bypassing date check
 
     if (!file || !documentType || !residentId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -316,6 +330,36 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         ? (validationResult as PaystubValidationResult).extractedData.payPeriodEndDate
         : null
     };
+
+    // Check for date discrepancy (only if not forced upload)
+    if (!forceUpload) {
+      // Extract the relevant document date
+      let documentDate: Date | null = null;
+      
+      if (documentType === DocumentType.PAYSTUB && docForValidation.payPeriodEndDate) {
+        documentDate = new Date(docForValidation.payPeriodEndDate);
+      } else if (documentType === DocumentType.W2 && docForValidation.taxYear) {
+        // For W2, use December 31st of the tax year
+        documentDate = new Date(`December 31, ${docForValidation.taxYear}`);
+      }
+      
+      if (documentDate && lease.leaseStartDate) {
+        const dateCheck = checkDateDiscrepancy(documentDate, new Date(lease.leaseStartDate));
+        
+        if (dateCheck.hasDiscrepancy) {
+          console.log(`Date discrepancy detected: Document date ${documentDate.toISOString()} is ${dateCheck.monthsDifference} months after lease start ${lease.leaseStartDate}`);
+          
+          // Return special response indicating date discrepancy
+          return NextResponse.json({
+            requiresDateConfirmation: true,
+            leaseStartDate: lease.leaseStartDate,
+            documentDate: documentDate.toISOString(),
+            monthsDifference: dateCheck.monthsDifference,
+            message: 'Document date is more than 5 months after lease start date. Please confirm.'
+          }, { status: 200 });
+        }
+      }
+    }
 
     // Validate timeliness and name matching
     const timelinessCheck = validateDocumentTimeliness(docForValidation, new Date(lease.leaseStartDate));
