@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import DateDiscrepancyModal from './DateDiscrepancyModal';
 import CreateLeaseDialog from './CreateLeaseDialog';
 import AddResidentDialog from './AddResidentDialog';
+import LeaseTypeSelectionDialog from './LeaseTypeSelectionDialog';
 
 interface Resident {
   id: string;
@@ -70,8 +71,10 @@ export default function IncomeVerificationDocumentUploadForm({
   
   // Lease creation workflow state
   const [createLeaseDialogOpen, setCreateLeaseDialogOpen] = useState(false);
+  const [leaseTypeDialogOpen, setLeaseTypeDialogOpen] = useState(false);
   const [addResidentDialogOpen, setAddResidentDialogOpen] = useState(false);
   const [newLeaseId, setNewLeaseId] = useState<string | null>(null);
+  const [newLeaseData, setNewLeaseData] = useState<{ id: string; name: string } | null>(null);
   const [pendingFileUpload, setPendingFileUpload] = useState<DateDiscrepancyData | null>(null);
 
   const router = useRouter();
@@ -181,16 +184,48 @@ export default function IncomeVerificationDocumentUploadForm({
       const newLease = await leaseResponse.json();
       console.log('[NEW LEASE WORKFLOW] Lease created successfully:', newLease);
       setNewLeaseId(newLease.id);
+      setNewLeaseData({ id: newLease.id, name: newLease.name });
       setCreateLeaseDialogOpen(false);
       
-      // Next step: add residents to the new lease
-      setAddResidentDialogOpen(true);
-      console.log('[NEW LEASE WORKFLOW] Opening resident creation dialog');
+      // Next step: determine lease type (renewal vs new)
+      setLeaseTypeDialogOpen(true);
+      console.log('[NEW LEASE WORKFLOW] Opening lease type selection dialog');
       
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to create lease');
       setIsSubmitting(false);
     }
+  };
+
+  // Lease type selection handlers
+  const handleSelectRenewal = async () => {
+    console.log('[NEW LEASE WORKFLOW] User selected lease renewal - copying existing residents');
+    setLeaseTypeDialogOpen(false);
+    
+    try {
+      setIsSubmitting(true);
+      
+      // Copy existing residents from current lease to new lease
+      const residentData = residents.map(resident => ({ name: resident.name }));
+      await handleResidentsAdded(residentData);
+      
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to copy residents for renewal');
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSelectNewLease = () => {
+    console.log('[NEW LEASE WORKFLOW] User selected new lease - adding fresh residents');
+    setLeaseTypeDialogOpen(false);
+    setAddResidentDialogOpen(true);
+  };
+
+  const handleCloseLeaseType = () => {
+    setLeaseTypeDialogOpen(false);
+    setNewLeaseData(null);
+    setPendingFileUpload(null);
+    setIsSubmitting(false);
   };
 
   const handleResidentsAdded = async (residentData: Array<{ name: string }>) => {
@@ -548,6 +583,15 @@ export default function IncomeVerificationDocumentUploadForm({
       onClose={handleCloseLease}
       onSubmit={handleLeaseCreated}
       unitId={unitId}
+    />
+    
+    {/* Lease Type Selection Dialog */}
+    <LeaseTypeSelectionDialog
+      isOpen={leaseTypeDialogOpen}
+      onClose={handleCloseLeaseType}
+      onSelectRenewal={handleSelectRenewal}
+      onSelectNewLease={handleSelectNewLease}
+      leaseName={newLeaseData?.name || 'New Lease'}
     />
     
     {/* Add Resident Dialog */}
