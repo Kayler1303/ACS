@@ -6,6 +6,7 @@ import DateDiscrepancyModal from './DateDiscrepancyModal';
 import CreateLeaseDialog from './CreateLeaseDialog';
 import AddResidentDialog from './AddResidentDialog';
 import LeaseTypeSelectionDialog from './LeaseTypeSelectionDialog';
+import ResidentSelectionDialog from './ResidentSelectionDialog';
 
 interface Resident {
   id: string;
@@ -72,6 +73,7 @@ export default function IncomeVerificationDocumentUploadForm({
   // Lease creation workflow state
   const [createLeaseDialogOpen, setCreateLeaseDialogOpen] = useState(false);
   const [leaseTypeDialogOpen, setLeaseTypeDialogOpen] = useState(false);
+  const [residentSelectionDialogOpen, setResidentSelectionDialogOpen] = useState(false);
   const [addResidentDialogOpen, setAddResidentDialogOpen] = useState(false);
   const [newLeaseId, setNewLeaseId] = useState<string | null>(null);
   const [newLeaseData, setNewLeaseData] = useState<{ id: string; name: string } | null>(null);
@@ -198,21 +200,10 @@ export default function IncomeVerificationDocumentUploadForm({
   };
 
   // Lease type selection handlers
-  const handleSelectRenewal = async () => {
-    console.log('[NEW LEASE WORKFLOW] User selected lease renewal - copying existing residents');
+  const handleSelectRenewal = () => {
+    console.log('[NEW LEASE WORKFLOW] User selected lease renewal - showing resident selection');
     setLeaseTypeDialogOpen(false);
-    
-    try {
-      setIsSubmitting(true);
-      
-      // Copy existing residents from current lease to new lease
-      const residentData = residents.map(resident => ({ name: resident.name }));
-      await handleResidentsAdded(residentData);
-      
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to copy residents for renewal');
-      setIsSubmitting(false);
-    }
+    setResidentSelectionDialogOpen(true);
   };
 
   const handleSelectNewLease = () => {
@@ -228,7 +219,27 @@ export default function IncomeVerificationDocumentUploadForm({
     setIsSubmitting(false);
   };
 
-  const handleResidentsAdded = async (residentData: Array<{ name: string }>) => {
+  const handleResidentSelectionSubmit = async (selectedResidents: Array<{ name: string; annualizedIncome: number | null }>) => {
+    console.log('[NEW LEASE WORKFLOW] Selected residents for renewal:', selectedResidents);
+    setResidentSelectionDialogOpen(false);
+    
+    try {
+      setIsSubmitting(true);
+      await handleResidentsAdded(selectedResidents);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to copy selected residents');
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCloseResidentSelection = () => {
+    setResidentSelectionDialogOpen(false);
+    setNewLeaseData(null);
+    setPendingFileUpload(null);
+    setIsSubmitting(false);
+  };
+
+  const handleResidentsAdded = async (residentData: Array<{ name: string; annualizedIncome?: number | null }>) => {
     if (!newLeaseId || !pendingFileUpload) return;
 
     try {
@@ -241,7 +252,10 @@ export default function IncomeVerificationDocumentUploadForm({
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ name: resident.name }),
+          body: JSON.stringify({ 
+            name: resident.name,
+            annualizedIncome: resident.annualizedIncome 
+          }),
         });
 
         if (!response.ok) {
@@ -591,6 +605,15 @@ export default function IncomeVerificationDocumentUploadForm({
       onClose={handleCloseLeaseType}
       onSelectRenewal={handleSelectRenewal}
       onSelectNewLease={handleSelectNewLease}
+      leaseName={newLeaseData?.name || 'New Lease'}
+    />
+    
+    {/* Resident Selection Dialog for Renewals */}
+    <ResidentSelectionDialog
+      isOpen={residentSelectionDialogOpen}
+      onClose={handleCloseResidentSelection}
+      onSubmit={handleResidentSelectionSubmit}
+      currentResidents={residents}
       leaseName={newLeaseData?.name || 'New Lease'}
     />
     

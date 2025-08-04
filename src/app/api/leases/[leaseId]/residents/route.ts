@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { randomUUID } from 'crypto';
 
 export async function POST(
   req: Request,
@@ -16,9 +17,9 @@ export async function POST(
     const { leaseId } = await params;
     const { name, annualizedIncome } = await req.json();
 
-    if (!name || !annualizedIncome) {
+    if (!name) {
       return NextResponse.json(
-        { error: 'Name and annualized income are required.' },
+        { error: 'Name is required.' },
         { status: 400 }
       );
     }
@@ -27,14 +28,14 @@ export async function POST(
     const lease = await prisma.lease.findFirst({
       where: {
         id: leaseId,
-        unit: {
-          property: {
+        Unit: {
+          Property: {
             ownerId: session.user.id,
           },
         },
       },
       include: {
-        tenancy: true,
+        Tenancy: true,
       },
     });
 
@@ -42,7 +43,7 @@ export async function POST(
       return NextResponse.json({ error: 'Lease not found or access denied' }, { status: 404 });
     }
 
-    if (lease.tenancy) {
+    if (lease.Tenancy) {
       return NextResponse.json(
         { error: 'Cannot manually add residents to a non-provisional lease.' },
         { status: 403 } // Forbidden
@@ -52,9 +53,11 @@ export async function POST(
     // 2. Create the new resident
     const newResident = await prisma.resident.create({
       data: {
+        id: randomUUID(),
         name,
-        annualizedIncome: parseFloat(annualizedIncome),
-        lease: {
+        annualizedIncome: annualizedIncome ? parseFloat(annualizedIncome) : null,
+        updatedAt: new Date(),
+        Lease: {
           connect: { id: leaseId },
         },
       },
