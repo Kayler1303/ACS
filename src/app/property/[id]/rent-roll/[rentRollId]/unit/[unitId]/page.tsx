@@ -1020,23 +1020,42 @@ export default function ResidentDetailPage() {
     );
   }, [tenancyData]);
 
+  // DEBUG: Log all document statuses for troubleshooting
+  useEffect(() => {
+    if (tenancyData) {
+      const allDocuments = tenancyData.lease.IncomeVerification.flatMap(v => v.IncomeDocument);
+      const statusCounts = allDocuments.reduce((acc, doc) => {
+        acc[doc.status] = (acc[doc.status] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      
+      console.log('[DEBUG] All document statuses:', statusCounts);
+      
+      // Log PROCESSING documents specifically
+      const processingDocs = allDocuments.filter(d => d.status === 'PROCESSING');
+      if (processingDocs.length > 0) {
+        console.log('[DEBUG] PROCESSING documents:', processingDocs.map(d => ({id: d.id, type: d.documentType, uploadDate: d.uploadDate})));
+      }
+    }
+  }, [tenancyData]);
+
   // Optimized polling - only poll when there are actually processing documents
   useEffect(() => {
     console.log('[POLLING] Processing document count:', processingDocCount);
 
     if (processingDocCount > 0) {
-      console.log('[POLLING] Starting 5-second polling for', processingDocCount, 'PROCESSING documents');
+      console.log('[POLLING] ⚠️  Starting 5-second polling for', processingDocCount, 'PROCESSING documents');
       const interval = setInterval(() => {
-        console.log('[POLLING] Fetching updated data...');
+        console.log('[POLLING] 🔄 Fetching updated data... (auto-polling active)');
         fetchTenancyData(false);
       }, 5000);
       
       return () => {
-        console.log('[POLLING] Cleaning up polling interval');
+        console.log('[POLLING] ✅ Cleaning up polling interval');
         clearInterval(interval);
       };
     } else {
-      console.log('[POLLING] No processing documents - polling disabled');
+      console.log('[POLLING] ✅ No processing documents - polling disabled');
     }
   }, [processingDocCount]); // Only re-run when processing count changes
 
