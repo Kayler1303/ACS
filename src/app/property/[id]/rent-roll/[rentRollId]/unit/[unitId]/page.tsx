@@ -1544,7 +1544,7 @@ export default function ResidentDetailPage() {
                   {period.Resident.length > 0 ? (
                     <div className="divide-y divide-gray-200">
                       {period.Resident.map((resident) => {
-                        // Filter documents for this resident - SHOW ALL DOCUMENTS
+                        // Filter documents for this resident - ONLY FOR THIS SPECIFIC VERIFICATION
                         const residentDocuments = verification?.IncomeDocument?.filter(
                           doc => doc.residentId === resident.id
                         ) || [];

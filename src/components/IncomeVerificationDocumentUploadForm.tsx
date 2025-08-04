@@ -398,16 +398,24 @@ export default function IncomeVerificationDocumentUploadForm({
 
       setDocumentAssignmentDialogOpen(false);
       setSuccess('New lease created successfully with documents uploaded!');
-      console.log('[NEW LEASE WORKFLOW] Workflow completed successfully, redirecting to unit page');
+      console.log('[NEW LEASE WORKFLOW] Workflow completed successfully, refreshing and redirecting...');
       
-      // Redirect to the unit page
-      router.push(`/property/${propertyId}/rent-roll/${rentRollId}/unit/${unitId}`);
-      
-      // Clean up state
+      // Clean up state first
       setPendingFileUpload(null);
       setNewLeaseId(null);
       setNewVerificationId(null);
       setNewLeaseResidents([]);
+      
+      // Add small delay and trigger data refresh before redirect
+      setTimeout(() => {
+        // Trigger a refresh by calling the onSuccess callback if provided
+        if (onUploadComplete) {
+          onUploadComplete();
+        }
+        
+        // Redirect to the unit page
+        router.push(`/property/${propertyId}/rent-roll/${rentRollId}/unit/${unitId}`);
+      }, 1000); // 1 second delay to allow backend processing
       
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to upload documents');
