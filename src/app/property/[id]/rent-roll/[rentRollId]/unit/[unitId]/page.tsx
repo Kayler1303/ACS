@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useState, useEffect, Fragment, useCallback } from 'react';
+import { useState, useEffect, Fragment, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import IncomeVerificationDocumentUploadForm from '@/components/IncomeVerificationDocumentUploadForm';
 import IncomeVerificationUploadDialog from '@/components/IncomeVerificationUploadDialog';
@@ -1012,30 +1012,33 @@ export default function ResidentDetailPage() {
     }
   }, [tenancyData?.unit?.id]); // Only re-run if we get a different unit
 
-  // Optimized polling - only poll when documents are actively being processed
-  useEffect(() => {
-    if (!tenancyData) return;
-    
-    // Only poll if there are documents that are ACTUALLY being processed right now
-    const isActivelyProcessing = tenancyData.lease.IncomeVerification.some(v =>
-        v.IncomeDocument.some(d => d.status === 'PROCESSING')
+  // Track processing document count to prevent unnecessary polling
+  const processingDocCount = useMemo(() => {
+    if (!tenancyData) return 0;
+    return tenancyData.lease.IncomeVerification.reduce((count, v) => 
+      count + v.IncomeDocument.filter(d => d.status === 'PROCESSING').length, 0
     );
+  }, [tenancyData]);
 
-    console.log('[POLLING] Active processing:', isActivelyProcessing);
+  // Optimized polling - only poll when there are actually processing documents
+  useEffect(() => {
+    console.log('[POLLING] Processing document count:', processingDocCount);
 
-    if (isActivelyProcessing) {
-      console.log('[POLLING] Starting 5-second polling for PROCESSING documents');
+    if (processingDocCount > 0) {
+      console.log('[POLLING] Starting 5-second polling for', processingDocCount, 'PROCESSING documents');
       const interval = setInterval(() => {
         console.log('[POLLING] Fetching updated data...');
         fetchTenancyData(false);
-      }, 5000); // Reduced frequency to 5 seconds
+      }, 5000);
       
       return () => {
         console.log('[POLLING] Cleaning up polling interval');
         clearInterval(interval);
       };
+    } else {
+      console.log('[POLLING] No processing documents - polling disabled');
     }
-  }, [tenancyData?.lease.IncomeVerification]); // More stable dependency
+  }, [processingDocCount]); // Only re-run when processing count changes
 
   // Function to fetch AMI bucket data for a completed lease
   const fetchAmiBucketData = async (leaseId: string) => {
