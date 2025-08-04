@@ -5,14 +5,14 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
 export async function DELETE(
   req: Request,
-  { params }: { params: { leaseId: string } }
+  { params }: { params: Promise<{ leaseId: string }> }
 ) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { leaseId } = params;
+  const { leaseId } = await params;
 
   if (!leaseId) {
     return NextResponse.json({ error: 'Lease ID is required' }, { status: 400 });
@@ -22,10 +22,10 @@ export async function DELETE(
     const lease = await prisma.lease.findUnique({
       where: { id: leaseId },
       include: {
-        tenancy: true,
-        unit: {
+        Tenancy: true,
+        Unit: {
           select: {
-            property: {
+            Property: {
               select: {
                 ownerId: true,
               },
@@ -39,12 +39,12 @@ export async function DELETE(
       return NextResponse.json({ error: 'Lease not found' }, { status: 404 });
     }
 
-    if (lease.unit.property.ownerId !== session.user.id) {
+    if (lease.Unit.Property.ownerId !== session.user.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // Only allow deleting "provisional" leases (not linked to a tenancy)
-    if (lease.tenancy) {
+    if (lease.Tenancy) {
       return NextResponse.json(
         {
           error:
