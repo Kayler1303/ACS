@@ -166,44 +166,43 @@ export default function IncomeVerificationDocumentUploadForm({
   };
 
   // Lease creation workflow handlers
-  const handleLeaseCreated = async (leaseData: { 
-    name: string; 
-    leaseStartDate: string; 
-    leaseEndDate: string; 
-    leaseRent: number | null 
-  }) => {
-    console.log('[NEW LEASE WORKFLOW] Creating lease with data:', leaseData);
-    try {
-      setIsSubmitting(true);
-      
-      // Create the new lease
-      const leaseResponse = await fetch(`/api/units/${unitId}/leases`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(leaseData),
-      });
-
-      if (!leaseResponse.ok) {
-        const data = await leaseResponse.json();
-        throw new Error(data.error || 'Failed to create lease');
+  const handleLeaseCreated = async (leaseData: { id: string; name: string }) => {
+    console.log('[NEW LEASE WORKFLOW] Lease created successfully:', leaseData);
+    setNewLeaseId(leaseData.id);
+    setNewLeaseData(leaseData);
+    
+    // Clean up any orphaned documents from current verification
+    // These are documents that were uploaded during the date check but should belong to the new lease
+    if (pendingFileUpload?.allSelectedFiles && pendingFileUpload?.selectedResident) {
+      console.log('[NEW LEASE WORKFLOW] Cleaning up orphaned documents from current verification');
+      try {
+        // Get the resident ID for the selected resident name
+        const residentId = pendingFileUpload.selectedResident;
+        
+        // Delete recent documents for this resident from the current verification
+        const cleanupResponse = await fetch(`/api/verifications/${verificationId}/cleanup-orphaned`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
+            residentId,
+            fileNames: pendingFileUpload.allSelectedFiles.map(f => f.file.name)
+          }),
+        });
+        
+        if (cleanupResponse.ok) {
+          console.log('[NEW LEASE WORKFLOW] Successfully cleaned up orphaned documents');
+        } else {
+          console.warn('[NEW LEASE WORKFLOW] Could not clean up orphaned documents');
+        }
+      } catch (error) {
+        console.warn('[NEW LEASE WORKFLOW] Error cleaning up orphaned documents:', error);
       }
-
-      const newLease = await leaseResponse.json();
-      console.log('[NEW LEASE WORKFLOW] Lease created successfully:', newLease);
-      setNewLeaseId(newLease.id);
-      setNewLeaseData({ id: newLease.id, name: newLease.name });
-      setCreateLeaseDialogOpen(false);
-      
-      // Next step: determine lease type (renewal vs new)
-      setLeaseTypeDialogOpen(true);
-      console.log('[NEW LEASE WORKFLOW] Opening lease type selection dialog');
-      
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to create lease');
-      setIsSubmitting(false);
     }
+    
+    setCreateLeaseDialogOpen(false);
+    setLeaseTypeDialogOpen(true);
   };
 
   // Lease type selection handlers

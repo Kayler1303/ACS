@@ -312,14 +312,62 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!lease.leaseStartDate) {
       console.log(`⏭️ Skipping timeliness validation for future lease ${lease.name} (no start date set)`);
       
-      // Just mark as completed - skip validation for future leases
-      document = await prisma.incomeDocument.update({
-        where: { id: document.id },
-        data: {
+      // Save extracted data for future leases (similar to normal lease processing)
+      if (documentType === DocumentType.W2) {
+        const w2Result = validationResult as W2ValidationResult;
+        const extractedData = w2Result.extractedData;
+        
+        // Use the highest amount from boxes 1, 3, 5 as per business rules
+        const amounts = [extractedData.box1_wages, extractedData.box3_ss_wages, extractedData.box5_med_wages]
+          .filter((amount): amount is number => amount !== null);
+        
+        let updateData: any = {
           status: DocumentStatus.COMPLETED,
-        }
-      });
+          box1_wages: extractedData.box1_wages,
+          box3_ss_wages: extractedData.box3_ss_wages,
+          box5_med_wages: extractedData.box5_med_wages,
+          employeeName: extractedData.employeeName,
+          employerName: extractedData.employerName,
+        };
 
+        if (amounts.length > 0) {
+          updateData.calculatedAnnualizedIncome = Math.max(...amounts);
+        }
+
+        document = await prisma.incomeDocument.update({
+          where: { id: document.id },
+          data: updateData
+        });
+        
+      } else if (documentType === DocumentType.PAYSTUB) {
+        const paystubResult = validationResult as PaystubValidationResult;
+        const extractedData = paystubResult.extractedData;
+        
+        let updateData: any = {
+          status: DocumentStatus.COMPLETED,
+          employeeName: extractedData.employeeName,
+          employerName: extractedData.employerName,
+        };
+
+        if (extractedData.grossPayAmount) {
+          updateData.grossPayAmount = extractedData.grossPayAmount;
+        }
+        
+        if (extractedData.payPeriodStartDate) {
+          updateData.payPeriodStartDate = extractedData.payPeriodStartDate;
+        }
+        
+        if (extractedData.payPeriodEndDate) {
+          updateData.payPeriodEndDate = extractedData.payPeriodEndDate;
+        }
+
+        document = await prisma.incomeDocument.update({
+          where: { id: document.id },
+          data: updateData
+        });
+      }
+
+      console.log(`✅ Future lease document processed with extracted data: ${document.id}`);
       return NextResponse.json(document, { status: 201 });
     }
 
