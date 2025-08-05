@@ -371,7 +371,10 @@ export default function IncomeVerificationDocumentUploadForm({
       setSuccess('New lease created successfully with documents uploaded!');
       console.log('[NEW LEASE WORKFLOW] Workflow completed successfully, refreshing and redirecting...');
       
-      // Clean up state first
+      // Clean up state first  
+      setIsSubmitting(false); // Clear the original form's submitting state
+      setSelectedFiles([]); // Clear the selected files
+      setDateDiscrepancyModal({ isOpen: false, data: null }); // Clear modal state
       setPendingFileUpload(null);
       setNewLeaseId(null);
       setNewVerificationId(null);
@@ -472,20 +475,32 @@ export default function IncomeVerificationDocumentUploadForm({
       // If date confirmation is required, show modal WITHOUT uploading anything
       if (checkResult.requiresDateConfirmation) {
         console.log('[NEW LEASE WORKFLOW] Date discrepancy detected - showing modal WITHOUT uploading files');
+        
+        const modalData = {
+          leaseStartDate: checkResult.leaseStartDate,
+          documentDate: checkResult.documentDate,
+          monthsDifference: checkResult.monthsDifference,
+          fileData: selectedFiles[0],  // Use first file as representative
+          allSelectedFiles: selectedFiles,  // Store ALL selected files
+          selectedResident: selectedResident,  // Store the selected resident
+          reason: checkResult.reason, // Why the modal is being shown
+          message: checkResult.message // Custom message from API
+        };
+        
+        console.log('[NEW LEASE WORKFLOW] Setting modal data:', modalData);
+        
         setDateDiscrepancyModal({
           isOpen: true,
-          data: {
-            leaseStartDate: checkResult.leaseStartDate,
-            documentDate: checkResult.documentDate,
-            monthsDifference: checkResult.monthsDifference,
-            fileData: selectedFiles[0],  // Use first file as representative
-            allSelectedFiles: selectedFiles,  // Store ALL selected files
-            selectedResident: selectedResident,  // Store the selected resident
-            reason: checkResult.reason, // Why the modal is being shown
-            message: checkResult.message // Custom message from API
-          }
+          data: modalData
         });
+        
         console.log('[NEW LEASE WORKFLOW] Modal state set, stopping submission');
+        
+        // Log current modal state after a brief delay to ensure state update
+        setTimeout(() => {
+          console.log('[NEW LEASE WORKFLOW] Modal state after timeout:', dateDiscrepancyModal);
+        }, 100);
+        
         setIsSubmitting(false);
         return; // Stop here - NO FILES UPLOADED YET!
       }
@@ -649,16 +664,31 @@ export default function IncomeVerificationDocumentUploadForm({
     
     {/* Dialogs outside form to prevent nesting */}
     {/* Date Discrepancy Modal */}
-    <DateDiscrepancyModal
-      isOpen={dateDiscrepancyModal.isOpen}
-      onClose={() => setDateDiscrepancyModal({ isOpen: false, data: null })}
-      leaseStartDate={dateDiscrepancyModal.data?.leaseStartDate || ''}
-      documentDate={dateDiscrepancyModal.data?.documentDate || ''}
-      onConfirmCurrentLease={handleConfirmCurrentLease}
-      onCreateNewLease={handleCreateNewLease}
-      reason={dateDiscrepancyModal.data?.reason}
-      message={dateDiscrepancyModal.data?.message}
-    />
+    {(() => {
+      const modalProps = {
+        isOpen: dateDiscrepancyModal.isOpen,
+        leaseStartDate: dateDiscrepancyModal.data?.leaseStartDate || '',
+        documentDate: dateDiscrepancyModal.data?.documentDate || '',
+        reason: dateDiscrepancyModal.data?.reason,
+        message: dateDiscrepancyModal.data?.message
+      };
+      
+      console.log('[MODAL DEBUG] About to render DateDiscrepancyModal with props:', modalProps);
+      console.log('[MODAL DEBUG] Full dateDiscrepancyModal state:', dateDiscrepancyModal);
+      
+      return (
+        <DateDiscrepancyModal
+          isOpen={dateDiscrepancyModal.isOpen}
+          onClose={() => setDateDiscrepancyModal({ isOpen: false, data: null })}
+          leaseStartDate={dateDiscrepancyModal.data?.leaseStartDate || ''}
+          documentDate={dateDiscrepancyModal.data?.documentDate || ''}
+          onConfirmCurrentLease={handleConfirmCurrentLease}
+          onCreateNewLease={handleCreateNewLease}
+          reason={dateDiscrepancyModal.data?.reason}
+          message={dateDiscrepancyModal.data?.message}
+        />
+      );
+    })()}
     
     {/* Lease Creation Dialog */}
     <CreateLeaseDialog
