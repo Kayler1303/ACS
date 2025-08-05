@@ -173,36 +173,6 @@ export default function IncomeVerificationDocumentUploadForm({
     setNewLeaseId(leaseData.id);
     setNewLeaseData(leaseData);
     
-    // Clean up any orphaned documents from current verification
-    // These are documents that were uploaded during the date check but should belong to the new lease
-    if (pendingFileUpload?.allSelectedFiles && pendingFileUpload?.selectedResident) {
-      console.log('[NEW LEASE WORKFLOW] Cleaning up orphaned documents from current verification');
-      try {
-        // Get the resident ID for the selected resident name
-        const residentId = pendingFileUpload.selectedResident;
-        
-        // Delete recent documents for this resident from the current verification
-        const cleanupResponse = await fetch(`/api/verifications/${verificationId}/cleanup-orphaned`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ 
-            residentId,
-            fileNames: pendingFileUpload.allSelectedFiles.map(f => f.file.name)
-          }),
-        });
-        
-        if (cleanupResponse.ok) {
-          console.log('[NEW LEASE WORKFLOW] Successfully cleaned up orphaned documents');
-        } else {
-          console.warn('[NEW LEASE WORKFLOW] Could not clean up orphaned documents');
-        }
-      } catch (error) {
-        console.warn('[NEW LEASE WORKFLOW] Error cleaning up orphaned documents:', error);
-      }
-    }
-    
     setCreateLeaseDialogOpen(false);
     setLeaseTypeDialogOpen(true);
   };
@@ -494,6 +464,11 @@ export default function IncomeVerificationDocumentUploadForm({
       
       const checkResult = await checkResponse.json();
       
+      console.log('[NEW LEASE WORKFLOW] Date check response:', checkResult);
+      console.log('[NEW LEASE WORKFLOW] requiresDateConfirmation:', checkResult.requiresDateConfirmation);
+      console.log('[NEW LEASE WORKFLOW] reason:', checkResult.reason);
+      console.log('[NEW LEASE WORKFLOW] message:', checkResult.message);
+      
       // If date confirmation is required, show modal WITHOUT uploading anything
       if (checkResult.requiresDateConfirmation) {
         console.log('[NEW LEASE WORKFLOW] Date discrepancy detected - showing modal WITHOUT uploading files');
@@ -510,6 +485,7 @@ export default function IncomeVerificationDocumentUploadForm({
             message: checkResult.message // Custom message from API
           }
         });
+        console.log('[NEW LEASE WORKFLOW] Modal state set, stopping submission');
         setIsSubmitting(false);
         return; // Stop here - NO FILES UPLOADED YET!
       }

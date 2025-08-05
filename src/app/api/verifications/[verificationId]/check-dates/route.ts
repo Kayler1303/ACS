@@ -142,6 +142,11 @@ export async function POST(
     }
 
     console.log(`📊 Date check results: ${readableDocumentCount}/${totalDocumentCount} documents readable, ${documentDates.length} dates extracted`);
+    
+    // Debug: Log extracted dates and lease info
+    console.log(`🗓️  Lease start date: ${leaseStartDate.toISOString()}`);
+    console.log(`🗓️  Five months after start: ${fiveMonthsAfterStart.toISOString()}`);
+    console.log(`🗓️  Extracted document dates:`, documentDates.map(d => d.toISOString()));
 
     // If no documents were readable, proceed normally (can't determine dates)
     if (readableDocumentCount === 0) {
@@ -154,6 +159,9 @@ export async function POST(
     // Check if ANY document date is > 5 months after lease start
     const futureDocuments = documentDates.filter(date => date > fiveMonthsAfterStart);
     
+    console.log(`🔍 Future documents found: ${futureDocuments.length}/${documentDates.length}`);
+    console.log(`🔍 Future document dates:`, futureDocuments.map(d => d.toISOString()));
+    
     if (futureDocuments.length > 0) {
       // Find the latest document date to show in modal
       const latestDate = new Date(Math.max(...futureDocuments.map(d => d.getTime())));
@@ -161,21 +169,27 @@ export async function POST(
         (latestDate.getTime() - leaseStartDate.getTime()) / (1000 * 60 * 60 * 24 * 30)
       );
 
-      return NextResponse.json({
+      const response = {
         requiresDateConfirmation: true,
         leaseStartDate: leaseStartDate.toISOString(),
         documentDate: latestDate.toISOString(),
         monthsDifference,
         message: `${futureDocuments.length} of ${documentDates.length} readable documents are from ${monthsDifference} months after lease start - confirmation required`,
         reason: 'date_discrepancy'
-      });
+      };
+      
+      console.log(`✅ Returning requiresDateConfirmation: true`, response);
+      return NextResponse.json(response);
     }
 
     // All readable documents are within acceptable range
-    return NextResponse.json({
+    const response = {
       requiresDateConfirmation: false,
       message: `All ${documentDates.length} readable documents are within acceptable date range`
-    });
+    };
+    
+    console.log(`✅ Returning requiresDateConfirmation: false`, response);
+    return NextResponse.json(response);
 
   } catch (error) {
     console.error('Error checking document dates:', error);
