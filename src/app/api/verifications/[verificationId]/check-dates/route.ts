@@ -20,11 +20,24 @@ export async function POST(
 
   try {
     const formData = await req.formData();
-    const file = formData.get('file') as File;
-    const documentType = formData.get('documentType') as string;
+    
+    // Get all files from the form data
+    const files: File[] = [];
+    const documentTypes: string[] = [];
+    
+    // FormData can have multiple files with same key name
+    const fileEntries = formData.getAll('files') as File[];
+    const typeEntries = formData.getAll('documentTypes') as string[];
+    
+    for (let i = 0; i < fileEntries.length; i++) {
+      if (fileEntries[i] && typeEntries[i]) {
+        files.push(fileEntries[i]);
+        documentTypes.push(typeEntries[i]);
+      }
+    }
 
-    if (!file || !documentType) {
-      return NextResponse.json({ error: 'File and document type are required' }, { status: 400 });
+    if (files.length === 0) {
+      return NextResponse.json({ error: 'No files provided' }, { status: 400 });
     }
 
     // Get verification and lease info for date comparison
@@ -68,101 +81,100 @@ export async function POST(
       });
     }
 
-    // Convert file to buffer for Azure analysis
-    const buffer = Buffer.from(await file.arrayBuffer());
-
-    // Analyze the document with Azure Document Intelligence
-    let analyzeResult;
-    try {
-      const modelId = documentType === DocumentType.W2 ? 'prebuilt-tax.us.w2' : 'prebuilt-payStub.us';
-      analyzeResult = await analyzeIncomeDocument(buffer, modelId);
-    } catch (azureError) {
-      console.error('Azure analysis failed for date check:', azureError);
-      
-      // Since we can't extract dates automatically, ask user to decide
-      // This prevents documents from going to wrong lease when Azure fails
-      return NextResponse.json({
-        requiresDateConfirmation: true,
-        leaseStartDate: lease.leaseStartDate,
-        documentDate: new Date().toISOString(), // Use current date as placeholder
-        monthsDifference: 12, // Arbitrary large number to trigger modal
-        message: 'Could not extract date automatically - please confirm which lease these documents are for',
-        reason: 'azure_failed'
-      });
-    }
-
-    // Validate Azure extraction results
-    let validationResult: PaystubValidationResult | W2ValidationResult;
-
-    if (documentType === DocumentType.PAYSTUB) {
-      validationResult = validatePaystubExtraction(analyzeResult);
-    } else if (documentType === DocumentType.W2) {
-      validationResult = validateW2Extraction(analyzeResult);
-    } else {
-      return NextResponse.json({ error: 'Unsupported document type' }, { status: 400 });
-    }
-
-    if (!validationResult.isValid) {
-      // Similar logic - if validation fails, ask user to decide
-      return NextResponse.json({
-        requiresDateConfirmation: true,
-        leaseStartDate: lease.leaseStartDate,
-        documentDate: new Date().toISOString(),
-        monthsDifference: 12,
-        message: 'Could not extract date reliably - please confirm which lease these documents are for',
-        reason: 'validation_failed'
-      });
-    }
-
-    // Get document date based on type
-    let documentDate: Date | null = null;
-    
-    if (documentType === DocumentType.PAYSTUB) {
-      const paystubResult = validationResult as PaystubValidationResult;
-      if (paystubResult.extractedData?.payPeriodEndDate) {
-        documentDate = new Date(paystubResult.extractedData.payPeriodEndDate);
-      }
-    } else if (documentType === DocumentType.W2) {
-      const w2Result = validationResult as W2ValidationResult;
-      if (w2Result.extractedData?.taxYear) {
-        // For W2, use December 31 of the tax year
-        documentDate = new Date(parseInt(w2Result.extractedData.taxYear), 11, 31);
-      }
-    }
-
-    if (!documentDate) {
-      // If we can't determine document date, ask user to decide
-      return NextResponse.json({
-        requiresDateConfirmation: true,
-        leaseStartDate: lease.leaseStartDate,
-        documentDate: new Date().toISOString(),
-        monthsDifference: 12,
-        message: 'Could not determine document date - please confirm which lease these documents are for',
-        reason: 'no_date_found'
-      });
-    }
-
-    // Check if document is more than 5 months after lease start
     const leaseStartDate = new Date(lease.leaseStartDate);
     const fiveMonthsAfterStart = addMonths(leaseStartDate, 5);
     
-    if (documentDate > fiveMonthsAfterStart) {
+    // Process all files and extract dates
+    const documentDates: Date[] = [];
+    let readableDocumentCount = 0;
+    let totalDocumentCount = files.length;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const documentType = documentTypes[i];
+      
+      try {
+        // Convert file to buffer for Azure analysis
+        const buffer = Buffer.from(await file.arrayBuffer());
+
+        // Analyze the document with Azure Document Intelligence
+        const modelId = documentType === DocumentType.W2 ? 'prebuilt-tax.us.w2' : 'prebuilt-payStub.us';
+        const analyzeResult = await analyzeIncomeDocument(buffer, modelId);
+        
+        // Validate Azure extraction results
+        let validationResult: PaystubValidationResult | W2ValidationResult;
+
+        if (documentType === DocumentType.PAYSTUB) {
+          validationResult = validatePaystubExtraction(analyzeResult);
+        } else if (documentType === DocumentType.W2) {
+          validationResult = validateW2Extraction(analyzeResult);
+        } else {
+          continue; // Skip unsupported types
+        }
+
+        if (validationResult.isValid) {
+          readableDocumentCount++;
+          
+          // Extract document date
+          let documentDate: Date | null = null;
+          
+          if (documentType === DocumentType.PAYSTUB) {
+            const paystubResult = validationResult as PaystubValidationResult;
+            if (paystubResult.extractedData?.payPeriodEndDate) {
+              documentDate = new Date(paystubResult.extractedData.payPeriodEndDate);
+            }
+          } else if (documentType === DocumentType.W2) {
+            const w2Result = validationResult as W2ValidationResult;
+            if (w2Result.extractedData?.taxYear) {
+              documentDate = new Date(parseInt(w2Result.extractedData.taxYear), 11, 31);
+            }
+          }
+          
+          if (documentDate) {
+            documentDates.push(documentDate);
+          }
+        }
+        
+      } catch (error) {
+        console.error(`Failed to process file ${file.name}:`, error);
+        // Continue processing other files
+      }
+    }
+
+    console.log(`📊 Date check results: ${readableDocumentCount}/${totalDocumentCount} documents readable, ${documentDates.length} dates extracted`);
+
+    // If no documents were readable, proceed normally (can't determine dates)
+    if (readableDocumentCount === 0) {
+      return NextResponse.json({
+        requiresDateConfirmation: false,
+        message: 'No documents could be read - proceeding with normal upload'
+      });
+    }
+
+    // Check if ANY document date is > 5 months after lease start
+    const futureDocuments = documentDates.filter(date => date > fiveMonthsAfterStart);
+    
+    if (futureDocuments.length > 0) {
+      // Find the latest document date to show in modal
+      const latestDate = new Date(Math.max(...futureDocuments.map(d => d.getTime())));
       const monthsDifference = Math.floor(
-        (documentDate.getTime() - leaseStartDate.getTime()) / (1000 * 60 * 60 * 24 * 30)
+        (latestDate.getTime() - leaseStartDate.getTime()) / (1000 * 60 * 60 * 24 * 30)
       );
 
       return NextResponse.json({
         requiresDateConfirmation: true,
         leaseStartDate: leaseStartDate.toISOString(),
-        documentDate: documentDate.toISOString(),
+        documentDate: latestDate.toISOString(),
         monthsDifference,
-        message: `Document date is ${monthsDifference} months after lease start - confirmation required`
+        message: `${futureDocuments.length} of ${documentDates.length} readable documents are from ${monthsDifference} months after lease start - confirmation required`,
+        reason: 'date_discrepancy'
       });
     }
 
+    // All readable documents are within acceptable range
     return NextResponse.json({
       requiresDateConfirmation: false,
-      message: 'Document date is within acceptable range'
+      message: `All ${documentDates.length} readable documents are within acceptable date range`
     });
 
   } catch (error) {

@@ -471,13 +471,16 @@ export default function IncomeVerificationDocumentUploadForm({
     setSuccess(null);
 
     try {
-      // STEP 1: Check dates BEFORE uploading any files
-      const firstFile = selectedFiles[0];
+      // STEP 1: Check dates BEFORE uploading any files - process ALL files
       const checkFormData = new FormData();
-      checkFormData.append('file', firstFile.file);
-      checkFormData.append('documentType', firstFile.documentType);
+      
+      // Add all files and their document types
+      selectedFiles.forEach((fileData) => {
+        checkFormData.append('files', fileData.file);
+        checkFormData.append('documentTypes', fileData.documentType);
+      });
 
-      console.log('[NEW LEASE WORKFLOW] Checking dates before upload...');
+      console.log(`[NEW LEASE WORKFLOW] Checking dates for ${selectedFiles.length} files before upload...`);
       
       const checkResponse = await fetch(`/api/verifications/${verificationId}/check-dates`, {
         method: 'POST',
@@ -500,7 +503,7 @@ export default function IncomeVerificationDocumentUploadForm({
             leaseStartDate: checkResult.leaseStartDate,
             documentDate: checkResult.documentDate,
             monthsDifference: checkResult.monthsDifference,
-            fileData: firstFile,  // The specific file that triggered discrepancy
+            fileData: selectedFiles[0],  // Use first file as representative
             allSelectedFiles: selectedFiles,  // Store ALL selected files
             selectedResident: selectedResident,  // Store the selected resident
             reason: checkResult.reason, // Why the modal is being shown
@@ -512,7 +515,7 @@ export default function IncomeVerificationDocumentUploadForm({
       }
 
       // STEP 2: If no date discrepancy, proceed with normal upload
-      console.log('[NEW LEASE WORKFLOW] No date discrepancy - proceeding with upload');
+      console.log(`[NEW LEASE WORKFLOW] ${checkResult.message} - proceeding with upload`);
       
       // Upload each file individually
       for (const fileData of selectedFiles) {
