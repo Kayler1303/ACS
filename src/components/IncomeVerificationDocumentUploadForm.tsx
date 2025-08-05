@@ -111,8 +111,6 @@ export default function IncomeVerificationDocumentUploadForm({
       const allFiles = dateDiscrepancyModal.data.allSelectedFiles || [dateDiscrepancyModal.data.fileData];
       const residentId = dateDiscrepancyModal.data.selectedResident || selectedResident;
       
-      console.log('[NEW LEASE WORKFLOW] Re-uploading files with forceUpload:', allFiles.length);
-      
       for (const fileData of allFiles) {
         const formData = new FormData();
         formData.append('file', fileData.file);
@@ -129,8 +127,6 @@ export default function IncomeVerificationDocumentUploadForm({
           const data = await response.json();
           throw new Error(data.error || `Failed to upload ${fileData.file.name}`);
         }
-        
-        console.log('[NEW LEASE WORKFLOW] Successfully re-uploaded:', fileData.file.name);
       }
 
       setDateDiscrepancyModal({ isOpen: false, data: null });
@@ -153,12 +149,10 @@ export default function IncomeVerificationDocumentUploadForm({
 
   const handleCreateNewLease = () => {
     // Store the file data and start lease creation workflow
-    console.log('[NEW LEASE WORKFLOW] Starting new lease creation workflow', dateDiscrepancyModal.data);
     if (dateDiscrepancyModal.data) {
       setPendingFileUpload(dateDiscrepancyModal.data);
       setDateDiscrepancyModal({ isOpen: false, data: null });
       setCreateLeaseDialogOpen(true);
-      console.log('[NEW LEASE WORKFLOW] Opening lease creation dialog');
     }
   };
 
@@ -169,11 +163,9 @@ export default function IncomeVerificationDocumentUploadForm({
 
   // Lease creation workflow handlers
   const handleLeaseCreated = async (formData: { name: string; leaseStartDate: string; leaseEndDate: string; leaseRent: number | null }) => {
-    console.log('[NEW LEASE WORKFLOW] handleLeaseCreated called with form data:', formData);
     
     try {
       // Actually create the lease via API
-      console.log('[NEW LEASE WORKFLOW] Creating lease via API...');
       const response = await fetch(`/api/units/${unitId}/leases`, {
         method: 'POST',
         headers: {
@@ -189,7 +181,6 @@ export default function IncomeVerificationDocumentUploadForm({
       }
 
       const createdLease = await response.json();
-      console.log('[NEW LEASE WORKFLOW] Lease created successfully:', createdLease);
       
       setNewLeaseId(createdLease.id);
       setNewLeaseData(createdLease);
@@ -204,15 +195,12 @@ export default function IncomeVerificationDocumentUploadForm({
 
   // Lease type selection handlers
   const handleSelectRenewal = () => {
-    console.log('[NEW LEASE WORKFLOW] User selected lease renewal - showing resident selection');
     const renewalResidents = allCurrentLeaseResidents || residents;
-    console.log('[NEW LEASE WORKFLOW] Available residents for selection:', renewalResidents.map(r => ({ id: r.id, name: r.name })));
     setLeaseTypeDialogOpen(false);
     setResidentSelectionDialogOpen(true);
   };
 
   const handleSelectNewLease = () => {
-    console.log('[NEW LEASE WORKFLOW] User selected new lease - adding fresh residents');
     setLeaseTypeDialogOpen(false);
     setAddResidentDialogOpen(true);
   };
@@ -226,21 +214,17 @@ export default function IncomeVerificationDocumentUploadForm({
 
   const handleResidentSelectionSubmit = async (selectedResidents: Array<{ name: string; annualizedIncome: number | null }>) => {
     console.log('[NEW LEASE WORKFLOW] Selected residents for renewal:', selectedResidents);
-    console.log('[NEW LEASE WORKFLOW] Current state:', { newLeaseId, pendingFileUpload: !!pendingFileUpload });
     setResidentSelectionDialogOpen(false);
     
     if (selectedResidents.length === 0) {
-      console.log('[NEW LEASE WORKFLOW] No residents selected, opening add resident dialog');
       // No residents selected, go straight to add residents dialog
       setAddResidentDialogOpen(true);
       return;
     }
     
     try {
-      console.log('[NEW LEASE WORKFLOW] Starting resident creation process...');
       setIsSubmitting(true);
       await handleResidentsAdded(selectedResidents);
-      console.log('[NEW LEASE WORKFLOW] Resident creation completed successfully');
     } catch (err: unknown) {
       console.error('[NEW LEASE WORKFLOW] Error in resident creation:', err);
       setError(err instanceof Error ? err.message : 'Failed to copy selected residents');
@@ -249,7 +233,6 @@ export default function IncomeVerificationDocumentUploadForm({
   };
 
   const handleAddAdditionalResidents = () => {
-    console.log('[NEW LEASE WORKFLOW] User wants to add additional residents');
     setResidentSelectionDialogOpen(false);
     setAddResidentDialogOpen(true);
   };
@@ -263,15 +246,6 @@ export default function IncomeVerificationDocumentUploadForm({
   };
 
   const handleResidentsAdded = async (residentData: Array<{ name: string; annualizedIncome?: number | null }>) => {
-    console.log('[NEW LEASE WORKFLOW] handleResidentsAdded called with:', residentData);
-    console.log('[NEW LEASE WORKFLOW] Current state check:', { 
-      newLeaseId, 
-      hasPendingFileUpload: !!pendingFileUpload,
-      pendingFileUploadDetails: pendingFileUpload ? {
-        allSelectedFiles: pendingFileUpload.allSelectedFiles?.length || 0,
-        selectedResident: pendingFileUpload.selectedResident
-      } : null
-    });
     
     if (!newLeaseId || !pendingFileUpload) {
       console.error('[NEW LEASE WORKFLOW] Missing required data:', { newLeaseId, pendingFileUpload: !!pendingFileUpload });
@@ -280,11 +254,9 @@ export default function IncomeVerificationDocumentUploadForm({
 
     try {
       setIsSubmitting(true);
-      console.log('[NEW LEASE WORKFLOW] Starting resident creation for lease:', newLeaseId);
       
       // Create residents in the new lease
       const residentPromises = residentData.map(async (resident, index) => {
-        console.log(`[NEW LEASE WORKFLOW] Creating resident ${index + 1}/${residentData.length}:`, resident.name);
         const response = await fetch(`/api/leases/${newLeaseId}/residents`, {
           method: 'POST',
           headers: {
@@ -303,16 +275,12 @@ export default function IncomeVerificationDocumentUploadForm({
         }
 
         const createdResident = await response.json();
-        console.log(`[NEW LEASE WORKFLOW] Successfully created resident:`, createdResident.name);
         return createdResident;
       });
 
-      console.log('[NEW LEASE WORKFLOW] Waiting for all residents to be created...');
       const createdResidents = await Promise.all(residentPromises);
-      console.log('[NEW LEASE WORKFLOW] All residents created:', createdResidents.map(r => ({ id: r.id, name: r.name })));
       
       // IMPORTANT: Before creating verification for new lease, auto-finalize any existing IN_PROGRESS verification
-      console.log('[NEW LEASE WORKFLOW] Starting auto-finalize check for existing verifications...');
       try {
         const finalizeResponse = await fetch(`/api/units/${unitId}/auto-finalize-verification`, {
           method: 'POST',
@@ -334,7 +302,6 @@ export default function IncomeVerificationDocumentUploadForm({
       }
       
       // Create income verification for the new lease
-      console.log('[NEW LEASE WORKFLOW] Creating income verification for new lease...');
       const verificationResponse = await fetch(`/api/leases/${newLeaseId}/verifications`, {
         method: 'POST',
         headers: {
@@ -350,17 +317,13 @@ export default function IncomeVerificationDocumentUploadForm({
       }
 
       const newVerification = await verificationResponse.json();
-      console.log('[NEW LEASE WORKFLOW] Successfully created verification:', newVerification.id);
       setNewVerificationId(newVerification.id);
       
       // Store residents and open document assignment dialog instead of uploading immediately
-      console.log('[NEW LEASE WORKFLOW] Setting up document assignment dialog...');
       setNewLeaseResidents(createdResidents.map(r => ({ id: r.id, name: r.name })));
       setAddResidentDialogOpen(false);
       setDocumentAssignmentDialogOpen(true);
       setIsSubmitting(false);
-      
-      console.log('[NEW LEASE WORKFLOW] Opening document assignment dialog for', createdResidents.length, 'residents');
       
     } catch (err: unknown) {
       console.error('[NEW LEASE WORKFLOW] Error in handleResidentsAdded:', err);
@@ -396,12 +359,6 @@ export default function IncomeVerificationDocumentUploadForm({
       
       // Upload ALL the documents with forceUpload to bypass date check
       const allFiles = pendingFileUpload.allSelectedFiles || [pendingFileUpload.fileData];
-      console.log('[NEW LEASE WORKFLOW] Uploading documents to selected resident:', {
-        verificationId: newVerificationId,
-        residentId: selectedResidentId,
-        fileCount: allFiles.length,
-        fileNames: allFiles.map(f => f.file.name)
-      });
 
       // Upload each file using the stored verification ID
       for (const fileData of allFiles) {
@@ -420,13 +377,10 @@ export default function IncomeVerificationDocumentUploadForm({
           const data = await uploadResponse.json();
           throw new Error(data.error || `Failed to upload ${fileData.file.name} to new lease`);
         }
-        
-        console.log('[NEW LEASE WORKFLOW] Successfully uploaded:', fileData.file.name);
       }
 
       setDocumentAssignmentDialogOpen(false);
       setSuccess('New lease created successfully with documents uploaded!');
-      console.log('[NEW LEASE WORKFLOW] Workflow completed successfully, refreshing and redirecting...');
       
       // Clean up state first  
       setIsSubmitting(false); // Clear the original form's submitting state
@@ -510,8 +464,6 @@ export default function IncomeVerificationDocumentUploadForm({
         checkFormData.append('documentTypes', fileData.documentType);
       });
 
-      console.log(`[NEW LEASE WORKFLOW] Checking dates for ${selectedFiles.length} files before upload...`);
-      
       const checkResponse = await fetch(`/api/verifications/${verificationId}/check-dates`, {
         method: 'POST',
         body: checkFormData,
@@ -524,14 +476,8 @@ export default function IncomeVerificationDocumentUploadForm({
       
       const checkResult = await checkResponse.json();
       
-      console.log('[NEW LEASE WORKFLOW] Date check response:', checkResult);
-      console.log('[NEW LEASE WORKFLOW] requiresDateConfirmation:', checkResult.requiresDateConfirmation);
-      console.log('[NEW LEASE WORKFLOW] reason:', checkResult.reason);
-      console.log('[NEW LEASE WORKFLOW] message:', checkResult.message);
-      
       // If date confirmation is required, show modal WITHOUT uploading anything
       if (checkResult.requiresDateConfirmation) {
-        console.log('[NEW LEASE WORKFLOW] Date discrepancy detected - showing modal');
         
         const modalData = {
           leaseStartDate: checkResult.leaseStartDate,
@@ -549,17 +495,11 @@ export default function IncomeVerificationDocumentUploadForm({
           data: modalData
         });
         
-        // Log current modal state after a brief delay to ensure state update
-        setTimeout(() => {
-          console.log('[NEW LEASE WORKFLOW] Modal state after timeout:', dateDiscrepancyModal);
-        }, 100);
-        
         setIsSubmitting(false);
         return; // Stop here - NO FILES UPLOADED YET!
       }
 
       // STEP 2: If no date discrepancy, proceed with normal upload
-      console.log(`[NEW LEASE WORKFLOW] ${checkResult.message} - proceeding with upload`);
       
       // Upload each file individually
       for (const fileData of selectedFiles) {
