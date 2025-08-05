@@ -158,6 +158,12 @@ export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Da
     return acc + amount;
   }, 0);
 
+  // Skip income discrepancy check for future leases (no rent roll data)
+  if (totalUploadedIncome === 0 && totalVerifiedIncome > 0) {
+    console.log(`[VERIFICATION SERVICE] Unit ${unit.unitNumber}: Skipping income discrepancy check - future lease detected (no rent roll data)`);
+    return "Verified";
+  }
+
   const incomeDifference = Math.abs(totalUploadedIncome - totalVerifiedIncome);
   
   console.log(`[VERIFICATION SERVICE] FINAL COMPARISON:`, {
