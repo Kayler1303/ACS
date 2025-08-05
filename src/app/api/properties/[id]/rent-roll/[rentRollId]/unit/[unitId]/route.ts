@@ -169,6 +169,24 @@ export async function GET(req: NextRequest, { params }: { params: { id: string, 
         }
 
         // Explicitly convert Prisma Decimal fields to numbers for proper frontend calculation
+        // Convert for ALL leases in the unit (including future leases), not just the tenancy lease
+        if (unitWithLeases.Lease) {
+            unitWithLeases.Lease = unitWithLeases.Lease.map((lease: any) => ({
+                ...lease,
+                Resident: lease.Resident ? lease.Resident.map((resident: any) => ({
+                    ...resident,
+                    calculatedAnnualizedIncome: resident.calculatedAnnualizedIncome ? Number(resident.calculatedAnnualizedIncome) : null,
+                    verifiedIncome: resident.verifiedIncome ? Number(resident.verifiedIncome) : null,
+                    annualizedIncome: resident.annualizedIncome ? Number(resident.annualizedIncome) : null,
+                })) : [],
+                IncomeVerification: lease.IncomeVerification ? lease.IncomeVerification.map((verification: any) => ({
+                    ...verification,
+                    calculatedVerifiedIncome: verification.calculatedVerifiedIncome ? Number(verification.calculatedVerifiedIncome) : null,
+                })) : []
+            }));
+        }
+
+        // Also convert for the specific tenancy lease (for backward compatibility)
         if (tenancy?.lease?.Resident) {
             tenancy.lease.Resident = tenancy.lease.Resident.map((resident: any) => ({
                 ...resident,
