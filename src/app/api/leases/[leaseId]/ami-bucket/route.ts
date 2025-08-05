@@ -21,25 +21,25 @@ export async function GET(
     const lease = await prisma.lease.findFirst({
       where: { 
         id: leaseId,
-        unit: {
-          property: {
+        Unit: {
+          Property: {
             ownerId: session.user.id
           }
         }
       },
       include: {
-        residents: true,
-        incomeVerifications: {
+        Resident: true,
+        IncomeVerification: {
           where: { status: 'FINALIZED' },
           orderBy: { createdAt: 'desc' },
           take: 1,
           include: {
-            incomeDocuments: true
+            IncomeDocument: true
           }
         },
-        unit: {
+        Unit: {
           include: {
-            property: true
+            Property: true
           }
         }
       }
@@ -50,7 +50,7 @@ export async function GET(
     }
 
     // Check if there's a finalized income verification
-    const finalized = lease.incomeVerifications[0];
+    const finalized = lease.IncomeVerification[0];
     if (!finalized) {
       return NextResponse.json({ 
         error: 'No finalized income verification found for this lease' 
@@ -59,7 +59,7 @@ export async function GET(
 
     // Get HUD income limits for the property's location
     const currentYear = new Date().getFullYear();
-    const property = lease.unit.property;
+    const property = lease.Unit.Property;
     
     if (!property.county || !property.state) {
       return NextResponse.json({ 
@@ -87,8 +87,8 @@ export async function GET(
 
     // Calculate AMI bucket information
     const amiBucketInfo = calculateAmiBucketForLease(
-      lease.residents,
-      finalized.incomeDocuments,
+      lease.Resident,
+      finalized.IncomeDocument,
       hudIncomeLimits
     );
 
