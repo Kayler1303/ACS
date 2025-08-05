@@ -1554,8 +1554,31 @@ export default function ResidentDetailPage() {
                           doc => doc.status === 'COMPLETED'
                         );
                         
-                        // Use resident-level calculated income instead of manual document aggregation
-                        const residentVerifiedIncome = resident.calculatedAnnualizedIncome || 0;
+                        // Calculate resident verified income from their actual completed documents
+                        let residentVerifiedIncome = 0;
+                        if (completedResidentDocuments.length > 0) {
+                          // Calculate total annualized income from completed documents
+                          residentVerifiedIncome = completedResidentDocuments.reduce((total, doc) => {
+                            if (doc.documentType === 'W2') {
+                              // For W2, use the highest of boxes 1, 3, 5
+                              const amounts = [doc.box1_wages, doc.box3_ss_wages, doc.box5_med_wages]
+                                .filter((amount): amount is number => amount !== null && amount !== undefined);
+                              return total + (amounts.length > 0 ? Math.max(...amounts) : 0);
+                            } else if (doc.documentType === 'PAYSTUB' && doc.grossPayAmount) {
+                              // For paystubs, annualize based on pay frequency (assume bi-weekly if not specified)
+                              const payFrequency = doc.payFrequency || 'BIWEEKLY';
+                              const multiplier = payFrequency === 'WEEKLY' ? 52 : 
+                                               payFrequency === 'BIWEEKLY' ? 26 : 
+                                               payFrequency === 'SEMIMONTHLY' ? 24 : 
+                                               payFrequency === 'MONTHLY' ? 12 : 26; // Default to bi-weekly
+                              return total + (doc.grossPayAmount * multiplier);
+                            }
+                            return total;
+                          }, 0);
+                        } else {
+                          // Fallback to resident-level calculated income or 0
+                          residentVerifiedIncome = resident.calculatedAnnualizedIncome || 0;
+                        }
 
                         const isResidentFinalized = resident.incomeFinalized || false;
                         const hasCompletedDocuments = completedResidentDocuments.length > 0;
@@ -1633,13 +1656,13 @@ export default function ResidentDetailPage() {
                                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                                         📋 Ready to Finalize
                                       </span>
-                                    ) : hasCompletedDocuments ? (
+                                    ) : hasCompletedDocuments && residentVerifiedIncome === 0 ? (
                                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                                        ⚠️ Review Required
+                                        ⚠️ Income Calculation Error
                                       </span>
                                     ) : hasAnyDocuments ? (
                                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                        📄 Documents Uploaded
+                                        📄 Documents Processing
                                       </span>
                                     ) : isInProgress ? (
                                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
