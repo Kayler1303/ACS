@@ -361,6 +361,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           updateData.payPeriodEndDate = extractedData.payPeriodEndDate;
         }
 
+        // Add pay frequency calculation for future leases too
+        if (extractedData.payPeriodStartDate && extractedData.payPeriodEndDate) {
+          const payFrequency = determinePayFrequency(extractedData.payPeriodStartDate, extractedData.payPeriodEndDate);
+          updateData.payFrequency = payFrequency;
+        }
+
         document = await prisma.incomeDocument.update({
           where: { id: document.id },
           data: updateData
