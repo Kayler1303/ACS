@@ -181,6 +181,25 @@ export default function ResidentFinalizationDialog({
       });
     }
     
+    // Process Social Security documents
+    const socialSecurityDocuments = residentDocuments.filter(doc => 
+      doc.documentType === 'SOCIAL_SECURITY' && doc.status === 'COMPLETED'
+    );
+    console.log(`[DEBUG] Social Security documents found:`, socialSecurityDocuments.length);
+    
+    socialSecurityDocuments.forEach(doc => {
+      // For Social Security, use calculatedAnnualizedIncome if available, otherwise annualize grossPayAmount
+      const annualIncome = doc.calculatedAnnualizedIncome || (doc.grossPayAmount ? Number(doc.grossPayAmount) * 12 : 0);
+      totalIncome += annualIncome;
+      
+      console.log(`[REAL-TIME CALC] ${resident.name} Social Security calculation:`, {
+        documentId: doc.id,
+        calculatedAnnualizedIncome: doc.calculatedAnnualizedIncome,
+        grossPayAmount: doc.grossPayAmount,
+        annualIncome
+      });
+    });
+    
     console.log(`[REAL-TIME CALC] ${resident.name} total calculated income: $${totalIncome}`);
     return totalIncome;
   };
@@ -590,6 +609,14 @@ export default function ResidentFinalizationDialog({
                       const endDate = new Date(doc.payPeriodEndDate);
                       displayText = `${doc.documentType} (${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`;
                     }
+                  } else if (doc.documentType === 'SOCIAL_SECURITY') {
+                    verifiedAmount = doc.grossPayAmount || 0; // Monthly benefit amount
+                    if (doc.documentDate) {
+                      const docDate = new Date(doc.documentDate);
+                      displayText = `Social Security Letter (${docDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })})`;
+                    } else {
+                      displayText = 'Social Security Letter';
+                    }
                   } else {
                     verifiedAmount = doc.calculatedAnnualizedIncome || 0;
                   }
@@ -599,9 +626,11 @@ export default function ResidentFinalizationDialog({
                       <span className="text-gray-700">
                         {displayText}
                         {doc.employerName && ` - ${doc.employerName}`}
+                        {doc.employeeName && !doc.employerName && ` - ${doc.employeeName}`}
                       </span>
                       <span className="font-medium text-green-600">
                         {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(verifiedAmount)}
+                        {doc.documentType === 'SOCIAL_SECURITY' && '/month'}
                       </span>
                     </div>
                   );

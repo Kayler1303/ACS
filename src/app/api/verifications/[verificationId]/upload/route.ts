@@ -25,6 +25,50 @@ function checkDateDiscrepancy(documentDate: Date, leaseStartDate: Date): { hasDi
   return { hasDiscrepancy, monthsDifference };
 }
 
+// Helper function to extract Social Security data from Azure layout analyzer
+function extractSocialSecurityData(analyzeResult: any) {
+  try {
+    const content = analyzeResult?.analyzeResult?.content || '';
+    const paragraphs = analyzeResult?.analyzeResult?.paragraphs || [];
+    
+    let beneficiaryName = null;
+    let monthlyBenefit = null;
+    let letterDate = null;
+    
+    // Extract beneficiary name (look for name in address line)
+    const nameMatch = content.match(/([A-Z][A-Z\s]+)\s+\d+\s+[A-Z\s]+\s+[A-Z]{2}\s+\d{5}/);
+    if (nameMatch) {
+      beneficiaryName = nameMatch[1].trim();
+    }
+    
+    // Extract monthly benefit amount
+    const benefitMatch = content.match(/monthly Social Security benefit.*?\$([0-9,]+\.?\d*)/i);
+    if (benefitMatch) {
+      monthlyBenefit = parseFloat(benefitMatch[1].replace(/,/g, ''));
+    }
+    
+    // Extract letter date
+    const dateMatch = content.match(/Date:\s*([A-Za-z]+\s+\d{1,2},\s+\d{4})/);
+    if (dateMatch) {
+      letterDate = new Date(dateMatch[1]);
+    }
+    
+    // Return extracted data if we have at least name and benefit
+    if (beneficiaryName && monthlyBenefit && monthlyBenefit > 0) {
+      return {
+        beneficiaryName,
+        monthlyBenefit,
+        letterDate,
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error extracting Social Security data:', error);
+    return null;
+  }
+}
+
 // Helper functions for document validation
 function validateDocumentTimeliness(doc: any, leaseStartDate: Date): { isValid: boolean, reason?: string } {
   if (!doc.documentType) {
@@ -174,9 +218,50 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // Analyze the document with Azure Document Intelligence
     let analyzeResult;
     try {
-      const modelId = documentType === DocumentType.W2 ? 'prebuilt-tax.us.w2' : 'prebuilt-payStub.us';
+      let modelId: string;
+      
+      if (documentType === DocumentType.W2) {
+        modelId = 'prebuilt-tax.us.w2';
+      } else if (documentType === DocumentType.PAYSTUB) {
+        modelId = 'prebuilt-payStub.us';
+             } else if (documentType === DocumentType.SOCIAL_SECURITY || 
+                  documentType === DocumentType.BANK_STATEMENT || 
+                  documentType === DocumentType.OFFER_LETTER) {
+         modelId = 'prebuilt-layout'; // Use layout analyzer for these document types (supports key-value pairs)
+         console.log(`Using layout analyzer for ${documentType}`);
+       } else {
+         // Skip Azure analysis for truly unsupported types
+         console.log(`Skipping Azure analysis for ${documentType} - no suitable model available`);
+        
+        // Mark as needing admin review since we can't auto-process
+        document = await prisma.incomeDocument.update({
+          where: { id: document.id },
+          data: {
+            status: DocumentStatus.NEEDS_REVIEW,
+          }
+        });
+
+        // Create override request for manual review
+        await prisma.overrideRequest.create({
+          data: {
+            id: randomUUID(),
+            type: 'DOCUMENT_REVIEW',
+            status: 'PENDING',
+            userExplanation: `${documentType} document requires manual review as Azure Document Intelligence does not have a suitable model for this document type.`,
+            documentId: document.id,
+            verificationId: verificationId,
+            residentId: residentId,
+            requesterId: session.user.id,
+            propertyId: verification.Lease?.Unit?.Property?.id,
+            updatedAt: new Date(),
+          }
+        });
+
+        return NextResponse.json(document, { status: 201 });
+      }
+
       analyzeResult = await analyzeIncomeDocument(buffer, modelId);
-      console.log(`Azure analysis completed for document ${document.id}`);
+      console.log(`Azure analysis completed for document ${document.id} using model ${modelId}`);
     } catch (azureError) {
       console.error('Azure Document Intelligence failed:', azureError);
       
@@ -222,6 +307,39 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       sampleFieldNames: analyzeResult?.documents?.[0]?.fields ? Object.keys(analyzeResult.documents[0].fields).slice(0, 5) : []
     });
 
+    // Enhanced logging for layout analyzer data
+    console.log(`[DEBUG] Full Azure response structure for document ${document.id}:`, JSON.stringify(analyzeResult, null, 2));
+    
+    // For layout analyzer, access nested data in analyzeResult
+    const nestedResult = analyzeResult?.analyzeResult || analyzeResult;
+    if (nestedResult?.pages || nestedResult?.keyValuePairs || nestedResult?.content) {
+      console.log(`[DEBUG] Layout analyzer data for document ${document.id}:`);
+      
+      // Log extracted text content
+      if (nestedResult.content) {
+        console.log(`Content length: ${nestedResult.content.length} characters`);
+        console.log(`Content preview: ${nestedResult.content.substring(0, 500)}...`);
+      }
+
+      // Log key-value pairs
+      if (nestedResult.keyValuePairs && nestedResult.keyValuePairs.length > 0) {
+        console.log(`Found ${nestedResult.keyValuePairs.length} key-value pairs:`);
+        nestedResult.keyValuePairs.slice(0, 10).forEach((pair: any, index: number) => {
+          console.log(`  ${index + 1}. Key: "${pair.key?.content || 'N/A'}" -> Value: "${pair.value?.content || 'N/A'}"`);
+        });
+      }
+
+      // Log paragraphs if available
+      if (nestedResult.paragraphs && nestedResult.paragraphs.length > 0) {
+        console.log(`Found ${nestedResult.paragraphs.length} paragraphs:`);
+        nestedResult.paragraphs.slice(0, 10).forEach((para: any, index: number) => {
+          console.log(`  ${index + 1}. ${para.content?.substring(0, 100)}...`);
+        });
+      }
+    } else {
+      console.log(`[DEBUG] No layout analyzer data found. Available keys:`, Object.keys(nestedResult || {}));
+    }
+
         // Validate Azure extraction results
     let validationResult: PaystubValidationResult | W2ValidationResult;
 
@@ -229,6 +347,75 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       validationResult = validatePaystubExtraction(analyzeResult);
     } else if (documentType === DocumentType.W2) {
       validationResult = validateW2Extraction(analyzeResult);
+            } else if (documentType === DocumentType.SOCIAL_SECURITY || 
+                   documentType === DocumentType.BANK_STATEMENT || 
+                   documentType === DocumentType.OFFER_LETTER) {
+          
+          // Try to extract key information automatically for high-confidence cases
+          let autoExtractedData = null;
+          let shouldAutoVerify = false;
+
+          if (documentType === DocumentType.SOCIAL_SECURITY) {
+            // Extract Social Security benefit information
+            autoExtractedData = extractSocialSecurityData(analyzeResult);
+            shouldAutoVerify = autoExtractedData && autoExtractedData.monthlyBenefit > 0;
+            
+            console.log(`Social Security auto-extraction result:`, {
+              extracted: !!autoExtractedData,
+              shouldAutoVerify,
+              monthlyBenefit: autoExtractedData?.monthlyBenefit,
+              beneficiaryName: autoExtractedData?.beneficiaryName
+            });
+          }
+
+          if (shouldAutoVerify && autoExtractedData) {
+            // Auto-verify with extracted data
+            console.log(`${documentType} document auto-verified with extracted data`);
+            
+            const annualizedIncome = autoExtractedData.monthlyBenefit * 12;
+            
+            document = await prisma.incomeDocument.update({
+              where: { id: document.id },
+              data: {
+                status: DocumentStatus.COMPLETED,
+                employeeName: autoExtractedData.beneficiaryName,
+                grossPayAmount: autoExtractedData.monthlyBenefit,
+                payFrequency: 'MONTHLY',
+                calculatedAnnualizedIncome: annualizedIncome,
+                documentDate: autoExtractedData.letterDate || new Date(),
+              }
+            });
+
+            return NextResponse.json(document, { status: 201 });
+          } else {
+            // Fall back to admin review
+            console.log(`${documentType} document analyzed with layout model - marking for admin review`);
+            
+            document = await prisma.incomeDocument.update({
+              where: { id: document.id },
+              data: {
+                status: DocumentStatus.NEEDS_REVIEW,
+              }
+            });
+
+            // Create override request for manual review
+            await prisma.overrideRequest.create({
+              data: {
+                id: randomUUID(),
+                type: 'DOCUMENT_REVIEW',
+                status: 'PENDING',
+                userExplanation: `${documentType} document has been processed by Azure's layout analyzer. Please manually review and enter the income information.`,
+                documentId: document.id,
+                verificationId: verificationId,
+                residentId: residentId,
+                requesterId: session.user.id,
+                propertyId: verification.Lease?.Unit?.Property?.id,
+                updatedAt: new Date(),
+              }
+            });
+
+            return NextResponse.json(document, { status: 201 });
+          }
     } else {
       return NextResponse.json({ error: 'Unsupported document type' }, { status: 400 });
     }

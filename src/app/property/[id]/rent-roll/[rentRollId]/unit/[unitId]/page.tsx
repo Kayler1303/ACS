@@ -269,6 +269,23 @@ function VerificationRow({ verification, lease, onActionComplete }: { verificati
                   )}
                 </div>
               )}
+              {doc.documentType === 'SOCIAL_SECURITY' && (
+                <div className="mt-2 pt-2 border-t border-gray-200 text-xs text-gray-600 space-y-1">
+                  <p><strong>Beneficiary:</strong> {doc.employeeName || 'N/A'}</p>
+                  {doc.documentDate && (
+                    <p><strong>Letter Date:</strong> {format(new Date(doc.documentDate), 'MMM d, yyyy')}</p>
+                  )}
+                  <div className="grid grid-cols-2 gap-x-4 pt-1">
+                    <p><strong>Monthly Benefit:</strong> {doc.grossPayAmount ? `$${doc.grossPayAmount.toLocaleString()}` : 'N/A'}</p>
+                    <p><strong>Pay Frequency:</strong> Monthly</p>
+                  </div>
+                  {doc.calculatedAnnualizedIncome && (
+                    <p className="pt-1 font-medium text-green-700">
+                      <strong>Annual Income:</strong> ${doc.calculatedAnnualizedIncome.toLocaleString()}
+                    </p>
+                  )}
+                </div>
+              )}
             </li>
           ))}
         </ul>
@@ -1710,6 +1727,17 @@ export default function ResidentDetailPage() {
                                              payFrequency === 'MONTHLY' ? 12 : 26; // Default to bi-weekly
                             residentVerifiedIncome += (averageGrossPay * multiplier);
                           }
+                          
+                          // Handle Social Security documents
+                          const socialSecurityDocuments = completedResidentDocuments.filter(doc => doc.documentType === 'SOCIAL_SECURITY');
+                          if (socialSecurityDocuments.length > 0) {
+                            const totalSocialSecurityIncome = socialSecurityDocuments.reduce((sum, doc) => {
+                              // For Social Security, use calculatedAnnualizedIncome if available, otherwise annualize grossPayAmount
+                              const annualIncome = doc.calculatedAnnualizedIncome || (doc.grossPayAmount ? doc.grossPayAmount * 12 : 0);
+                              return sum + annualIncome;
+                            }, 0);
+                            residentVerifiedIncome += totalSocialSecurityIncome;
+                          }
                         } else {
                           // Fallback to resident-level calculated income or 0
                           residentVerifiedIncome = resident.calculatedAnnualizedIncome || 0;
@@ -2010,6 +2038,35 @@ export default function ResidentDetailPage() {
                                                   <span className="font-medium text-gray-700">Employer:</span>
                                                   <div className="text-gray-600">
                                                     {doc.employerName}
+                                                  </div>
+                                                </div>
+                                              )}
+                                            </div>
+                                          )}
+                                          
+                                          {doc.documentType === 'SOCIAL_SECURITY' && !needsReview && (
+                                            <div className="grid grid-cols-2 gap-3 text-xs">
+                                              {doc.documentDate && (
+                                                <div>
+                                                  <span className="font-medium text-gray-700">Letter Date:</span>
+                                                  <div className="text-gray-600">
+                                                    {format(new Date(doc.documentDate), 'MMM d, yyyy')}
+                                                  </div>
+                                                </div>
+                                              )}
+                                              {doc.grossPayAmount && (
+                                                <div>
+                                                  <span className="font-medium text-gray-700">Monthly Benefit:</span>
+                                                  <div className="text-green-700 font-semibold">
+                                                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(doc.grossPayAmount)}
+                                                  </div>
+                                                </div>
+                                              )}
+                                              {doc.calculatedAnnualizedIncome && (
+                                                <div className="col-span-2">
+                                                  <span className="font-medium text-gray-700">Annual Income:</span>
+                                                  <div className="text-green-700 font-semibold">
+                                                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(doc.calculatedAnnualizedIncome)}
                                                   </div>
                                                 </div>
                                               )}

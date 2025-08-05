@@ -101,6 +101,19 @@ export async function PATCH(
       console.log(`[FINALIZE DEBUG] Paystub calculation: ${paystubDocuments.length} paystubs, average $${averageGrossPay.toFixed(2)} × ${multiplier} = $${paystubIncome.toFixed(2)}`);
     }
     
+    // Process Social Security documents
+    const socialSecurityDocuments = residentDocuments.filter(doc => 
+      doc.documentType === 'SOCIAL_SECURITY'
+    );
+    
+    socialSecurityDocuments.forEach(doc => {
+      // For Social Security, use calculatedAnnualizedIncome if available, otherwise annualize grossPayAmount
+      const annualIncome = Number(doc.calculatedAnnualizedIncome) || (doc.grossPayAmount ? Number(doc.grossPayAmount) * 12 : 0);
+      serverCalculatedIncome += annualIncome;
+      
+      console.log(`[FINALIZE DEBUG] Social Security document: annual income $${annualIncome}`);
+    });
+    
     console.log(`[FINALIZE DEBUG] Server calculated income: $${serverCalculatedIncome}`);
     console.log(`[FINALIZE DEBUG] Frontend sent income: $${calculatedVerifiedIncome}`);
     

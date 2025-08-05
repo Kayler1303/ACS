@@ -365,6 +365,14 @@ export default function VerificationFinalizationDialog({
                             const endDate = new Date(doc.payPeriodEndDate);
                             displayText = `${doc.documentType} (${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`;
                           }
+                        } else if (doc.documentType === 'SOCIAL_SECURITY') {
+                          verifiedAmount = doc.calculatedAnnualizedIncome || 0; // Show annualized amount in this view
+                          if (doc.documentDate) {
+                            const docDate = new Date(doc.documentDate);
+                            displayText = `Social Security Letter (${docDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })})`;
+                          } else {
+                            displayText = 'Social Security Letter';
+                          }
                         }
 
                         return (
@@ -372,6 +380,7 @@ export default function VerificationFinalizationDialog({
                             <span className="text-gray-600">
                               {displayText}
                               {doc.employerName && ` - ${doc.employerName}`}
+                              {doc.employeeName && !doc.employerName && ` - ${doc.employeeName}`}
                             </span>
                             <span className="font-medium text-green-600">
                               {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(verifiedAmount)}

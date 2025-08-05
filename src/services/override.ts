@@ -67,7 +67,7 @@ export async function createAutoOverrideRequest(params: CreateAutoOverrideParams
         updatedAt: new Date()
       },
       include: { 
-        requester: { 
+        User_OverrideRequest_requesterIdToUser: { 
           select: { id: true, name: true, email: true, company: true } 
         } 
       }

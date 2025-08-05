@@ -98,7 +98,19 @@ export async function POST(
         const buffer = Buffer.from(await file.arrayBuffer());
 
         // Analyze the document with Azure Document Intelligence
-        const modelId = documentType === DocumentType.W2 ? 'prebuilt-tax.us.w2' : 'prebuilt-payStub.us';
+        let modelId: string;
+        if (documentType === DocumentType.W2) {
+          modelId = 'prebuilt-tax.us.w2';
+        } else if (documentType === DocumentType.PAYSTUB) {
+          modelId = 'prebuilt-payStub.us';
+                 } else if (documentType === DocumentType.SOCIAL_SECURITY || 
+                   documentType === DocumentType.BANK_STATEMENT || 
+                   documentType === DocumentType.OFFER_LETTER) {
+           modelId = 'prebuilt-layout'; // Use layout analyzer for these document types (supports key-value pairs)
+           console.log(`Using layout analyzer for ${documentType} in date check`);
+        } else {
+          continue; // Skip unsupported types
+        }
         const analyzeResult = await analyzeIncomeDocument(buffer, modelId);
         
         // Validate Azure extraction results
@@ -108,6 +120,13 @@ export async function POST(
           validationResult = validatePaystubExtraction(analyzeResult);
         } else if (documentType === DocumentType.W2) {
           validationResult = validateW2Extraction(analyzeResult);
+        } else if (documentType === DocumentType.SOCIAL_SECURITY || 
+                   documentType === DocumentType.BANK_STATEMENT || 
+                   documentType === DocumentType.OFFER_LETTER) {
+                     // For these document types, we can't extract dates reliably from layout analyzer
+           // Skip date extraction for these documents
+           console.log(`Skipping date extraction for ${documentType} - layout analyzer doesn't provide reliable date extraction`);
+          continue;
         } else {
           continue; // Skip unsupported types
         }
