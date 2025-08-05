@@ -291,7 +291,12 @@ export default function ResidentFinalizationDialog({
 
       console.log(`[DISCREPANCY CHECK] Rent Roll: $${rentRollIncome}, Calculated: $${calculatedIncome}, Difference: $${difference}`);
 
-      if (difference >= discrepancyThreshold) {
+      // Skip discrepancy check for future leases (no rent roll data)
+      const isFutureLease = rentRollIncome === 0 && calculatedIncome > 0;
+      
+      if (isFutureLease) {
+        console.log(`[DISCREPANCY CHECK] Future lease detected - skipping discrepancy check`);
+      } else if (difference >= discrepancyThreshold) {
         // Show discrepancy modal instead of direct finalization
         console.log(`[DISCREPANCY CHECK] Discrepancy detected (>= $${discrepancyThreshold}), showing modal`);
         setDiscrepancyData({
