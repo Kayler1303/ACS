@@ -1131,6 +1131,15 @@ export default function ResidentDetailPage() {
 
       // Only show discrepancy modal if all residents are finalized and there are individual discrepancies
       if (allResidentsFinalized && verification.status === 'FINALIZED') {
+        // Skip discrepancy check for future leases (no rent roll data)
+        const totalRentRollIncome = allResidents.reduce((sum, resident) => sum + (resident.annualizedIncome || 0), 0);
+        const isFutureLease = totalRentRollIncome === 0;
+        
+        if (isFutureLease) {
+          // Future lease - skip automatic discrepancy check
+          return;
+        }
+        
         const residentsWithDiscrepancies = allResidents.filter(resident => {
           const rentRollIncome = resident.annualizedIncome || 0;
           const verifiedIncome = resident.calculatedAnnualizedIncome || 0;
