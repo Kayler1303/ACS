@@ -1480,6 +1480,15 @@ export default function ResidentDetailPage() {
                             const hasIncomeDiscrepancy = currentVerificationStatus === 'Needs Investigation';
                             
                             if (allResidentsFinalized && hasIncomeDiscrepancy && !discrepancyModalCooldown) {
+                              // Skip lease discrepancy modal for future leases (no rent roll data)
+                              const totalRentRollIncome = allResidents.reduce((sum, resident) => sum + (resident.annualizedIncome || 0), 0);
+                              const isFutureLease = totalRentRollIncome === 0;
+                              
+                              if (isFutureLease) {
+                                // Future lease - skip discrepancy check
+                                return null;
+                              }
+                              
                               // Find residents with income discrepancies (rent roll vs verified income)
                               const residentsWithDiscrepancies = allResidents.filter(resident => {
                                 const rentRollIncome = resident.annualizedIncome || 0;
