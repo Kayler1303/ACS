@@ -1506,12 +1506,8 @@ export default function ResidentDetailPage() {
                               
                               // Calculate verified income only when all residents are finalized
                               const leaseVerifiedIncome = finalizedResidents.reduce((total, resident) => {
-                                const residentIncome = resident.calculatedAnnualizedIncome || 0;
-                                console.log(`[LEASE VERIFIED INCOME] ${resident.name}: $${residentIncome} (finalized: ${resident.incomeFinalized})`);
-                                return total + residentIncome;
+                                return total + (resident.calculatedAnnualizedIncome || 0);
                               }, 0);
-                              
-                              console.log(`[LEASE VERIFIED INCOME] ${period.name}: Total residents: ${allResidents.length}, Finalized: ${finalizedResidents.length}, Sum: $${leaseVerifiedIncome}`);
                               
                               return leaseVerifiedIncome > 0 
                                 ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(leaseVerifiedIncome)
