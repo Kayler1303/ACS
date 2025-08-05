@@ -1104,17 +1104,38 @@ export default function ResidentDetailPage() {
       // Check if we're viewing a future lease (no Tenancy record)
       const isFutureLease = !tenancyData.lease?.Tenancy;
       
-      if (isFutureLease) {
+      console.log(`[TENANCY DEBUG] Lease ID: ${tenancyData.lease?.id}`);
+      console.log(`[TENANCY DEBUG] Lease Name: ${tenancyData.lease?.name}`);
+      console.log(`[TENANCY DEBUG] Has Tenancy:`, !!tenancyData.lease?.Tenancy);
+      console.log(`[TENANCY DEBUG] Tenancy:`, tenancyData.lease?.Tenancy);
+      console.log(`[TENANCY DEBUG] Is Future Lease:`, isFutureLease);
+      
+                          if (isFutureLease) {
         // For future leases, calculate status based on the specific lease we're viewing
         const allResidents = tenancyData.lease?.Resident || [];
         const finalizedResidents = allResidents.filter((r: any) => r.incomeFinalized);
         
+        console.log(`[FUTURE LEASE STATUS] All residents: ${allResidents.length}, Finalized: ${finalizedResidents.length}`);
+        
         if (allResidents.length === 0) {
+          console.log(`[FUTURE LEASE STATUS] Setting to Vacant`);
           setUnitVerificationStatus('Vacant');
         } else if (finalizedResidents.length === allResidents.length) {
+          console.log(`[FUTURE LEASE STATUS] Setting to Verified`);
           setUnitVerificationStatus('Verified');
         } else {
-          setUnitVerificationStatus('In Progress - Finalize to Process');
+          // Check for documents needing admin review
+          const hasDocumentsNeedingReview = allResidents.some((resident: any) => 
+            (resident.IncomeDocument || []).some((doc: any) => doc.status === 'NEEDS_REVIEW')
+          );
+          
+          if (hasDocumentsNeedingReview) {
+            console.log(`[FUTURE LEASE STATUS] Setting to Waiting for Admin Review`);
+            setUnitVerificationStatus('Waiting for Admin Review');
+          } else {
+            console.log(`[FUTURE LEASE STATUS] Setting to In Progress - Finalize to Process`);
+            setUnitVerificationStatus('In Progress - Finalize to Process');
+          }
         }
       } else {
         // For current leases, use the existing verification service
@@ -1415,9 +1436,12 @@ export default function ResidentDetailPage() {
               const verification = period.verification;
               const isInProgress = verification?.status === 'IN_PROGRESS';
               
-              // Use the fetched verification status that matches the property table logic
-              // But first check for pending validation exception override requests
+              // Calculate verification status specific to this lease period
               let currentVerificationStatus: string;
+              
+              // Check if this is a future lease (no Tenancy record)
+              const isFutureLease = !period.Tenancy;
+              
               if (verification?.status === 'IN_PROGRESS') {
                 // Check if there are pending validation exception override requests
                 const hasPendingValidationException = verification.OverrideRequest?.some(
@@ -1428,7 +1452,27 @@ export default function ResidentDetailPage() {
                 currentVerificationStatus = hasPendingValidationException 
                   ? 'Waiting for Admin Review' 
                   : 'In Progress - Finalize to Process';
+              } else if (isFutureLease) {
+                // For future leases, calculate status based on resident finalization
+                const allResidents = period.Resident || [];
+                const finalizedResidents = allResidents.filter((r: any) => r.incomeFinalized);
+                
+                if (allResidents.length === 0) {
+                  currentVerificationStatus = 'Vacant';
+                } else if (finalizedResidents.length === allResidents.length) {
+                  currentVerificationStatus = 'Verified';
+                } else {
+                  // Check for documents needing admin review
+                  const hasDocumentsNeedingReview = allResidents.some((resident: any) => 
+                    (resident.IncomeDocument || []).some((doc: any) => doc.status === 'NEEDS_REVIEW')
+                  );
+                  
+                  currentVerificationStatus = hasDocumentsNeedingReview 
+                    ? 'Waiting for Admin Review'
+                    : 'In Progress - Finalize to Process';
+                }
               } else {
+                // For current leases, use the unit-level verification status
                 currentVerificationStatus = unitVerificationStatus;
               }
                 

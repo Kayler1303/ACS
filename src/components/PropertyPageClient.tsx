@@ -1711,9 +1711,12 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                      <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
                        {unit.futureLease ? (
                          <div className="flex flex-col items-center space-y-1">
-                           <div className="text-sm text-gray-900 font-medium">
+                           <Link
+                             href={`/property/${property.id}/rent-roll/${selectedRentRollId}/unit/${unit.id}`}
+                             className="text-sm text-gray-900 font-medium text-brand-blue hover:text-brand-accent underline cursor-pointer"
+                           >
                              {unit.futureLease.leaseName}
-                           </div>
+                           </Link>
                            <div className="flex items-center space-x-1">
                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                                unit.futureLease.verificationStatus === 'Verified' ? 'bg-green-100 text-green-800' :

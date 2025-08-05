@@ -107,30 +107,20 @@ export async function GET(
           // Get the most recent future lease
           const futureLease = futureLeases[0];
           
-          // Calculate verification status
-          let verificationStatus = 'Pending Verification';
-          if (futureLease.IncomeVerification.length > 0) {
-            const latestVerification = futureLease.IncomeVerification[0];
-            if (latestVerification.status === 'FINALIZED') {
-              verificationStatus = 'Verified';
-            } else if (latestVerification.status === 'IN_PROGRESS') {
-              // Check if any documents are waiting for admin review
-              const hasDocumentsNeedingReview = (futureLease.Resident || []).some((resident: any) => 
-                (resident.IncomeDocument || []).some((doc: any) => doc.status === 'NEEDS_REVIEW')
-              );
-              
-              if (hasDocumentsNeedingReview) {
-                verificationStatus = 'Waiting for Admin Review';
-              } else {
-                verificationStatus = 'In Progress';
-              }
-            }
-          }
+                          // Use the lease-specific verification function
+        const { getLeaseVerificationStatus } = await import('@/services/verification');
+        const verificationStatus = getLeaseVerificationStatus(futureLease);
 
-          // Calculate total income
-          const totalIncome = (futureLease.Resident || []).reduce((acc: number, resident: any) => {
-            return acc + (resident.annualizedIncome || 0);
-          }, 0);
+          // Calculate total income - only for verified leases
+          let totalIncome = 0;
+          if (verificationStatus === 'Verified') {
+            // For verified leases, use verified income (calculatedAnnualizedIncome or verifiedIncome)
+            totalIncome = (futureLease.Resident || []).reduce((acc: number, resident: any) => {
+              const verifiedIncome = resident.calculatedAnnualizedIncome || resident.verifiedIncome || 0;
+              return acc + verifiedIncome;
+            }, 0);
+          }
+          // For non-verified future leases, totalIncome stays 0 (no rent roll data exists)
 
           // Generate lease name (first resident name + others)
           const residentNames = (futureLease.Resident || []).map((r: any) => r.name);

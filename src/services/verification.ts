@@ -28,6 +28,48 @@ export type VerificationStatus = "Verified" | "Needs Investigation" | "Out of Da
  * @param latestRentRollDate - The date of the most recent rent roll.
  * @returns The verification status of the unit.
  */
+/**
+ * Determines the verification status for a specific lease based on its residents and documents.
+ */
+export function getLeaseVerificationStatus(lease: any): VerificationStatus {
+  const allResidents = lease.Resident || [];
+  
+  console.log(`[LEASE VERIFICATION DEBUG] Lease ${lease.id}:`, {
+    leaseName: lease.name,
+    totalResidents: allResidents.length,
+    isFutureLease: !lease.Tenancy
+  });
+
+  if (allResidents.length === 0) {
+    console.log(`[LEASE VERIFICATION DEBUG] Lease ${lease.id}: No residents - returning Vacant`);
+    return "Vacant";
+  }
+
+  const finalizedResidents = allResidents.filter((r: any) => r.incomeFinalized);
+  
+  console.log(`[LEASE VERIFICATION DEBUG] Lease ${lease.id}: ${finalizedResidents.length}/${allResidents.length} residents finalized`);
+
+  // If all residents are finalized, return Verified
+  if (finalizedResidents.length === allResidents.length) {
+    console.log(`[LEASE VERIFICATION DEBUG] Lease ${lease.id}: All residents finalized - returning Verified`);
+    return "Verified";
+  }
+
+  // Check if any documents are waiting for admin review
+  const hasDocumentsNeedingReview = allResidents.some((resident: any) => 
+    (resident.IncomeDocument || []).some((doc: any) => doc.status === 'NEEDS_REVIEW')
+  );
+  
+  if (hasDocumentsNeedingReview) {
+    console.log(`[LEASE VERIFICATION DEBUG] Lease ${lease.id}: Documents need review - returning Waiting for Admin Review`);
+    return "Waiting for Admin Review";
+  }
+
+  // Some residents not finalized
+  console.log(`[LEASE VERIFICATION DEBUG] Lease ${lease.id}: Some residents not finalized - returning In Progress`);
+  return "In Progress - Finalize to Process";
+}
+
 export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Date): VerificationStatus {
   // Find the lease associated with the most recent rent roll for this unit.
   // IMPORTANT: Exclude provisional leases (leases without tenancy) as per user requirements
