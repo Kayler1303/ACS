@@ -1564,17 +1564,24 @@ export default function ResidentDetailPage() {
                               const amounts = [doc.box1_wages, doc.box3_ss_wages, doc.box5_med_wages]
                                 .filter((amount): amount is number => amount !== null && amount !== undefined);
                               return total + (amounts.length > 0 ? Math.max(...amounts) : 0);
-                            } else if (doc.documentType === 'PAYSTUB' && doc.grossPayAmount) {
-                              // For paystubs, annualize based on pay frequency (use database format with hyphens)
-                              const payFrequency = doc.payFrequency || 'BI-WEEKLY';
-                              const multiplier = payFrequency === 'WEEKLY' ? 52 : 
-                                               payFrequency === 'BI-WEEKLY' ? 26 : 
-                                               payFrequency === 'SEMI-MONTHLY' ? 24 : 
-                                               payFrequency === 'MONTHLY' ? 12 : 26; // Default to bi-weekly
-                              return total + (doc.grossPayAmount * multiplier);
                             }
                             return total;
                           }, 0);
+                          
+                          // Handle paystubs separately - average then annualize
+                          const paystubDocuments = completedResidentDocuments.filter(doc => doc.documentType === 'PAYSTUB');
+                          if (paystubDocuments.length > 0) {
+                            const totalGrossPay = paystubDocuments.reduce((sum, doc) => sum + (Number(doc.grossPayAmount) || 0), 0);
+                            const averageGrossPay = totalGrossPay / paystubDocuments.length;
+                            
+                            // For paystubs, annualize based on pay frequency (use database format with hyphens)
+                            const payFrequency = paystubDocuments[0]?.payFrequency || 'BI-WEEKLY';
+                            const multiplier = payFrequency === 'WEEKLY' ? 52 : 
+                                             payFrequency === 'BI-WEEKLY' ? 26 : 
+                                             payFrequency === 'SEMI-MONTHLY' ? 24 : 
+                                             payFrequency === 'MONTHLY' ? 12 : 26; // Default to bi-weekly
+                            residentVerifiedIncome += (averageGrossPay * multiplier);
+                          }
                         } else {
                           // Fallback to resident-level calculated income or 0
                           residentVerifiedIncome = resident.calculatedAnnualizedIncome || 0;
