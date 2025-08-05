@@ -46,6 +46,7 @@ export default function ResidentSelectionDialog({
   };
 
   const handleSubmit = () => {
+    console.log('[RESIDENT SELECTION] handleSubmit called');
     const residentsToSubmit = selectedResidents
       .filter(resident => resident.selected)
       .map(resident => ({
@@ -53,7 +54,10 @@ export default function ResidentSelectionDialog({
         annualizedIncome: null // No pre-set income for renewals
       }));
 
+    console.log('[RESIDENT SELECTION] Submitting residents:', residentsToSubmit);
+    console.log('[RESIDENT SELECTION] Calling onSubmit...');
     onSubmit(residentsToSubmit);
+    console.log('[RESIDENT SELECTION] onSubmit call completed');
   };
 
   const selectedCount = selectedResidents.filter(r => r.selected).length;
