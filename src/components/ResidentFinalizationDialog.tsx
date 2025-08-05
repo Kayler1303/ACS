@@ -549,7 +549,10 @@ export default function ResidentFinalizationDialog({
             <h4 className="text-md font-semibold text-blue-900 mb-2">Lease: {leaseName}</h4>
             <div className="text-sm text-blue-800">
               <p><strong>Resident:</strong> {resident.name}</p>
-              <p><strong>Original Income:</strong> {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(resident.annualizedIncome)}</p>
+              {/* Only show Original Income for current leases with rent roll data */}
+              {Number(resident.annualizedIncome || 0) > 0 && (
+                <p><strong>Original Income:</strong> {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(resident.annualizedIncome)}</p>
+              )}
             </div>
           </div>
 
