@@ -1101,13 +1101,29 @@ export default function ResidentDetailPage() {
     if (!tenancyData?.unit) return;
     
     try {
-      // Use the verification service with already-available tenancy data
-      // No need to call the property-wide API!
-      const verificationStatus = getUnitVerificationStatus(
-        tenancyData.unit as any, // Type assertion to handle the interface differences
-        new Date(tenancyData.rentRoll.date)
-      );
-      setUnitVerificationStatus(verificationStatus);
+      // Check if we're viewing a future lease (no Tenancy record)
+      const isFutureLease = !tenancyData.lease?.Tenancy;
+      
+      if (isFutureLease) {
+        // For future leases, calculate status based on the specific lease we're viewing
+        const allResidents = tenancyData.lease?.Resident || [];
+        const finalizedResidents = allResidents.filter((r: any) => r.incomeFinalized);
+        
+        if (allResidents.length === 0) {
+          setUnitVerificationStatus('Vacant');
+        } else if (finalizedResidents.length === allResidents.length) {
+          setUnitVerificationStatus('Verified');
+        } else {
+          setUnitVerificationStatus('In Progress - Finalize to Process');
+        }
+      } else {
+        // For current leases, use the existing verification service
+        const verificationStatus = getUnitVerificationStatus(
+          tenancyData.unit as any, // Type assertion to handle the interface differences
+          new Date(tenancyData.rentRoll.date)
+        );
+        setUnitVerificationStatus(verificationStatus);
+      }
     } catch (error) {
       console.error('Error calculating unit verification status:', error);
     }
