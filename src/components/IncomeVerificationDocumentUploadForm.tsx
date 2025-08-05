@@ -168,13 +168,38 @@ export default function IncomeVerificationDocumentUploadForm({
   };
 
   // Lease creation workflow handlers
-  const handleLeaseCreated = async (leaseData: { id: string; name: string }) => {
-    console.log('[NEW LEASE WORKFLOW] Lease created successfully:', leaseData);
-    setNewLeaseId(leaseData.id);
-    setNewLeaseData(leaseData);
+  const handleLeaseCreated = async (formData: { name: string; leaseStartDate: string; leaseEndDate: string; leaseRent: number | null }) => {
+    console.log('[NEW LEASE WORKFLOW] handleLeaseCreated called with form data:', formData);
     
-    setCreateLeaseDialogOpen(false);
-    setLeaseTypeDialogOpen(true);
+    try {
+      // Actually create the lease via API
+      console.log('[NEW LEASE WORKFLOW] Creating lease via API...');
+      const response = await fetch(`/api/units/${unitId}/leases`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        console.error('[NEW LEASE WORKFLOW] Failed to create lease:', data);
+        throw new Error(data.error || 'Failed to create lease');
+      }
+
+      const createdLease = await response.json();
+      console.log('[NEW LEASE WORKFLOW] Lease created successfully:', createdLease);
+      
+      setNewLeaseId(createdLease.id);
+      setNewLeaseData(createdLease);
+      
+      setCreateLeaseDialogOpen(false);
+      setLeaseTypeDialogOpen(true);
+    } catch (err: unknown) {
+      console.error('[NEW LEASE WORKFLOW] Error creating lease:', err);
+      setError(err instanceof Error ? err.message : 'Failed to create lease');
+    }
   };
 
   // Lease type selection handlers
