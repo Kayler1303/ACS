@@ -115,18 +115,24 @@ export default function ResidentFinalizationDialog({
   const calculateIncomeFromDocuments = () => {
     let totalIncome = 0;
     
-    console.log(`[REAL-TIME CALC] ${resident.name} documents:`, residentDocuments.map(doc => ({
+    console.log(`[DEBUG] ${resident.name} - Starting income calculation`);
+    console.log(`[DEBUG] Total documents for ${resident.name}:`, residentDocuments.length);
+    console.log(`[DEBUG] Documents:`, residentDocuments.map(doc => ({
       id: doc.id,
       type: doc.documentType,
       status: doc.status,
-      grossPay: doc.grossPayAmount,
-      box1: doc.box1_wages
+      grossPayAmount: doc.grossPayAmount,
+      grossPayAmountType: typeof doc.grossPayAmount,
+      payFrequency: doc.payFrequency
     })));
     
-    // Process W2 documents - take highest of boxes 1, 3, 5 (include any status with extracted data)
-    const w2Documents = residentDocuments.filter(doc => doc.documentType === 'W2');
+    // Process W2 documents
+    const w2Documents = residentDocuments.filter(doc => doc.documentType === 'W2' && doc.status === 'COMPLETED');
+    console.log(`[DEBUG] W2 documents found:`, w2Documents.length);
+    
     w2Documents.forEach(doc => {
       const amounts = [doc.box1_wages, doc.box3_ss_wages, doc.box5_med_wages]
+        .map(amount => amount ? Number(amount) : 0)
         .filter((amount): amount is number => amount !== null && amount !== undefined && amount > 0);
       if (amounts.length > 0) {
         totalIncome += Math.max(...amounts);
@@ -137,6 +143,14 @@ export default function ResidentFinalizationDialog({
     const paystubDocuments = residentDocuments.filter(doc => 
       doc.documentType === 'PAYSTUB' && doc.grossPayAmount && doc.grossPayAmount > 0
     );
+    console.log(`[DEBUG] Paystub documents found:`, paystubDocuments.length);
+    console.log(`[DEBUG] Paystub filter details:`, residentDocuments.map(doc => ({
+      id: doc.id,
+      type: doc.documentType,
+      grossPayAmount: doc.grossPayAmount,
+      passes: doc.documentType === 'PAYSTUB' && doc.grossPayAmount && doc.grossPayAmount > 0
+    })));
+    
     if (paystubDocuments.length > 0) {
       const totalGrossPay = paystubDocuments.reduce((sum, doc) => sum + (doc.grossPayAmount || 0), 0);
       const averageGrossPay = totalGrossPay / paystubDocuments.length;
@@ -157,6 +171,7 @@ export default function ResidentFinalizationDialog({
       
       console.log(`[REAL-TIME CALC] ${resident.name} paystub calculation:`, {
         paystubCount: paystubDocuments.length,
+        totalGrossPay,
         averageGrossPay,
         payFrequency,
         multiplier,
