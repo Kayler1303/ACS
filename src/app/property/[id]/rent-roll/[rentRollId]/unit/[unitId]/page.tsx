@@ -1565,11 +1565,11 @@ export default function ResidentDetailPage() {
                                 .filter((amount): amount is number => amount !== null && amount !== undefined);
                               return total + (amounts.length > 0 ? Math.max(...amounts) : 0);
                             } else if (doc.documentType === 'PAYSTUB' && doc.grossPayAmount) {
-                              // For paystubs, annualize based on pay frequency (assume bi-weekly if not specified)
-                              const payFrequency = doc.payFrequency || 'BIWEEKLY';
+                              // For paystubs, annualize based on pay frequency (use database format with hyphens)
+                              const payFrequency = doc.payFrequency || 'BI-WEEKLY';
                               const multiplier = payFrequency === 'WEEKLY' ? 52 : 
-                                               payFrequency === 'BIWEEKLY' ? 26 : 
-                                               payFrequency === 'SEMIMONTHLY' ? 24 : 
+                                               payFrequency === 'BI-WEEKLY' ? 26 : 
+                                               payFrequency === 'SEMI-MONTHLY' ? 24 : 
                                                payFrequency === 'MONTHLY' ? 12 : 26; // Default to bi-weekly
                               return total + (doc.grossPayAmount * multiplier);
                             }
