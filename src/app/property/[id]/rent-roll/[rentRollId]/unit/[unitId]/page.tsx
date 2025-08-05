@@ -1136,12 +1136,10 @@ export default function ResidentDetailPage() {
         console.log(`[AUTO DISCREPANCY CHECK] All residents finalized: ${allResidentsFinalized}`);
         console.log(`[AUTO DISCREPANCY CHECK] Verification status: ${verification.status}`);
         
-        // Skip discrepancy check for future leases (no rent roll data)
+        // Instead of checking if entire lease is future, exclude individual future residents from discrepancy check
         const totalRentRollIncome = allResidents.reduce((sum, resident) => sum + (resident.annualizedIncome || 0), 0);
-        const isFutureLease = totalRentRollIncome === 0;
         
         console.log(`[AUTO DISCREPANCY CHECK] Total rent roll income: $${totalRentRollIncome}`);
-        console.log(`[AUTO DISCREPANCY CHECK] Is future lease: ${isFutureLease}`);
         console.log(`[AUTO DISCREPANCY CHECK] Individual residents:`, allResidents.map(r => ({
           name: r.name,
           annualizedIncome: r.annualizedIncome,
@@ -1149,23 +1147,21 @@ export default function ResidentDetailPage() {
           incomeFinalized: r.incomeFinalized
         })));
         
-        if (isFutureLease) {
-          console.log(`[AUTO DISCREPANCY CHECK] ✅ Future lease detected - skipping automatic discrepancy check`);
-          return;
-        }
-        
-        console.log(`[AUTO DISCREPANCY CHECK] ❌ Not a future lease - proceeding with discrepancy check`);
-        
+        // Filter discrepancies but exclude future lease residents (those with no rent roll income)
         const residentsWithDiscrepancies = allResidents.filter(resident => {
           const rentRollIncome = resident.annualizedIncome || 0;
           const verifiedIncome = resident.calculatedAnnualizedIncome || 0;
           const discrepancy = Math.abs(rentRollIncome - verifiedIncome);
-          const hasDiscrepancy = discrepancy > 1.00;
+          
+          // Skip discrepancy check for future lease residents (no rent roll data)
+          const isFutureResident = rentRollIncome === 0 && verifiedIncome > 0;
+          const hasDiscrepancy = discrepancy > 1.00 && !isFutureResident;
           
           console.log(`[AUTO DISCREPANCY CHECK] Resident ${resident.name}:`, {
             rentRollIncome,
             verifiedIncome,
             discrepancy,
+            isFutureResident,
             hasDiscrepancy
           });
           
@@ -1528,26 +1524,23 @@ export default function ResidentDetailPage() {
                             if (allResidentsFinalized && hasIncomeDiscrepancy && !discrepancyModalCooldown) {
                               console.log(`[BUTTON DISCREPANCY CHECK] Button-triggered discrepancy check for period:`, period.name);
                               
-                              // Skip lease discrepancy modal for future leases (no rent roll data)
+                              // Find residents with income discrepancies but exclude future lease residents
                               const totalRentRollIncome = allResidents.reduce((sum, resident) => sum + (resident.annualizedIncome || 0), 0);
-                              const isFutureLease = totalRentRollIncome === 0;
                               
                               console.log(`[BUTTON DISCREPANCY CHECK] Total rent roll income: $${totalRentRollIncome}`);
-                              console.log(`[BUTTON DISCREPANCY CHECK] Is future lease: ${isFutureLease}`);
-                              
-                              if (isFutureLease) {
-                                console.log(`[BUTTON DISCREPANCY CHECK] ✅ Future lease detected - skipping button discrepancy check`);
-                                return null;
-                              }
-                              
-                              console.log(`[BUTTON DISCREPANCY CHECK] ❌ Not a future lease - proceeding with button discrepancy check`);
                               
                               // Find residents with income discrepancies (rent roll vs verified income)
+                              // but exclude future lease residents (those with no rent roll data)
                               const residentsWithDiscrepancies = allResidents.filter(resident => {
                                 const rentRollIncome = resident.annualizedIncome || 0;
                                 const verifiedIncome = resident.calculatedAnnualizedIncome || 0;
                                 const discrepancy = Math.abs(rentRollIncome - verifiedIncome);
-                                return discrepancy > 1.00; // More than $1 difference
+                                
+                                // Skip discrepancy check for future lease residents (no rent roll data)
+                                const isFutureResident = rentRollIncome === 0 && verifiedIncome > 0;
+                                const hasDiscrepancy = discrepancy > 1.00 && !isFutureResident;
+                                
+                                return hasDiscrepancy;
                               });
                               
                               console.log(`[BUTTON DISCREPANCY CHECK] Found ${residentsWithDiscrepancies.length} residents with discrepancies`);
