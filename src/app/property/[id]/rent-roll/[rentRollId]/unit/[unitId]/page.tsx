@@ -1131,24 +1131,52 @@ export default function ResidentDetailPage() {
 
       // Only show discrepancy modal if all residents are finalized and there are individual discrepancies
       if (allResidentsFinalized && verification.status === 'FINALIZED') {
+        console.log(`[AUTO DISCREPANCY CHECK] Starting automatic discrepancy check for lease ${lease.id}`);
+        console.log(`[AUTO DISCREPANCY CHECK] Lease name: ${lease.name}`);
+        console.log(`[AUTO DISCREPANCY CHECK] All residents finalized: ${allResidentsFinalized}`);
+        console.log(`[AUTO DISCREPANCY CHECK] Verification status: ${verification.status}`);
+        
         // Skip discrepancy check for future leases (no rent roll data)
         const totalRentRollIncome = allResidents.reduce((sum, resident) => sum + (resident.annualizedIncome || 0), 0);
         const isFutureLease = totalRentRollIncome === 0;
         
+        console.log(`[AUTO DISCREPANCY CHECK] Total rent roll income: $${totalRentRollIncome}`);
+        console.log(`[AUTO DISCREPANCY CHECK] Is future lease: ${isFutureLease}`);
+        console.log(`[AUTO DISCREPANCY CHECK] Individual residents:`, allResidents.map(r => ({
+          name: r.name,
+          annualizedIncome: r.annualizedIncome,
+          calculatedAnnualizedIncome: r.calculatedAnnualizedIncome,
+          incomeFinalized: r.incomeFinalized
+        })));
+        
         if (isFutureLease) {
-          // Future lease - skip automatic discrepancy check
+          console.log(`[AUTO DISCREPANCY CHECK] ✅ Future lease detected - skipping automatic discrepancy check`);
           return;
         }
+        
+        console.log(`[AUTO DISCREPANCY CHECK] ❌ Not a future lease - proceeding with discrepancy check`);
         
         const residentsWithDiscrepancies = allResidents.filter(resident => {
           const rentRollIncome = resident.annualizedIncome || 0;
           const verifiedIncome = resident.calculatedAnnualizedIncome || 0;
           const discrepancy = Math.abs(rentRollIncome - verifiedIncome);
-          return discrepancy > 1.00; // More than $1 difference
+          const hasDiscrepancy = discrepancy > 1.00;
+          
+          console.log(`[AUTO DISCREPANCY CHECK] Resident ${resident.name}:`, {
+            rentRollIncome,
+            verifiedIncome,
+            discrepancy,
+            hasDiscrepancy
+          });
+          
+          return hasDiscrepancy;
         });
 
+        console.log(`[AUTO DISCREPANCY CHECK] Residents with discrepancies: ${residentsWithDiscrepancies.length}`);
+
         if (residentsWithDiscrepancies.length > 0) {
-          console.log(`[INDIVIDUAL DISCREPANCY DETECTED] Lease ${lease.id}: ${residentsWithDiscrepancies.length} residents with discrepancies`);
+          console.log(`[AUTO DISCREPANCY CHECK] 🚨 TRIGGERING MODAL - Found ${residentsWithDiscrepancies.length} residents with discrepancies`);
+          console.log(`[AUTO DISCREPANCY CHECK] Residents triggering modal:`, residentsWithDiscrepancies.map(r => r.name));
           
           // Use the NEW individual resident modal instead of the old unit-level modal
           setLeaseDiscrepancyModal({
@@ -1160,7 +1188,16 @@ export default function ResidentDetailPage() {
             } : null,
             residentsWithDiscrepancies: residentsWithDiscrepancies
           });
+        } else {
+          console.log(`[AUTO DISCREPANCY CHECK] ✅ No discrepancies found - modal not triggered`);
         }
+      } else {
+        console.log(`[AUTO DISCREPANCY CHECK] Conditions not met:`, {
+          allResidentsFinalized,
+          verificationStatus: verification?.status,
+          leaseId: lease.id,
+          leaseName: lease.name
+        });
       }
     });
   }, [tenancyData, discrepancyModalCooldown]);
@@ -1489,14 +1526,21 @@ export default function ResidentDetailPage() {
                             const hasIncomeDiscrepancy = currentVerificationStatus === 'Needs Investigation';
                             
                             if (allResidentsFinalized && hasIncomeDiscrepancy && !discrepancyModalCooldown) {
+                              console.log(`[BUTTON DISCREPANCY CHECK] Button-triggered discrepancy check for period:`, period.name);
+                              
                               // Skip lease discrepancy modal for future leases (no rent roll data)
                               const totalRentRollIncome = allResidents.reduce((sum, resident) => sum + (resident.annualizedIncome || 0), 0);
                               const isFutureLease = totalRentRollIncome === 0;
                               
+                              console.log(`[BUTTON DISCREPANCY CHECK] Total rent roll income: $${totalRentRollIncome}`);
+                              console.log(`[BUTTON DISCREPANCY CHECK] Is future lease: ${isFutureLease}`);
+                              
                               if (isFutureLease) {
-                                // Future lease - skip discrepancy check
+                                console.log(`[BUTTON DISCREPANCY CHECK] ✅ Future lease detected - skipping button discrepancy check`);
                                 return null;
                               }
+                              
+                              console.log(`[BUTTON DISCREPANCY CHECK] ❌ Not a future lease - proceeding with button discrepancy check`);
                               
                               // Find residents with income discrepancies (rent roll vs verified income)
                               const residentsWithDiscrepancies = allResidents.filter(resident => {
@@ -1505,6 +1549,8 @@ export default function ResidentDetailPage() {
                                 const discrepancy = Math.abs(rentRollIncome - verifiedIncome);
                                 return discrepancy > 1.00; // More than $1 difference
                               });
+                              
+                              console.log(`[BUTTON DISCREPANCY CHECK] Found ${residentsWithDiscrepancies.length} residents with discrepancies`);
                               
                               if (residentsWithDiscrepancies.length > 0) {
                                 return (
