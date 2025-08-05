@@ -201,18 +201,23 @@ export default function IncomeVerificationDocumentUploadForm({
 
   const handleResidentSelectionSubmit = async (selectedResidents: Array<{ name: string; annualizedIncome: number | null }>) => {
     console.log('[NEW LEASE WORKFLOW] Selected residents for renewal:', selectedResidents);
+    console.log('[NEW LEASE WORKFLOW] Current state:', { newLeaseId, pendingFileUpload: !!pendingFileUpload });
     setResidentSelectionDialogOpen(false);
     
     if (selectedResidents.length === 0) {
+      console.log('[NEW LEASE WORKFLOW] No residents selected, opening add resident dialog');
       // No residents selected, go straight to add residents dialog
       setAddResidentDialogOpen(true);
       return;
     }
     
     try {
+      console.log('[NEW LEASE WORKFLOW] Starting resident creation process...');
       setIsSubmitting(true);
       await handleResidentsAdded(selectedResidents);
+      console.log('[NEW LEASE WORKFLOW] Resident creation completed successfully');
     } catch (err: unknown) {
+      console.error('[NEW LEASE WORKFLOW] Error in resident creation:', err);
       setError(err instanceof Error ? err.message : 'Failed to copy selected residents');
       setIsSubmitting(false);
     }
@@ -233,13 +238,28 @@ export default function IncomeVerificationDocumentUploadForm({
   };
 
   const handleResidentsAdded = async (residentData: Array<{ name: string; annualizedIncome?: number | null }>) => {
-    if (!newLeaseId || !pendingFileUpload) return;
+    console.log('[NEW LEASE WORKFLOW] handleResidentsAdded called with:', residentData);
+    console.log('[NEW LEASE WORKFLOW] Current state check:', { 
+      newLeaseId, 
+      hasPendingFileUpload: !!pendingFileUpload,
+      pendingFileUploadDetails: pendingFileUpload ? {
+        allSelectedFiles: pendingFileUpload.allSelectedFiles?.length || 0,
+        selectedResident: pendingFileUpload.selectedResident
+      } : null
+    });
+    
+    if (!newLeaseId || !pendingFileUpload) {
+      console.error('[NEW LEASE WORKFLOW] Missing required data:', { newLeaseId, pendingFileUpload: !!pendingFileUpload });
+      return;
+    }
 
     try {
       setIsSubmitting(true);
+      console.log('[NEW LEASE WORKFLOW] Starting resident creation for lease:', newLeaseId);
       
       // Create residents in the new lease
-      const residentPromises = residentData.map(async (resident) => {
+      const residentPromises = residentData.map(async (resident, index) => {
+        console.log(`[NEW LEASE WORKFLOW] Creating resident ${index + 1}/${residentData.length}:`, resident.name);
         const response = await fetch(`/api/leases/${newLeaseId}/residents`, {
           method: 'POST',
           headers: {
@@ -253,17 +273,21 @@ export default function IncomeVerificationDocumentUploadForm({
 
         if (!response.ok) {
           const data = await response.json();
+          console.error(`[NEW LEASE WORKFLOW] Failed to create resident ${resident.name}:`, data);
           throw new Error(data.error || 'Failed to create resident');
         }
 
-        return await response.json();
+        const createdResident = await response.json();
+        console.log(`[NEW LEASE WORKFLOW] Successfully created resident:`, createdResident.name);
+        return createdResident;
       });
 
+      console.log('[NEW LEASE WORKFLOW] Waiting for all residents to be created...');
       const createdResidents = await Promise.all(residentPromises);
-      console.log('[NEW LEASE WORKFLOW] Created residents:', createdResidents.map(r => ({ id: r.id, name: r.name })));
+      console.log('[NEW LEASE WORKFLOW] All residents created:', createdResidents.map(r => ({ id: r.id, name: r.name })));
       
       // IMPORTANT: Before creating verification for new lease, auto-finalize any existing IN_PROGRESS verification
-      console.log('[NEW LEASE WORKFLOW] Checking for existing IN_PROGRESS verification to auto-finalize...');
+      console.log('[NEW LEASE WORKFLOW] Starting auto-finalize check for existing verifications...');
       try {
         const finalizeResponse = await fetch(`/api/units/${unitId}/auto-finalize-verification`, {
           method: 'POST',
@@ -285,6 +309,7 @@ export default function IncomeVerificationDocumentUploadForm({
       }
       
       // Create income verification for the new lease
+      console.log('[NEW LEASE WORKFLOW] Creating income verification for new lease...');
       const verificationResponse = await fetch(`/api/leases/${newLeaseId}/verifications`, {
         method: 'POST',
         headers: {
@@ -295,14 +320,16 @@ export default function IncomeVerificationDocumentUploadForm({
 
       if (!verificationResponse.ok) {
         const data = await verificationResponse.json();
+        console.error('[NEW LEASE WORKFLOW] Failed to create verification:', data);
         throw new Error(data.error || 'Failed to create verification');
       }
 
       const newVerification = await verificationResponse.json();
-      console.log('[NEW LEASE WORKFLOW] Created verification:', newVerification.id);
+      console.log('[NEW LEASE WORKFLOW] Successfully created verification:', newVerification.id);
       setNewVerificationId(newVerification.id);
       
       // Store residents and open document assignment dialog instead of uploading immediately
+      console.log('[NEW LEASE WORKFLOW] Setting up document assignment dialog...');
       setNewLeaseResidents(createdResidents.map(r => ({ id: r.id, name: r.name })));
       setAddResidentDialogOpen(false);
       setDocumentAssignmentDialogOpen(true);
@@ -311,6 +338,11 @@ export default function IncomeVerificationDocumentUploadForm({
       console.log('[NEW LEASE WORKFLOW] Opening document assignment dialog for', createdResidents.length, 'residents');
       
     } catch (err: unknown) {
+      console.error('[NEW LEASE WORKFLOW] Error in handleResidentsAdded:', err);
+      console.error('[NEW LEASE WORKFLOW] Error details:', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined
+      });
       setError(err instanceof Error ? err.message : 'Failed to create residents');
       setIsSubmitting(false);
     }
