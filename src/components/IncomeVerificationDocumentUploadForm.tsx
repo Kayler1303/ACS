@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import DateDiscrepancyModal from './DateDiscrepancyModal';
-import CreateLeaseDialog from './CreateLeaseDialog';
+import { DocumentType } from '@prisma/client';
 import AddResidentDialog from './AddResidentDialog';
-import LeaseTypeSelectionDialog from './LeaseTypeSelectionDialog';
+import CreateLeaseDialog from './CreateLeaseDialog';
+import DateDiscrepancyModal from './DateDiscrepancyModal';
 import ResidentSelectionDialog from './ResidentSelectionDialog';
 import DocumentAssignmentDialog from './DocumentAssignmentDialog';
 
@@ -78,7 +78,6 @@ export default function IncomeVerificationDocumentUploadForm({
   
   // Lease creation workflow state
   const [createLeaseDialogOpen, setCreateLeaseDialogOpen] = useState(false);
-  const [leaseTypeDialogOpen, setLeaseTypeDialogOpen] = useState(false);
   const [residentSelectionDialogOpen, setResidentSelectionDialogOpen] = useState(false);
   const [addResidentDialogOpen, setAddResidentDialogOpen] = useState(false);
   const [documentAssignmentDialogOpen, setDocumentAssignmentDialogOpen] = useState(false);
@@ -186,32 +185,17 @@ export default function IncomeVerificationDocumentUploadForm({
       setNewLeaseData(createdLease);
       
       setCreateLeaseDialogOpen(false);
-      setLeaseTypeDialogOpen(true);
+      
+      // Skip lease type dialog - if they're uploading documents for a resident, it's always a renewal
+      const renewalResidents = allCurrentLeaseResidents || residents;
+      setResidentSelectionDialogOpen(true);
     } catch (err: unknown) {
       console.error('[NEW LEASE WORKFLOW] Error creating lease:', err);
       setError(err instanceof Error ? err.message : 'Failed to create lease');
     }
   };
 
-  // Lease type selection handlers
-  const handleSelectRenewal = () => {
-    const renewalResidents = allCurrentLeaseResidents || residents;
-    setLeaseTypeDialogOpen(false);
-    setResidentSelectionDialogOpen(true);
-  };
-
-  const handleSelectNewLease = () => {
-    setLeaseTypeDialogOpen(false);
-    setAddResidentDialogOpen(true);
-  };
-
-  const handleCloseLeaseType = () => {
-    setLeaseTypeDialogOpen(false);
-    setNewLeaseData(null);
-    setPendingFileUpload(null);
-    setIsSubmitting(false);
-  };
-
+  // Resident Selection Dialog for Renewals
   const handleResidentSelectionSubmit = async (selectedResidents: Array<{ name: string; annualizedIncome: number | null }>) => {
     console.log('[NEW LEASE WORKFLOW] Selected residents for renewal:', selectedResidents);
     setResidentSelectionDialogOpen(false);
@@ -674,15 +658,6 @@ export default function IncomeVerificationDocumentUploadForm({
       onClose={handleCloseLease}
       onSubmit={handleLeaseCreated}
       unitId={unitId}
-    />
-    
-    {/* Lease Type Selection Dialog */}
-    <LeaseTypeSelectionDialog
-      isOpen={leaseTypeDialogOpen}
-      onClose={handleCloseLeaseType}
-      onSelectRenewal={handleSelectRenewal}
-      onSelectNewLease={handleSelectNewLease}
-      leaseName={newLeaseData?.name || 'New Lease'}
     />
     
     {/* Resident Selection Dialog for Renewals */}
