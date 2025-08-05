@@ -49,15 +49,29 @@ export async function DELETE(
       return NextResponse.json({ error: 'Document not found or access denied.' }, { status: 404 });
     }
 
+    // Use a transaction to delete both the document and any associated override requests
+    await prisma.$transaction(async (tx) => {
+      // First, delete any override requests associated with this document
+      const deletedOverrideRequests = await tx.overrideRequest.deleteMany({
+        where: {
+          documentId: documentId,
+        },
+      });
+
+      console.log(`🧹 Deleted ${deletedOverrideRequests.count} override request(s) for document ${documentId}`);
+
+      // Then delete the document itself
+      await tx.incomeDocument.delete({
+        where: { id: documentId },
+      });
+    });
+
+    // Delete the physical file after successful database operations
     if (document.filePath) {
       await deleteFileLocally(document.filePath);
     }
 
-    await prisma.incomeDocument.delete({
-      where: { id: documentId },
-    });
-
-    return NextResponse.json({ message: 'Document deleted successfully' });
+    return NextResponse.json({ message: 'Document and associated override requests deleted successfully' });
   } catch (error) {
     console.error('Error deleting document:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
