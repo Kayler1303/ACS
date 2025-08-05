@@ -152,6 +152,10 @@ export default function ResidentFinalizationDialog({
     })));
     
     if (paystubDocuments.length > 0) {
+      // Calculate total gross pay from all paystubs (with proper Number conversion)
+      const totalGrossPay = paystubDocuments.reduce((sum, doc) => sum + (Number(doc.grossPayAmount) || 0), 0);
+      const averageGrossPay = totalGrossPay / paystubDocuments.length;
+      
       // Get pay frequency (should be consistent across paystubs)
       const payFrequency = paystubDocuments[0]?.payFrequency || 'BI-WEEKLY';
       const frequencyMultipliers: Record<string, number> = {
@@ -163,24 +167,17 @@ export default function ResidentFinalizationDialog({
       };
       
       const multiplier = frequencyMultipliers[payFrequency] || 26;
-      
-      // Calculate total annualized income by annualizing each paystub separately
-      const paystubIncome = paystubDocuments.reduce((total, doc) => {
-        const grossPay = Number(doc.grossPayAmount) || 0;
-        return total + (grossPay * multiplier);
-      }, 0);
+      const paystubIncome = averageGrossPay * multiplier;
       
       totalIncome += paystubIncome;
       
       console.log(`[REAL-TIME CALC] ${resident.name} paystub calculation:`, {
         paystubCount: paystubDocuments.length,
+        totalGrossPay,
+        averageGrossPay,
         payFrequency,
         multiplier,
-        paystubDetails: paystubDocuments.map(doc => ({
-          grossPay: Number(doc.grossPayAmount),
-          annualized: (Number(doc.grossPayAmount) || 0) * multiplier
-        })),
-        totalPaystubIncome: paystubIncome
+        paystubIncome
       });
     }
     
