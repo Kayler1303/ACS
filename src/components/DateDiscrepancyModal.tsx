@@ -24,21 +24,9 @@ export default function DateDiscrepancyModal({
 }: DateDiscrepancyModalProps) {
   const [isProcessing, setIsProcessing] = useState(false);
 
-  console.log('[MODAL DEBUG] DateDiscrepancyModal called with:', {
-    isOpen,
-    leaseStartDate,
-    documentDate,
-    reason,
-    message,
-    isProcessing
-  });
-
   if (!isOpen) {
-    console.log('[MODAL DEBUG] Modal not open, returning null');
     return null;
   }
-
-  console.log('[MODAL DEBUG] Modal should be rendering...');
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
