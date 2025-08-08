@@ -12,6 +12,102 @@ import { DocumentType, DocumentStatus } from '@prisma/client';
 import { isWithinInterval, subMonths, getYear, addMonths } from 'date-fns';
 import { randomUUID } from 'crypto';
 
+// Helper function to detect duplicate documents
+async function checkForDuplicateDocument(
+  residentId: string, 
+  documentType: DocumentType, 
+  extractedData: any
+): Promise<{ isDuplicate: boolean, duplicateId?: string, reason?: string }> {
+  try {
+    // Get existing documents for this resident of the same type that are not failed/deleted
+    const existingDocuments = await prisma.incomeDocument.findMany({
+      where: {
+        residentId,
+        documentType,
+        status: {
+          in: [DocumentStatus.COMPLETED, DocumentStatus.NEEDS_REVIEW]
+        }
+      },
+      orderBy: {
+        uploadDate: 'desc'
+      }
+    });
+
+    if (existingDocuments.length === 0) {
+      return { isDuplicate: false };
+    }
+
+    // Check for duplicates based on document type
+    for (const existingDoc of existingDocuments) {
+      let isDuplicateMatch = false;
+      let reason = '';
+
+      if (documentType === DocumentType.PAYSTUB) {
+        // For paystubs, check: pay period dates, employer, and gross pay amount
+        const existingPayPeriodStart = existingDoc.payPeriodStartDate;
+        const existingPayPeriodEnd = existingDoc.payPeriodEndDate;
+        const existingGrossPay = existingDoc.grossPayAmount;
+        const existingEmployer = existingDoc.employerName;
+
+        const newPayPeriodStart = extractedData.payPeriodStartDate;
+        const newPayPeriodEnd = extractedData.payPeriodEndDate;
+        const newGrossPay = extractedData.grossPayAmount;
+        const newEmployer = extractedData.employerName;
+
+        // Check if pay periods and key details match
+        if (existingPayPeriodStart && existingPayPeriodEnd && newPayPeriodStart && newPayPeriodEnd) {
+          const samePayPeriod = existingPayPeriodStart.getTime() === newPayPeriodStart.getTime() && 
+                               existingPayPeriodEnd.getTime() === newPayPeriodEnd.getTime();
+          const sameGrossPay = existingGrossPay && newGrossPay && 
+                              Math.abs(Number(existingGrossPay) - Number(newGrossPay)) < 0.01;
+          const sameEmployer = existingEmployer && newEmployer && 
+                              existingEmployer.toLowerCase().trim() === newEmployer.toLowerCase().trim();
+
+          if (samePayPeriod && sameGrossPay && sameEmployer) {
+            isDuplicateMatch = true;
+            reason = `Duplicate paystub detected: same pay period (${newPayPeriodStart.toLocaleDateString()} - ${newPayPeriodEnd.toLocaleDateString()}), employer (${newEmployer}), and gross pay ($${newGrossPay})`;
+          }
+        }
+      } else if (documentType === DocumentType.W2) {
+        // For W2s, check: tax year, employer, and wage amounts
+        const existingTaxYear = existingDoc.taxYear;
+        const existingBox1Wages = existingDoc.box1_wages;
+        const existingEmployer = existingDoc.employerName;
+
+        const newTaxYear = extractedData.taxYear;
+        const newBox1Wages = extractedData.box1_wages;
+        const newEmployer = extractedData.employerName;
+
+        if (existingTaxYear && newTaxYear && existingTaxYear === newTaxYear) {
+          const sameBox1Wages = existingBox1Wages && newBox1Wages && 
+                               Math.abs(Number(existingBox1Wages) - Number(newBox1Wages)) < 0.01;
+          const sameEmployer = existingEmployer && newEmployer && 
+                              existingEmployer.toLowerCase().trim() === newEmployer.toLowerCase().trim();
+
+          if (sameBox1Wages && sameEmployer) {
+            isDuplicateMatch = true;
+            reason = `Duplicate W2 detected: same tax year (${newTaxYear}), employer (${newEmployer}), and wages ($${newBox1Wages})`;
+          }
+        }
+      }
+
+      if (isDuplicateMatch) {
+        return { 
+          isDuplicate: true, 
+          duplicateId: existingDoc.id,
+          reason 
+        };
+      }
+    }
+
+    return { isDuplicate: false };
+  } catch (error) {
+    console.error('Error checking for duplicate documents:', error);
+    // If there's an error checking for duplicates, don't block the upload
+    return { isDuplicate: false };
+  }
+}
+
 // Helper function to check if document date is more than 5 months after lease start
 function checkDateDiscrepancy(documentDate: Date, leaseStartDate: Date): { hasDiscrepancy: boolean, monthsDifference: number } {
   const fiveMonthsAfterLease = addMonths(leaseStartDate, 5);
@@ -35,16 +131,84 @@ function extractSocialSecurityData(analyzeResult: any) {
     let monthlyBenefit = null;
     let letterDate = null;
     
-    // Extract beneficiary name (look for name in address line)
-    const nameMatch = content.match(/([A-Z][A-Z\s]+)\s+\d+\s+[A-Z\s]+\s+[A-Z]{2}\s+\d{5}/);
+    // Extract beneficiary name (look for name in address line - try multiple patterns)
+    let nameMatch = content.match(/([A-Z][A-Z\s]+)\s+\d+\s+[A-Z\s]+\s+[A-Z]{2}\s+\d{5}/);
+    if (!nameMatch) {
+      // Try alternative pattern: name after codes/numbers but before address
+      nameMatch = content.match(/\b([A-Z]{2,}(?:\s+[A-Z]{2,})+)\s+\d+\s+[A-Z\s]+\s+[A-Z]{2}\s+\d{5}/);
+    }
+    if (!nameMatch) {
+      // Try pattern: P## followed by name
+      nameMatch = content.match(/P\d+\s+([A-Z]{2,}(?:\s+[A-Z]{2,})+)\s+\d+/);
+    }
+    if (!nameMatch) {
+      // Try SSA-1099 Box 1 pattern: "Box 1. Name FIRSTNAME LASTNAME"
+      nameMatch = content.match(/Box 1\.\s*Name\s+([A-Z\s]+?)(?:\n|Box)/i);
+    }
     if (nameMatch) {
       beneficiaryName = nameMatch[1].trim();
     }
     
-    // Extract monthly benefit amount
-    const benefitMatch = content.match(/monthly Social Security benefit.*?\$([0-9,]+\.?\d*)/i);
+    // Extract benefit amount (try multiple patterns for different document types)
+    let benefitMatch = null;
+    let isAnnualAmount = false;
+    
+    // First, check if this is an SSA-1099 form (annual benefits)
+    if (content.includes('SSA-1099') || content.includes('SOCIAL SECURITY BENEFIT STATEMENT')) {
+      console.log('[SS EXTRACTION] Detected SSA-1099 form - looking for annual benefits');
+      
+      // Try to extract from Box 3 (Benefits paid in year) or Box 5 (Net Benefits)
+      // Updated patterns to handle spaces and commas: "$11, 420.40"
+      benefitMatch = content.match(/Box 5[^$]*\$\s*([0-9,\s]+\.?\d*)/i);
+      if (!benefitMatch) {
+        benefitMatch = content.match(/Box 3[^$]*\$\s*([0-9,\s]+\.?\d*)/i);
+      }
+      if (!benefitMatch) {
+        benefitMatch = content.match(/Net Benefits[^$]*\$\s*([0-9,\s]+\.?\d*)/i);
+      }
+      if (!benefitMatch) {
+        benefitMatch = content.match(/Benefits paid[^$]*\$\s*([0-9,\s]+\.?\d*)/i);
+      }
+      
+      if (benefitMatch) {
+        isAnnualAmount = true;
+        console.log('[SS EXTRACTION] Found annual amount in SSA-1099:', benefitMatch[1]);
+      }
+    }
+    
+    // If not SSA-1099 or no match found, try monthly benefit patterns (for letters)
+    if (!benefitMatch) {
+      console.log('[SS EXTRACTION] Looking for monthly benefit amounts (letters)');
+      
+      benefitMatch = content.match(/monthly Social Security benefit.*?\$([0-9,]+\.?\d*)/i);
+      if (!benefitMatch) {
+        // Try more flexible pattern: "monthly benefit"
+        benefitMatch = content.match(/monthly benefit.*?\$([0-9,]+\.?\d*)/i);
+      }
+      if (!benefitMatch) {
+        // Try pattern: "benefit to $amount"
+        benefitMatch = content.match(/benefit to \$([0-9,]+\.?\d*)/i);
+      }
+      if (!benefitMatch) {
+        // Try general dollar amount pattern near benefit context
+        benefitMatch = content.match(/(?:benefit|Social Security).*?\$([0-9,]+\.?\d*)/i);
+      }
+    }
+    
     if (benefitMatch) {
-      monthlyBenefit = parseFloat(benefitMatch[1].replace(/,/g, ''));
+      // Clean up the extracted amount - remove commas and extra spaces
+      const cleanAmount = benefitMatch[1].replace(/[,\s]/g, '');
+      const extractedAmount = parseFloat(cleanAmount);
+      
+      if (isAnnualAmount) {
+        // Convert annual to monthly
+        monthlyBenefit = extractedAmount / 12;
+        console.log(`[SS EXTRACTION] Converted annual $${extractedAmount} to monthly $${monthlyBenefit}`);
+      } else {
+        // Already monthly
+        monthlyBenefit = extractedAmount;
+        console.log(`[SS EXTRACTION] Using monthly amount $${monthlyBenefit}`);
+      }
     }
     
     // Extract letter date
@@ -150,6 +314,9 @@ function validateDocumentName(doc: any, residentName: string): { isValid: boolea
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ verificationId: string }> }) {
   
+  // Declare document variable in function scope for error handling
+  let document: any = null;
+  
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
@@ -161,6 +328,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const file = formData.get('file') as File;
     const documentType = formData.get('documentType') as DocumentType;
     const residentId = formData.get('residentId') as string;
+    
+    // CRITICAL: Log every single document upload to verify our code is running
+    console.log(`🚀 [UPLOAD] ANY DOCUMENT UPLOAD - Type: "${documentType}" | File: ${file?.name} | Time: ${new Date().toISOString()}`);
     const forceUpload = formData.get('forceUpload') === 'true'; // Allow bypassing date check
 
     if (!file || !documentType || !residentId) {
@@ -201,19 +371,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     console.log(`File uploaded: ${filename} for verification ${verificationId}, resident ${residentId}`);
 
-         // Create initial document record
-     let document = await prisma.incomeDocument.create({
-       data: {
-         id: randomUUID(),
-         documentType,
-         documentDate: new Date(), // Required field for document date
-         uploadDate: new Date(),
-         status: DocumentStatus.PROCESSING,
-         filePath: filename,
-         verificationId,
-         residentId,
-       },
-     });
+    // Create initial document record
+    document = await prisma.incomeDocument.create({
+      data: {
+        id: randomUUID(),
+        documentType,
+        documentDate: new Date(), // Required field for document date
+        uploadDate: new Date(),
+        status: DocumentStatus.PROCESSING,
+        filePath: filename,
+        verificationId,
+        residentId,
+      },
+    });
 
     // Analyze the document with Azure Document Intelligence
     let analyzeResult;
@@ -222,16 +392,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       
       if (documentType === DocumentType.W2) {
         modelId = 'prebuilt-tax.us.w2';
+        console.log(`[AZURE MODEL] Using W2 model: ${modelId} for document ${document.id}`);
       } else if (documentType === DocumentType.PAYSTUB) {
         modelId = 'prebuilt-payStub.us';
-             } else if (documentType === DocumentType.SOCIAL_SECURITY || 
-                  documentType === DocumentType.BANK_STATEMENT || 
-                  documentType === DocumentType.OFFER_LETTER) {
-         modelId = 'prebuilt-layout'; // Use layout analyzer for these document types (supports key-value pairs)
-         console.log(`Using layout analyzer for ${documentType}`);
-       } else {
-         // Skip Azure analysis for truly unsupported types
-         console.log(`Skipping Azure analysis for ${documentType} - no suitable model available`);
+        console.log(`[AZURE MODEL] Using Paystub model: ${modelId} for document ${document.id}`);
+      } else if (documentType === 'SSA_1099') {
+        modelId = 'prebuilt-tax.us.1099SSA'; // Use Azure's specific SSA-1099 model
+        console.log(`[AZURE MODEL] Using Azure SSA-1099 model: ${modelId} for document ${document.id}`);
+      } else if (documentType === DocumentType.SOCIAL_SECURITY) {
+        modelId = 'prebuilt-layout'; // Use layout analyzer for general Social Security letters
+        console.log(`[AZURE MODEL] Using layout analyzer: ${modelId} for ${documentType} document ${document.id}`);
+      } else {
+        // Skip Azure analysis for Bank Statement and Offer Letter document types
+        const documentTypeLabel = documentType === DocumentType.BANK_STATEMENT ? 'Bank Statement' : 
+                                 documentType === DocumentType.OFFER_LETTER ? 'Offer Letter' : documentType;
+        console.log(`Skipping Azure analysis for ${documentTypeLabel} - sending directly to admin review`);
         
         // Mark as needing admin review since we can't auto-process
         document = await prisma.incomeDocument.update({
@@ -242,12 +417,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         });
 
         // Create override request for manual review
+        const userExplanation = documentType === DocumentType.BANK_STATEMENT 
+          ? `Bank Statement document requires manual review and income entry by an administrator.`
+          : documentType === DocumentType.OFFER_LETTER
+          ? `Offer Letter document requires manual review and income entry by an administrator.`
+          : `${documentType} document requires manual review and income entry by an administrator.`;
+          
         await prisma.overrideRequest.create({
           data: {
             id: randomUUID(),
             type: 'DOCUMENT_REVIEW',
             status: 'PENDING',
-            userExplanation: `${documentType} document requires manual review as Azure Document Intelligence does not have a suitable model for this document type.`,
+            userExplanation,
             documentId: document.id,
             verificationId: verificationId,
             residentId: residentId,
@@ -340,16 +521,172 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       console.log(`[DEBUG] No layout analyzer data found. Available keys:`, Object.keys(nestedResult || {}));
     }
 
-        // Validate Azure extraction results
-    let validationResult: PaystubValidationResult | W2ValidationResult;
+        // Debug: Show exactly what documentType we received
+    console.log(`🔍 [DOCUMENT TYPE DEBUG] Received documentType:`, {
+      raw: documentType,
+      type: typeof documentType,
+      isW2: documentType === DocumentType.W2,
+      isStringW2: documentType === 'W2',
+      DocumentTypeEnum: DocumentType,
+      comparison: `"${documentType}" === "${DocumentType.W2}"`
+    });
+
+    // Validate Azure extraction results
+    let validationResult: PaystubValidationResult | W2ValidationResult | null = null;
+    let updateData: any = {};
 
     if (documentType === DocumentType.PAYSTUB) {
       validationResult = validatePaystubExtraction(analyzeResult);
     } else if (documentType === DocumentType.W2) {
-      validationResult = validateW2Extraction(analyzeResult);
-            } else if (documentType === DocumentType.SOCIAL_SECURITY || 
+        console.log(`🔥 [W2 UPLOAD] Processing W2 document - this should always appear!`);
+        // Debug: Log Azure W2 fields before validation
+        const documentsArray = analyzeResult.documents;
+        if (documentsArray && documentsArray.length > 0) {
+          const fields = documentsArray[0].fields;
+          console.log(`[UPLOAD DEBUG] Azure W2 fields available:`, Object.keys(fields || {}));
+          console.log(`[UPLOAD DEBUG] Employee-related fields:`, Object.keys(fields || {}).filter(k => 
+            k.toLowerCase().includes('employee') || k.toLowerCase().includes('name')));
+          console.log(`[UPLOAD DEBUG] Employer-related fields:`, Object.keys(fields || {}).filter(k => 
+            k.toLowerCase().includes('employer') || k.toLowerCase().includes('company')));
+        }
+        validationResult = validateW2Extraction(analyzeResult);
+            } else if (documentType === 'SSA_1099') {
+          // Handle structured SSA-1099 response from Azure prebuilt model
+          const extractedData = analyzeResult?.analyzeResult?.documents?.[0]?.fields;
+          
+          if (extractedData) {
+            console.log('[SSA-1099] Using Azure prebuilt model structured extraction');
+            console.log('[SSA-1099] Available fields from Azure:', Object.keys(extractedData));
+            console.log('[SSA-1099] Full extracted data:', JSON.stringify(extractedData, null, 2));
+            
+            // Extract structured fields from SSA-1099 model using correct Azure field names
+            const beneficiaryName = extractedData.Beneficiary?.valueObject?.Name?.content || 
+                                  extractedData.Beneficiary?.content || 
+                                  extractedData.Box1?.content || 
+                                  extractedData.BeneficiaryName?.content ||
+                                  extractedData.EmployeeName?.content ||
+                                  extractedData.RecipientName?.content;
+            const annualBenefits = extractedData.Box5?.content || extractedData.Box3?.content;
+            const taxYear = extractedData.TaxYear?.content;
+            
+            console.log('[SSA-1099] Extraction attempts:', {
+              beneficiaryName,
+              annualBenefits,
+              taxYear
+            });
+            
+            // If name extraction failed, log all available fields to debug
+            if (!beneficiaryName) {
+              console.log('[SSA-1099] Name extraction failed. All available fields:', Object.keys(extractedData));
+              console.log('[SSA-1099] Fields that might contain names:', 
+                Object.keys(extractedData).filter(key => 
+                  key.toLowerCase().includes('name') || 
+                  key.toLowerCase().includes('beneficiary') ||
+                  key.toLowerCase().includes('box1') ||
+                  key.toLowerCase().includes('recipient')
+                )
+              );
+              
+              // Debug the Beneficiary field structure specifically
+              if (extractedData.Beneficiary) {
+                console.log('[SSA-1099] Beneficiary field structure:', JSON.stringify(extractedData.Beneficiary, null, 2));
+                console.log('[SSA-1099] Beneficiary content alternatives:', {
+                  content: extractedData.Beneficiary.content,
+                  valueString: extractedData.Beneficiary.valueString,
+                  text: extractedData.Beneficiary.text,
+                  value: extractedData.Beneficiary.value
+                });
+              }
+            }
+            
+            if (beneficiaryName && annualBenefits) {
+              // Remove currency formatting from the benefits amount
+              const cleanBenefits = annualBenefits.replace(/[$,]/g, '');
+              const monthlyBenefit = parseFloat(cleanBenefits) / 12;
+              const annualizedIncome = parseFloat(cleanBenefits);
+              
+              console.log(`[SSA-1099] Extracted: ${beneficiaryName}, Annual: $${annualBenefits}, Monthly: $${monthlyBenefit}`);
+              
+              // Apply the extracted data immediately
+              const updateData: any = {
+                employeeName: beneficiaryName,
+                grossPayAmount: monthlyBenefit,
+                payFrequency: 'MONTHLY',
+                calculatedAnnualizedIncome: annualizedIncome,
+                status: DocumentStatus.COMPLETED
+              };
+              
+              if (taxYear) {
+                updateData.documentDate = new Date(`${taxYear}-12-31`);
+              }
+
+              document = await prisma.incomeDocument.update({
+                where: { id: document.id },
+                data: updateData
+              });
+
+              console.log(`[SSA-1099] Document ${document.id} successfully processed and marked as COMPLETED`);
+              return NextResponse.json(document, { status: 201 });
+            } else {
+              console.log('[SSA-1099] Could not extract required fields, marking for review');
+              
+              // Mark as needing admin review
+              document = await prisma.incomeDocument.update({
+                where: { id: document.id },
+                data: { status: DocumentStatus.NEEDS_REVIEW }
+              });
+
+              // Create override request for manual review
+              await prisma.overrideRequest.create({
+                data: {
+                  id: randomUUID(),
+                  type: 'DOCUMENT_REVIEW',
+                  status: 'PENDING',
+                  userExplanation: 'SSA-1099 document could not be automatically processed. Please manually review and enter the income information.',
+                  documentId: document.id,
+                  verificationId: verificationId,
+                  residentId: residentId,
+                  requesterId: session.user.id,
+                  propertyId: verification.Lease?.Unit?.Property?.id,
+                  updatedAt: new Date(),
+                }
+              });
+
+              console.log(`[SSA-1099] Document ${document.id} marked for admin review`);
+              return NextResponse.json(document, { status: 201 });
+            }
+          } else {
+            console.log('[SSA-1099] No structured data found, marking for review');
+            
+            // Mark as needing admin review
+            document = await prisma.incomeDocument.update({
+              where: { id: document.id },
+              data: { status: DocumentStatus.NEEDS_REVIEW }
+            });
+
+            // Create override request for manual review
+            await prisma.overrideRequest.create({
+              data: {
+                id: randomUUID(),
+                type: 'DOCUMENT_REVIEW',
+                status: 'PENDING',
+                userExplanation: 'SSA-1099 document analysis failed. Please manually review and enter the income information.',
+                documentId: document.id,
+                verificationId: verificationId,
+                residentId: residentId,
+                requesterId: session.user.id,
+                propertyId: verification.Lease?.Unit?.Property?.id,
+                updatedAt: new Date(),
+              }
+            });
+
+            console.log(`[SSA-1099] Document ${document.id} marked for admin review due to analysis failure`);
+            return NextResponse.json(document, { status: 201 });
+          }
+        } else if (documentType === DocumentType.SOCIAL_SECURITY || 
                    documentType === DocumentType.BANK_STATEMENT || 
-                   documentType === DocumentType.OFFER_LETTER) {
+                   documentType === DocumentType.OFFER_LETTER ||
+                   documentType === 'OTHER') {
           
           // Try to extract key information automatically for high-confidence cases
           let autoExtractedData = null;
@@ -388,8 +725,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
             return NextResponse.json(document, { status: 201 });
           } else {
-            // Fall back to admin review
-            console.log(`${documentType} document analyzed with layout model - marking for admin review`);
+            // Fall back to admin review for all document types that use the generic layout model
+            const documentTypeLabel = documentType === DocumentType.OTHER ? 'Other' : documentType;
+            console.log(`${documentTypeLabel} document analyzed with layout model - marking for admin review`);
             
             document = await prisma.incomeDocument.update({
               where: { id: document.id },
@@ -399,12 +737,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             });
 
             // Create override request for manual review
+            const userExplanation = documentType === DocumentType.OTHER 
+              ? `Other document type has been processed by Azure's layout analyzer. Please manually review and enter the income information.`
+              : `${documentType} document has been processed by Azure's layout analyzer. Please manually review and enter the income information.`;
+
             await prisma.overrideRequest.create({
               data: {
                 id: randomUUID(),
                 type: 'DOCUMENT_REVIEW',
                 status: 'PENDING',
-                userExplanation: `${documentType} document has been processed by Azure's layout analyzer. Please manually review and enter the income information.`,
+                userExplanation,
                 documentId: document.id,
                 verificationId: verificationId,
                 residentId: residentId,
@@ -420,16 +762,27 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: 'Unsupported document type' }, { status: 400 });
     }
 
-    console.log(`Validation result for document ${document.id}:`, {
-      isValid: validationResult.isValid,
-      needsAdminReview: validationResult.needsAdminReview,
-      confidence: validationResult.confidence,
-      warningsCount: validationResult.warnings.length,
-      errorsCount: validationResult.errors.length
-    });
+    // Handle validation results (only for W2 and Paystub documents)
+    if (validationResult) {
+      console.log(`Validation result for document ${document.id}:`, {
+        isValid: validationResult.isValid,
+        needsAdminReview: validationResult.needsAdminReview,
+        confidence: validationResult.confidence,
+        warningsCount: validationResult.warnings.length,
+        errorsCount: validationResult.errors.length
+      });
 
-    // Handle validation results
-    if (!validationResult.isValid || validationResult.needsAdminReview) {
+      if (!validationResult.isValid || validationResult.needsAdminReview) {
+      // Log detailed validation failure information
+      console.log(`[VALIDATION FAILURE] Document ${document.id} (${documentType}) failed validation:`, {
+        isValid: validationResult.isValid,
+        needsAdminReview: validationResult.needsAdminReview,
+        confidence: validationResult.confidence,
+        errors: validationResult.errors,
+        warnings: validationResult.warnings,
+        extractedData: validationResult.extractedData
+      });
+
       // Mark document as needing admin review
       document = await prisma.incomeDocument.update({
         where: { id: document.id },
@@ -467,7 +820,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           }
         });
 
-        console.log(`Created admin review request for document ${document.id} due to validation issues`);
+        console.log(`Created validation override request for document ${document.id}: ${explanation}`);
       } catch (overrideError) {
         console.error('Failed to create auto-override request for validation issues:', overrideError);
       }
@@ -475,7 +828,28 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json(document, { status: 201 });
     }
 
-    // Validation passed - now check timeliness and name matching
+    // Validation passed - now check for duplicates before proceeding
+    const duplicateCheck = await checkForDuplicateDocument(residentId, documentType, validationResult.extractedData);
+    
+    if (duplicateCheck.isDuplicate) {
+      console.log(`Duplicate document detected for resident ${residentId}: ${duplicateCheck.reason}`);
+      
+      // Delete the newly created document since it's a duplicate
+      await prisma.incomeDocument.delete({
+        where: { id: document.id }
+      });
+      
+      return NextResponse.json(
+        { 
+          error: 'Duplicate document detected', 
+          message: duplicateCheck.reason,
+          duplicateDocumentId: duplicateCheck.duplicateId
+        }, 
+        { status: 409 } // Conflict status code
+      );
+    }
+
+    // No duplicates found - continue with timeliness and name matching validation
     // Get lease information for validation
     const lease = await prisma.lease.findFirst({
       where: { 
@@ -508,6 +882,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const amounts = [extractedData.box1_wages, extractedData.box3_ss_wages, extractedData.box5_med_wages]
           .filter((amount): amount is number => amount !== null);
         
+        // eslint-disable-next-line prefer-const
         let updateData: any = {
           status: DocumentStatus.COMPLETED,
           box1_wages: extractedData.box1_wages,
@@ -530,6 +905,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const paystubResult = validationResult as PaystubValidationResult;
         const extractedData = paystubResult.extractedData;
         
+        // eslint-disable-next-line prefer-const
         let updateData: any = {
           status: DocumentStatus.COMPLETED,
           employeeName: extractedData.employeeName,
@@ -579,9 +955,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       employeeName: documentType === DocumentType.W2 
         ? (validationResult as W2ValidationResult).extractedData.employeeName
         : (validationResult as PaystubValidationResult).extractedData.employeeName,
-      taxYear: documentType === DocumentType.W2 
-        ? (validationResult as W2ValidationResult).extractedData.taxYear
-        : null,
+                  taxYear: documentType === DocumentType.W2
+              ? ((validationResult as W2ValidationResult).extractedData.taxYear ? 
+                  parseInt((validationResult as W2ValidationResult).extractedData.taxYear, 10) : null)
+              : null,
       payPeriodEndDate: documentType === DocumentType.PAYSTUB 
         ? (validationResult as PaystubValidationResult).extractedData.payPeriodEndDate
         : null
@@ -621,7 +998,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const timelinessCheck = validateDocumentTimeliness(docForValidation, new Date(lease.leaseStartDate));
     const nameCheck = validateDocumentName(docForValidation, resident.name);
 
+    // Collect validation issues (declare outside if block so it's accessible later)
+    const issues = [];
+    if (!timelinessCheck.isValid) {
+      issues.push(timelinessCheck.message);
+    }
+    if (!nameCheck.isValid) {
+      issues.push(nameCheck.message);
+    }
+
     if (!timelinessCheck.isValid || !nameCheck.isValid) {
+
       // Mark document as needing review due to validation issues
       document = await prisma.incomeDocument.update({
         where: { id: document.id },
@@ -634,7 +1021,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             box5_med_wages: (validationResult as W2ValidationResult).extractedData.box5_med_wages,
             employeeName: (validationResult as W2ValidationResult).extractedData.employeeName,
             employerName: (validationResult as W2ValidationResult).extractedData.employerName,
-            taxYear: (validationResult as W2ValidationResult).extractedData.taxYear
+            taxYear: (validationResult as W2ValidationResult).extractedData.taxYear ? 
+              parseInt((validationResult as W2ValidationResult).extractedData.taxYear, 10) : null
           } : {
             payPeriodStartDate: (validationResult as PaystubValidationResult).extractedData.payPeriodStartDate,
             payPeriodEndDate: (validationResult as PaystubValidationResult).extractedData.payPeriodEndDate,
@@ -646,12 +1034,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }
       });
 
-      // Create detailed explanation for admin review
-      const issues = [];
-      if (!timelinessCheck.isValid) issues.push(timelinessCheck.reason);
-      if (!nameCheck.isValid) issues.push(nameCheck.reason);
-      
-      const explanation = `Document validation issues found: ${issues.join('; ')}. User can either delete and reupload correct documents or request admin override.`;
+      // Create simplified explanation for admin review
+      const explanation = 'Document requires manual review and verification by an administrator.';
 
       // Create override request for admin review
       try {
@@ -707,6 +1091,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             box5_med_wages: extractedData.box5_med_wages,
             employeeName: extractedData.employeeName,
             employerName: extractedData.employerName,
+            taxYear: extractedData.taxYear ? parseInt(extractedData.taxYear, 10) : null,
             calculatedAnnualizedIncome: highestAmount
           }
         });
@@ -784,6 +1169,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }
       }
     }
+    } // Close the validationResult if block
 
     return NextResponse.json(document, { status: 201 });
 
