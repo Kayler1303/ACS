@@ -156,23 +156,11 @@ export async function PATCH(
 
     console.log(`[DEBUG] Marked documents as COMPLETED for resident ${residentId} in verification ${verificationId}`);
 
-    // Get the total uploaded income for discrepancy check
-    const totalUploadedIncome = verification.Lease.Resident.reduce((acc: number, r: any) => acc + (Number(r.annualizedIncome) || 0), 0);
-    
-    // Check for income discrepancy and create auto-override if needed
-    try {
-      await checkAndCreateIncomeDiscrepancyOverride({
-        unitId: verification.Lease.Unit.id,
-        verificationId: verification.id,
-        residentId: residentId,
-        totalUploadedIncome,
-        totalVerifiedIncome: finalIncomeToUse,
-        userId: session.user.id
-      });
-    } catch (error) {
-      console.error('Failed to create auto-override request for income discrepancy:', error);
-      // Don't fail the finalization, just log the error
-    }
+    // NOTE: Income discrepancy override requests should only be created when the user 
+    // explicitly chooses "Submit for Admin Review" in the frontend discrepancy modal.
+    // Automatic creation here was causing unwanted admin review requests even when
+    // users accepted the discrepancy. The frontend handles discrepancy detection and
+    // user choice appropriately.
 
     // Check if all residents in the lease now have finalized income
     const allResidents = verification.Lease.Resident;
@@ -202,19 +190,8 @@ export async function PATCH(
       
       const totalVerifiedIncome = totalVerifiedIncomeResult._sum.calculatedAnnualizedIncome?.toNumber() || 0;
 
-      // Check for income discrepancy at verification level too
-      try {
-        await checkAndCreateIncomeDiscrepancyOverride({
-          unitId: verification.Lease.Unit.id,
-          verificationId: verification.id,
-          totalUploadedIncome,
-          totalVerifiedIncome,
-          userId: session.user.id
-        });
-      } catch (error) {
-        console.error('Failed to create auto-override request for verification income discrepancy:', error);
-        // Don't fail the finalization, just log the error
-      }
+      // NOTE: Automatic income discrepancy checking removed - this should only happen
+      // when user explicitly chooses "Submit for Admin Review" in the frontend modal
 
       await prisma.incomeVerification.update({
         where: { id: verificationId },

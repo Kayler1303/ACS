@@ -87,22 +87,8 @@ export async function PATCH(
       }
     });
 
-    // Check for income discrepancy and create auto-override if needed
-    const totalUploadedIncome = updatedVerification.Lease.Resident.reduce((acc: number, r: any) => 
-      acc + (r.annualizedIncome ? r.annualizedIncome.toNumber() : 0), 0);
-    
-    try {
-      await checkAndCreateIncomeDiscrepancyOverride({
-        unitId: updatedVerification.Lease.Unit.id,
-        verificationId: updatedVerification.id,
-        totalUploadedIncome,
-        totalVerifiedIncome,
-        userId: session.user.id
-      });
-    } catch (error) {
-      console.error('Failed to create auto-override request for income discrepancy:', error);
-      // Don't fail the finalization, just log the error
-    }
+    // NOTE: Automatic income discrepancy checking removed - this should only happen
+    // when user explicitly chooses "Submit for Admin Review" in the frontend modal
 
     return NextResponse.json(updatedVerification);
   } catch (error) {
