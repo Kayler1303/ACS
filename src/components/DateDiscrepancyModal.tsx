@@ -92,8 +92,8 @@ export default function DateDiscrepancyModal({
               <div className="mt-4 p-3 bg-blue-50 rounded-md">
                 <p className="text-xs text-blue-700 text-center">
                   💡 <strong>Note:</strong> If you choose to create a new lease instance, 
-                  any current income verification in progress will be automatically finalized 
-                  to make way for the new lease.
+                  the current lease status will remain unchanged. Only verifications with 
+                  uploaded documents will be finalized.
                 </p>
               </div>
             </div>
@@ -114,7 +114,7 @@ export default function DateDiscrepancyModal({
               disabled={isProcessing}
               className="w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 sm:text-sm"
             >
-              {isProcessing ? 'Processing...' : 'Create New Lease Instance (auto-finalize current verification)'}
+              {isProcessing ? 'Processing...' : 'Create New Lease Instance'}
             </button>
             
             <button

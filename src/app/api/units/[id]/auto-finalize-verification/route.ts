@@ -46,22 +46,49 @@ export async function POST(
       );
     }
 
-    // Auto-finalize the existing verification
-    const finalizedVerification = await prisma.incomeVerification.update({
-      where: { id: existingVerification.id },
-      data: {
-        status: 'FINALIZED',
-        finalizedAt: new Date(),
-      },
+    // Instead of auto-finalizing, check if this verification has any documents uploaded
+    // If no documents were uploaded to this verification, we should delete it instead of finalizing it
+    // This preserves the original lease status when user chooses "New Lease"
+    const documentsCount = await prisma.incomeDocument.count({
+      where: {
+        verificationId: existingVerification.id
+      }
     });
 
-    console.log(`🔄 [AUTO-FINALIZE] Verification ${existingVerification.id} auto-finalized for unit ${unitId}. Reason: ${reason}`);
+    let result;
+    if (documentsCount === 0) {
+      // No documents uploaded - delete the verification to restore original status
+      await prisma.incomeVerification.delete({
+        where: { id: existingVerification.id }
+      });
+      
+      console.log(`🗑️ [AUTO-CLEANUP] Empty verification ${existingVerification.id} deleted for unit ${unitId}. Reason: ${reason}`);
+      result = {
+        message: `Removed empty verification for ${existingVerification.Lease.name}`,
+        action: 'deleted',
+        verificationId: existingVerification.id,
+        reason: reason || 'Deleted empty verification for new lease creation',
+      };
+    } else {
+      // Documents were uploaded - auto-finalize as before
+      const finalizedVerification = await prisma.incomeVerification.update({
+        where: { id: existingVerification.id },
+        data: {
+          status: 'FINALIZED',
+          finalizedAt: new Date(),
+        },
+      });
 
-    return NextResponse.json({
-      message: `Auto-finalized verification for ${existingVerification.Lease.name}`,
-      verificationId: existingVerification.id,
-      reason: reason || 'Auto-finalized for new lease creation',
-    });
+      console.log(`🔄 [AUTO-FINALIZE] Verification ${existingVerification.id} auto-finalized for unit ${unitId}. Reason: ${reason}`);
+      result = {
+        message: `Auto-finalized verification for ${existingVerification.Lease.name}`,
+        action: 'finalized', 
+        verificationId: existingVerification.id,
+        reason: reason || 'Auto-finalized for new lease creation',
+      };
+    }
+
+    return NextResponse.json(result);
 
   } catch (error) {
     console.error('Error auto-finalizing verification:', error);

@@ -504,6 +504,24 @@ function OverrideRequestItem({
     payPeriodEndDate?: string;
   }>({});
 
+  // Pre-populate form with Azure's extracted values when dialog opens for document review
+  useEffect(() => {
+    if (showReviewDialog && request.type === 'DOCUMENT_REVIEW' && request.contextualData?.document) {
+      const doc = request.contextualData.document;
+      setCorrectedValues({
+        employeeName: doc.employeeName || '',
+        employerName: doc.employerName || '',
+        grossPayAmount: doc.grossPayAmount || undefined,
+        payFrequency: doc.payFrequency || '',
+        payPeriodStartDate: doc.payPeriodStartDate ? doc.payPeriodStartDate.split('T')[0] : '',
+        payPeriodEndDate: doc.payPeriodEndDate ? doc.payPeriodEndDate.split('T')[0] : '',
+      });
+    } else if (!showReviewDialog) {
+      // Reset form when dialog closes
+      setCorrectedValues({});
+    }
+  }, [showReviewDialog]); // Removed 'request' from dependencies to prevent overwriting user changes
+
   const handleAction = (action: 'approve' | 'deny') => {
     setActionType(action);
     setShowReviewDialog(true);
@@ -1570,7 +1588,7 @@ function OverrideRequestItem({
                 <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
                   <h4 className="text-sm font-medium text-green-800 mb-3">Manual Data Entry</h4>
                   <p className="text-xs text-green-700 mb-4">
-                    Enter the correct values from the document. Leave fields blank to keep Azure's extracted values.
+                    Azure's extracted values are pre-filled below. Correct any inaccurate information by editing the fields.
                   </p>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1581,7 +1599,7 @@ function OverrideRequestItem({
                         value={correctedValues.employeeName || ''}
                         onChange={(e) => setCorrectedValues(prev => ({ ...prev, employeeName: e.target.value }))}
                         className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
-                        placeholder="Enter employee name"
+                        placeholder="Correct employee name if needed"
                       />
                     </div>
                     
@@ -1592,7 +1610,7 @@ function OverrideRequestItem({
                         value={correctedValues.employerName || ''}
                         onChange={(e) => setCorrectedValues(prev => ({ ...prev, employerName: e.target.value }))}
                         className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
-                        placeholder="Enter employer name"
+                        placeholder="Correct employer name if needed"
                       />
                     </div>
                     
@@ -1604,7 +1622,7 @@ function OverrideRequestItem({
                         value={correctedValues.grossPayAmount || ''}
                         onChange={(e) => setCorrectedValues(prev => ({ ...prev, grossPayAmount: parseFloat(e.target.value) || undefined }))}
                         className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
-                        placeholder="Enter gross pay amount"
+                        placeholder="Correct gross pay amount if needed"
                       />
                     </div>
                     

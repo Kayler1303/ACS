@@ -560,7 +560,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             console.log('[SSA-1099] Full extracted data:', JSON.stringify(extractedData, null, 2));
             
             // Extract structured fields from SSA-1099 model using correct Azure field names
-            const beneficiaryName = extractedData.Beneficiary?.valueObject?.Name?.content || 
+            let beneficiaryName = extractedData.Beneficiary?.valueObject?.Name?.content || 
                                   extractedData.Beneficiary?.content || 
                                   extractedData.Box1?.content || 
                                   extractedData.BeneficiaryName?.content ||
@@ -575,27 +575,40 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
               taxYear
             });
             
-            // If name extraction failed, log all available fields to debug
+            // If name extraction failed, try alternative access patterns
             if (!beneficiaryName) {
               console.log('[SSA-1099] Name extraction failed. All available fields:', Object.keys(extractedData));
-              console.log('[SSA-1099] Fields that might contain names:', 
-                Object.keys(extractedData).filter(key => 
-                  key.toLowerCase().includes('name') || 
-                  key.toLowerCase().includes('beneficiary') ||
-                  key.toLowerCase().includes('box1') ||
-                  key.toLowerCase().includes('recipient')
-                )
-              );
               
-              // Debug the Beneficiary field structure specifically
+              // Try alternative extraction methods for beneficiary name
+              let alternativeName = null;
+              
               if (extractedData.Beneficiary) {
-                console.log('[SSA-1099] Beneficiary field structure:', JSON.stringify(extractedData.Beneficiary, null, 2));
-                console.log('[SSA-1099] Beneficiary content alternatives:', {
-                  content: extractedData.Beneficiary.content,
-                  valueString: extractedData.Beneficiary.valueString,
-                  text: extractedData.Beneficiary.text,
-                  value: extractedData.Beneficiary.value
-                });
+                console.log('[SSA-1099] Trying alternative Beneficiary access patterns...');
+                
+                // Try direct content access
+                alternativeName = extractedData.Beneficiary.content;
+                if (alternativeName) console.log('[SSA-1099] Found name via Beneficiary.content:', alternativeName);
+                
+                // Try valueString access  
+                if (!alternativeName) {
+                  alternativeName = extractedData.Beneficiary.valueString;
+                  if (alternativeName) console.log('[SSA-1099] Found name via Beneficiary.valueString:', alternativeName);
+                }
+                
+                // Try valueObject.Name access
+                if (!alternativeName && extractedData.Beneficiary.valueObject?.Name) {
+                  alternativeName = extractedData.Beneficiary.valueObject.Name.content || 
+                                   extractedData.Beneficiary.valueObject.Name.valueString;
+                  if (alternativeName) console.log('[SSA-1099] Found name via Beneficiary.valueObject.Name:', alternativeName);
+                }
+              }
+              
+              // If we found an alternative name, use it
+              if (alternativeName) {
+                beneficiaryName = alternativeName;
+                console.log('[SSA-1099] Successfully extracted beneficiary name using alternative method:', beneficiaryName);
+              } else {
+                console.log('[SSA-1099] Could not extract beneficiary name through any method');
               }
             }
             

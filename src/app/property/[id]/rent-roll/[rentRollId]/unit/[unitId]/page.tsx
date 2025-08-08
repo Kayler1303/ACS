@@ -18,6 +18,7 @@ import { format } from 'date-fns';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { getUnitVerificationStatus, type VerificationStatus } from '@/services/verification';
+import OverrideRequestModal from '@/components/OverrideRequestModal';
 
 // --- NEW Data Structures ---
 
@@ -147,7 +148,7 @@ const formatPayFrequency = (frequency: string): string => {
 
 // --- NEW VerificationRow Component ---
 
-function VerificationRow({ verification, lease, onActionComplete }: { verification: IncomeVerification, lease: Lease, onActionComplete: () => void }) {
+function VerificationRow({ verification, lease, onActionComplete, onOpenDocumentReview }: { verification: IncomeVerification, lease: Lease, onActionComplete: () => void, onOpenDocumentReview: (doc: any, verificationId: string, leaseName: string) => void }) {
   
   const getResidentName = (residentId: string) => {
     return lease.Resident.find(r => r.id === residentId)?.name || 'Unknown Resident';
@@ -181,6 +182,10 @@ function VerificationRow({ verification, lease, onActionComplete }: { verificati
       alert(`Error: ${err instanceof Error ? err.message : 'An unexpected error occurred'}`);
     }
   };
+
+  // These functions are defined in the main component scope
+  // const openDocumentReviewModal = (defined below in main component)
+  // const submitDocumentReview = (defined below in main component)
 
   return (
     <div className="mt-4 p-4 border border-gray-200 rounded-lg bg-gray-50">
@@ -226,6 +231,14 @@ function VerificationRow({ verification, lease, onActionComplete }: { verificati
                     }`}>
                       {doc.status}
                     </span>
+                  {doc.status === 'COMPLETED' && (
+                    <button
+                      onClick={() => onOpenDocumentReview(doc as any, verification.id, lease.name)}
+                      className="text-orange-600 hover:text-orange-700 text-xs px-2 py-1 border border-orange-300 rounded"
+                    >
+                      Request Admin Review
+                    </button>
+                  )}
                   <button 
                     onClick={() => handleDelete(doc.id)}
                     className="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-100"
@@ -286,6 +299,18 @@ function VerificationRow({ verification, lease, onActionComplete }: { verificati
                   )}
                 </div>
               )}
+              {doc.documentType === 'SSA_1099' && (
+                <div className="mt-2 pt-2 border-t border-gray-200 text-xs text-gray-600 space-y-1">
+                  <p><strong>Beneficiary:</strong> {doc.employeeName || 'N/A'}</p>
+                  {doc.documentDate && (
+                    <p><strong>Tax Year:</strong> {new Date(doc.documentDate).getFullYear()}</p>
+                  )}
+                  <div className="grid grid-cols-2 gap-x-4 pt-1">
+                    <p><strong>Monthly Benefit:</strong> {doc.grossPayAmount ? `$${doc.grossPayAmount.toLocaleString()}` : 'N/A'}</p>
+                    <p><strong>Annual Benefits:</strong> {doc.calculatedAnnualizedIncome ? `$${doc.calculatedAnnualizedIncome.toLocaleString()}` : 'N/A'}</p>
+                  </div>
+                </div>
+              )}
             </li>
           ))}
         </ul>
@@ -316,19 +341,29 @@ export default function ResidentDetailPage() {
   const [isAddResidentDialogOpen, setAddResidentDialogOpen] = useState(false);
   const [isRenewalDialogOpen, setRenewalDialogOpen] = useState(false);
   const [isInitialAddResidentDialogOpen, setInitialAddResidentDialogOpen] = useState(false);
-  const [isUploadDialogOpen, setUploadDialogOpen] = useState(false);
-  const [uploadDialogData, setUploadDialogData] = useState<{
-    verificationId: string;
-    leaseName: string;
-    residents: Array<{ id: string; name: string }>;
-    hasExistingDocuments: boolean;
-    lease?: {
-      id: string;
-      name: string;
-      leaseStartDate?: string;
-      leaseEndDate?: string;
-    };
-  } | null>(null);
+    const [isUploadDialogOpen, setUploadDialogOpen] = useState(false);
+   const [uploadDialogData, setUploadDialogData] = useState<{
+     verificationId: string;
+     leaseName: string;
+     residents: Array<{ id: string; name: string }>;
+     hasExistingDocuments: boolean;
+     lease?: {
+       id: string;
+       name: string;
+       leaseStartDate?: string;
+       leaseEndDate?: string;
+     };
+   } | null>(null);
+
+   // override request modal state
+  const [overrideModal, setOverrideModal] = useState<{
+    isOpen: boolean;
+    documentId: string | null;
+    verificationId: string | null;
+    residentId: string | null;
+    title: string;
+    description: string;
+  }>({ isOpen: false, documentId: null, verificationId: null, residentId: null, title: '', description: '' });
 
   // Income discrepancy resolution state
   // Income discrepancy modal state - REMOVED (replaced with leaseDiscrepancyModal)
@@ -408,9 +443,8 @@ export default function ResidentDetailPage() {
         throw new Error(errorData.error || 'Failed to mark resident as no income');
       }
 
-      // Refresh the data
-      fetchTenancyData(false);
-      fetchUnitVerificationStatus();
+      // Refresh data with proper timing after finalization
+      await refreshDataAfterFinalization();
     } catch (error) {
       console.error('Error marking resident as no income:', error);
       alert(error instanceof Error ? error.message : 'Failed to mark resident as no income');
@@ -950,8 +984,8 @@ export default function ResidentDetailPage() {
       
       // Close dialog and refresh data
       handleCloseResidentFinalizationDialog();
-      fetchTenancyData(false);
-      fetchUnitVerificationStatus();
+      
+      await refreshDataAfterFinalization();
       
       if (result.verificationFinalized) {
         toast.success(`${resident.name}'s income finalized! All residents verified - lease verification complete!`);
@@ -1010,6 +1044,8 @@ export default function ResidentDetailPage() {
       }
       const data = await response.json();
       setTenancyData(data);
+      // Immediately recompute status after data changes
+      setTimeout(() => { fetchUnitVerificationStatus(); }, 0);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {
@@ -1020,14 +1056,15 @@ export default function ResidentDetailPage() {
   // Initial data fetch with stable dependencies  
   useEffect(() => {
     fetchTenancyData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [propertyId, rentRollId, unitId]); // Only re-fetch when URL params change
 
-  // Call fetchUnitVerificationStatus when tenancyData is available (optimized to prevent loops)
+  // Recompute verification status whenever tenancy data changes
   useEffect(() => {
     if (tenancyData) {
       fetchUnitVerificationStatus();
     }
-  }, [tenancyData?.unit?.id]); // Only re-run if we get a different unit
+  }, [tenancyData]);
 
   // Track processing document count to prevent unnecessary polling
   const processingDocCount = useMemo(() => {
@@ -1098,6 +1135,7 @@ export default function ResidentDetailPage() {
     } else {
       console.log('[POLLING] ✅ No processing documents - polling disabled');
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [processingDocCount]); // Only re-run when processing count changes
 
   // Function to fetch AMI bucket data for a completed lease
@@ -1113,22 +1151,115 @@ export default function ResidentDetailPage() {
     }
   };
 
+  // Helper function to refresh data with proper timing after finalization actions
+  const refreshDataAfterFinalization = async () => {
+    console.log('[REFRESH] Starting post-finalization data refresh');
+    
+    // First immediate refresh
+    await fetchTenancyData(false);
+    
+           // Add a delay for database consistency, then refresh again to ensure we have the latest data
+      setTimeout(async () => {
+        console.log('[REFRESH] Performing delayed refresh for accurate status');
+        await fetchTenancyData(false);
+        await fetchUnitVerificationStatus();
+      }, 500);
+  };
+
+  // Document review modal functions
+  const openDocumentReviewModal = (doc: any, verificationId: string, leaseName: string) => {
+    setOverrideModal({
+      isOpen: true,
+      documentId: doc.id,
+      verificationId,
+      residentId: doc.residentId || null,
+      title: 'Request Admin Review of Document',
+      description: `If the automatic analysis for this ${doc.documentType} looks incorrect, you can request an admin review for ${leaseName}. Please describe the issue and the correct values if known.`
+    });
+  };
+
+  const submitDocumentReview = async (explanation: string) => {
+    if (!overrideModal.documentId) return;
+    try {
+      const res = await fetch('/api/override-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'DOCUMENT_REVIEW',
+          userExplanation: explanation,
+          documentId: overrideModal.documentId,
+          verificationId: overrideModal.verificationId,
+          residentId: overrideModal.residentId
+        })
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to submit admin review request');
+      }
+      toast.success('Admin review requested');
+      setOverrideModal({ isOpen: false, documentId: null, verificationId: null, residentId: null, title: '', description: '' });
+      await refreshDataAfterFinalization();
+    } catch (e) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : 'Failed to request admin review');
+    }
+  };
+
   // Function to fetch verification status for this unit using already available data
   const fetchUnitVerificationStatus = async () => {
     if (!tenancyData?.unit) return;
     
     try {
-      // Check if we're viewing a future lease (no Tenancy record)
-      const isFutureLease = !tenancyData.lease?.Tenancy;
+      // Find the current lease (one with a Tenancy record) for status calculation
+      const currentLease = tenancyData.unit.Lease?.find((lease: any) => lease.Tenancy);
+      const isViewingCurrentLease = currentLease && currentLease.id === tenancyData.lease?.id;
       
-      console.log(`[TENANCY DEBUG] Lease ID: ${tenancyData.lease?.id}`);
-      console.log(`[TENANCY DEBUG] Lease Name: ${tenancyData.lease?.name}`);
-      console.log(`[TENANCY DEBUG] Has Tenancy:`, !!tenancyData.lease?.Tenancy);
-      console.log(`[TENANCY DEBUG] Tenancy:`, tenancyData.lease?.Tenancy);
-      console.log(`[TENANCY DEBUG] Is Future Lease:`, isFutureLease);
+      console.log(`[TENANCY DEBUG] Current Lease Found:`, !!currentLease);
+      console.log(`[TENANCY DEBUG] Current Lease ID:`, currentLease?.id);
+      console.log(`[TENANCY DEBUG] Viewing Lease ID:`, tenancyData.lease?.id);
+      console.log(`[TENANCY DEBUG] Is Viewing Current Lease:`, isViewingCurrentLease);
       
-                          if (isFutureLease) {
-        // For future leases, calculate status based on the specific lease we're viewing
+      if (currentLease) {
+        // We have a current lease with Tenancy - let the backend verification status determine the display
+        console.log(`[CURRENT LEASE STATUS] Current lease found, checking verification status from backend`);
+        
+        // For current leases, check if any verification is finalized AND all residents are actually finalized
+        const latestVerification = currentLease.IncomeVerification?.[0];
+        const allResidents = currentLease.Resident || [];
+        const finalizedResidents = allResidents.filter((resident: any) => resident.incomeFinalized);
+        
+        if (latestVerification?.status === 'FINALIZED' && 
+            allResidents.length > 0 && 
+            finalizedResidents.length === allResidents.length) {
+          console.log(`[CURRENT LEASE STATUS] Verification finalized AND all residents finalized - setting to Verified`);
+          setUnitVerificationStatus('Verified');
+                 } else {
+           // Check if any documents need admin review
+           const allResidents = currentLease.Resident || [];
+           const hasDocumentsNeedingReview = allResidents.some((resident: any) => 
+             (resident.IncomeDocument || []).some((doc: any) => doc.status === 'NEEDS_REVIEW')
+           );
+          
+          if (hasDocumentsNeedingReview) {
+            console.log(`[CURRENT LEASE STATUS] Documents need admin review - setting to Waiting for Admin Review`);
+            setUnitVerificationStatus('Waiting for Admin Review');
+          } else {
+            // Check if all residents have finalized income (like the verification service does)
+            const finalizedResidents = allResidents.filter((resident: any) => resident.incomeFinalized);
+            console.log(`[CURRENT LEASE STATUS] All residents: ${allResidents.length}, Finalized: ${finalizedResidents.length}`);
+            
+            if (allResidents.length > 0 && finalizedResidents.length === allResidents.length) {
+              console.log(`[CURRENT LEASE STATUS] All residents finalized - setting to Verified`);
+              setUnitVerificationStatus('Verified');
+            } else {
+              console.log(`[CURRENT LEASE STATUS] Setting to default Out of Date Income Documents`);
+              setUnitVerificationStatus('Out of Date Income Documents');
+            }
+          }
+        }
+      } else {
+        // No current lease with Tenancy - this means we're viewing a future/provisional lease
+        console.log(`[FUTURE LEASE STATUS] No current lease found, calculating status for provisional lease`);
         const allResidents = tenancyData.lease?.Resident || [];
         const finalizedResidents = allResidents.filter((r: any) => r.incomeFinalized);
         
@@ -1154,13 +1285,6 @@ export default function ResidentDetailPage() {
             setUnitVerificationStatus('In Progress - Finalize to Process');
           }
         }
-      } else {
-        // For current leases, use the existing verification service
-        const verificationStatus = getUnitVerificationStatus(
-          tenancyData.unit as any, // Type assertion to handle the interface differences
-          new Date(tenancyData.rentRoll.date)
-        );
-        setUnitVerificationStatus(verificationStatus);
       }
     } catch (error) {
       console.error('Error calculating unit verification status:', error);
@@ -1212,20 +1336,33 @@ export default function ResidentDetailPage() {
         console.log(`[AUTO DISCREPANCY CHECK] ❌ Current lease detected - proceeding with discrepancy check`);
         
         // For current leases, check for legitimate discrepancies
+        // IMPORTANT: Skip this check if residents were finalized through individual discrepancy resolution
+        // If a resident's calculatedAnnualizedIncome equals their verifiedIncome, they went through
+        // the discrepancy resolution process during individual finalization
         const residentsWithDiscrepancies = allResidents.filter(resident => {
           const rentRollIncome = resident.annualizedIncome || 0;
           const verifiedIncome = resident.calculatedAnnualizedIncome || 0;
           const discrepancy = Math.abs(rentRollIncome - verifiedIncome);
           const hasDiscrepancy = discrepancy > 1.00;
           
+          // If there's a discrepancy AND the resident has been finalized, check if they already
+          // resolved it through the individual resident discrepancy modal
+          // This happens when verifiedIncome matches what was set during finalization
+          const wasResolvedDuringFinalization = resident.incomeFinalized && 
+                                               resident.verifiedIncome && 
+                                               Math.abs(verifiedIncome - resident.verifiedIncome) < 1.00;
+          
           console.log(`[AUTO DISCREPANCY CHECK] Resident ${resident.name}:`, {
             rentRollIncome,
             verifiedIncome,
             discrepancy,
-            hasDiscrepancy
+            hasDiscrepancy,
+            wasResolvedDuringFinalization,
+            residentVerifiedIncome: resident.verifiedIncome
           });
           
-          return hasDiscrepancy;
+          // Only count as having a discrepancy if there's a real discrepancy AND it wasn't already resolved
+          return hasDiscrepancy && !wasResolvedDuringFinalization;
         });
 
         console.log(`[AUTO DISCREPANCY CHECK] Residents with discrepancies: ${residentsWithDiscrepancies.length}`);
@@ -1474,6 +1611,14 @@ export default function ResidentDetailPage() {
                 const allResidents = period.Resident || [];
                 const finalizedResidents = allResidents.filter((r: any) => r.incomeFinalized);
                 
+                console.log(`[DEBUG VACANT STATUS] Lease ${period.id}:`, {
+                  isFutureLease,
+                  allResidentsCount: allResidents.length,
+                  residents: allResidents.map((r: any) => r.name),
+                  periodKeys: Object.keys(period),
+                  hasResident: !!period.Resident
+                });
+                
                 if (allResidents.length === 0) {
                   currentVerificationStatus = 'Vacant';
                 } else if (finalizedResidents.length === allResidents.length) {
@@ -1490,6 +1635,7 @@ export default function ResidentDetailPage() {
                 }
               } else {
                 // For current leases, use the unit-level verification status
+                console.log(`[RENDER] Using unitVerificationStatus:`, unitVerificationStatus, 'for lease:', period.name);
                 currentVerificationStatus = unitVerificationStatus;
               }
                 
@@ -1923,9 +2069,9 @@ export default function ResidentDetailPage() {
                                         
                                         return (
                                           <div key={doc.id} className={containerClasses}>
-                                          {(needsReview || isDenied) && (
+                                          {(needsReview || isDenied || isApproved) && (
                                             <div className={`mb-2 text-xs font-medium flex items-center ${
-                                              isDenied ? 'text-red-700' : 'text-yellow-700'
+                                              isDenied ? 'text-red-700' : (isApproved ? 'text-green-700' : 'text-yellow-700')
                                             }`}>
                                               <span className="mr-1">{statusIcon}</span>
                                               {statusText}
@@ -1942,22 +2088,12 @@ export default function ResidentDetailPage() {
                                             </div>
                                           )}
                                           
-                                          {needsReview && latestOverrideRequest?.userExplanation && (() => {
-                                            const explanation = latestOverrideRequest.userExplanation;
-                                            // Skip Azure-specific technical explanations since user-friendly message already shows
-                                            const isAzureExplanation = explanation.includes('Azure Document Intelligence') || 
-                                                                      explanation.includes('Confidence:') ||
-                                                                      explanation.includes('extraction requires admin review');
-                                            
-                                            if (isAzureExplanation) return null;
-                                            
-                                            return (
-                                              <div className="mb-2 p-2 bg-yellow-100 border border-yellow-200 rounded text-xs">
-                                                <div className="font-medium text-yellow-800 mb-1">Reason for Review:</div>
-                                                <div className="text-yellow-700">{explanation}</div>
-                                              </div>
-                                            );
-                                          })()}
+                                          {needsReview && (
+                                            <div className="mb-2 p-2 bg-yellow-100 border border-yellow-200 rounded text-xs">
+                                              <div className="font-medium text-yellow-800 mb-1">⏳ Waiting for Admin Review</div>
+                                              <div className="text-yellow-700">Needs Admin Review for Verification</div>
+                                            </div>
+                                          )}
                                           <div className="flex justify-between items-start mb-2">
                                             <div className="flex items-center space-x-2">
                                               <span className={badgeClasses}>
@@ -2009,20 +2145,22 @@ export default function ResidentDetailPage() {
                                               )}
                                             </div>
                                           )}
-                                          
-                                          {/* Show admin review message for documents needing review */}
-                                          {needsReview && (
-                                            <div className="mt-2 text-xs text-yellow-700 font-medium">
-                                              Status: Pending Admin Review
+
+                                          {/* User-triggered admin review for completed documents */}
+                                          {doc.status === 'COMPLETED' && !hasPendingRequest && (
+                                            <div className="mt-2 pt-2 border-t border-gray-100">
+                                              <button
+                                                onClick={() => openDocumentReviewModal(doc as any, verification.id, period.name)}
+                                                className="text-xs text-orange-600 hover:text-orange-700 hover:underline"
+                                              >
+                                                🔍 Request Admin Review
+                                              </button>
+                                              <div className="text-xs text-gray-500 mt-1">
+                                                Think the extraction is incorrect? Request manual review.
+                                              </div>
                                             </div>
                                           )}
-                                          
-                                          {doc.documentType === 'PAYSTUB' && needsReview && (
-                                            <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-700">
-                                              This paystub could not be automatically processed and requires admin review.
-                                            </div>
-                                          )}
-                                          
+
                                           {doc.documentType === 'PAYSTUB' && !needsReview && (
                                             <div className="grid grid-cols-2 gap-3 text-xs">
                                               {doc.payFrequency && (
@@ -2073,10 +2211,9 @@ export default function ResidentDetailPage() {
                                             </div>
                                           )}
                                           
-                                          {doc.documentType === 'W2' && (
+                                          {doc.documentType === 'W2' && doc.status === 'COMPLETED' && doc.box1_wages && (
                                             <div className="space-y-2">
-                                              {doc.status === 'COMPLETED' && doc.box1_wages ? (
-                                                // Successfully extracted W2 data
+                                                {/* Successfully extracted W2 data */}
                                                 <div className="grid grid-cols-2 gap-3 text-xs">
                                                   {doc.taxYear && (
                                                     <div>
@@ -2123,23 +2260,18 @@ export default function ResidentDetailPage() {
                                                     </div>
                                                   )}
                                                 </div>
-                                              ) : (
-                                                // Failed extraction - show manual entry needed
-                                                <div className="bg-orange-50 border border-orange-200 rounded-md p-3">
-                                                  <div className="flex items-center mb-2">
-                                                    <svg className="w-4 h-4 text-orange-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                                                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                                                    </svg>
-                                                    <span className="text-sm font-medium text-orange-800">W2 Data Extraction Failed</span>
-                                                  </div>
-                                                  <p className="text-xs text-orange-700 mb-2">
-                                                    Our system couldn't automatically read the W2 data. Manual review is required.
-                                                  </p>
-                                                  <div className="text-xs text-orange-600">
-                                                    <strong>Next step:</strong> Click "Finalize Income" to manually enter the W2 information.
-                                                  </div>
-                                                </div>
+                                            </div>
+                                          )}
+                                          {doc.documentType === 'SSA_1099' && (
+                                            <div className="mt-2 pt-2 border-t border-gray-200 text-xs text-gray-600 space-y-1">
+                                              <p><strong>Beneficiary:</strong> {doc.employeeName || 'N/A'}</p>
+                                              {doc.documentDate && (
+                                                <p><strong>Tax Year:</strong> {new Date(doc.documentDate).getFullYear()}</p>
                                               )}
+                                              <div className="grid grid-cols-2 gap-x-4 pt-1">
+                                                <p><strong>Monthly Benefit:</strong> {doc.grossPayAmount ? `$${doc.grossPayAmount.toLocaleString()}` : 'N/A'}</p>
+                                                <p><strong>Annual Benefits:</strong> {doc.calculatedAnnualizedIncome ? `$${doc.calculatedAnnualizedIncome.toLocaleString()}` : 'N/A'}</p>
+                                              </div>
                                             </div>
                                           )}
                                         </div>
@@ -2459,45 +2591,60 @@ export default function ResidentDetailPage() {
       )}
 
       {/* Resident Finalization Dialog */}
-      {residentFinalizationDialog.isOpen && residentFinalizationDialog.verification && residentFinalizationDialog.resident && (
-        <ResidentFinalizationDialog
-          isOpen={residentFinalizationDialog.isOpen}
-          onClose={() => setResidentFinalizationDialog({ isOpen: false, verification: null, resident: null, leaseName: '' })}
-          onConfirm={async (calculatedIncome: number) => {
-            if (!residentFinalizationDialog.verification || !residentFinalizationDialog.resident) return;
-            
-            try {
-              const response = await fetch(
-                `/api/leases/${residentFinalizationDialog.verification.leaseId}/verifications/${residentFinalizationDialog.verification.id}/residents/${residentFinalizationDialog.resident.id}/finalize`,
-                {
-                  method: 'PATCH',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ calculatedIncome })
-                }
-              );
+            {residentFinalizationDialog.isOpen && residentFinalizationDialog.verification && residentFinalizationDialog.resident && (
+         <ResidentFinalizationDialog
+           isOpen={residentFinalizationDialog.isOpen}
+           onClose={() => setResidentFinalizationDialog({ isOpen: false, verification: null, resident: null, leaseName: '' })}
+           onConfirm={async (calculatedIncome: number) => {
+             if (!residentFinalizationDialog.verification || !residentFinalizationDialog.resident) return;
+             
+             try {
+               const response = await fetch(
+                 `/api/leases/${residentFinalizationDialog.verification.leaseId}/verifications/${residentFinalizationDialog.verification.id}/residents/${residentFinalizationDialog.resident.id}/finalize`,
+                 {
+                   method: 'PATCH',
+                   headers: { 'Content-Type': 'application/json' },
+                   body: JSON.stringify({ calculatedIncome })
+                 }
+               );
 
-              if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to finalize resident income');
-              }
+               if (!response.ok) {
+                 const errorData = await response.json();
+                 throw new Error(errorData.error || 'Failed to finalize resident income');
+               }
 
-              // Refresh the data
-              fetchTenancyData(false);
-              fetchUnitVerificationStatus();
-              
-              // Close the dialog
-              setResidentFinalizationDialog({ isOpen: false, verification: null, resident: null, leaseName: '' });
-            } catch (error) {
-              console.error('Error finalizing resident income:', error);
-              alert(error instanceof Error ? error.message : 'Failed to finalize resident income');
-            }
-          }}
-          verification={residentFinalizationDialog.verification}
-          resident={residentFinalizationDialog.resident}
-          leaseName={residentFinalizationDialog.leaseName}
-          onDataRefresh={() => fetchTenancyData(false)} // Pass the refresh callback
-        />
-      )}
+               // Refresh data with proper timing after finalization
+               await refreshDataAfterFinalization();
+               
+               // Close the dialog
+               setResidentFinalizationDialog({ isOpen: false, verification: null, resident: null, leaseName: '' });
+             } catch (error) {
+               console.error('Error finalizing resident income:', error);
+               alert(error instanceof Error ? error.message : 'Failed to finalize resident income');
+             }
+           }}
+           verification={residentFinalizationDialog.verification}
+           resident={residentFinalizationDialog.resident}
+           leaseName={residentFinalizationDialog.leaseName}
+           onDataRefresh={refreshDataAfterFinalization}
+         />
+       )}
+
+       {overrideModal.isOpen && (
+         <OverrideRequestModal
+           isOpen={overrideModal.isOpen}
+           onClose={() => setOverrideModal({ isOpen: false, documentId: null, verificationId: null, residentId: null, title: '', description: '' })}
+           onSubmit={submitDocumentReview}
+           type="DOCUMENT_REVIEW"
+           context={{
+             title: overrideModal.title,
+             description: overrideModal.description,
+             documentId: overrideModal.documentId || undefined,
+             verificationId: overrideModal.verificationId || undefined,
+             residentId: overrideModal.residentId || undefined
+           }}
+         />
+       )}
 
       {/* Lease-Level Discrepancy Resolution Modal */}
       {leaseDiscrepancyModal.isOpen && leaseDiscrepancyModal.lease && leaseDiscrepancyModal.verification && (
@@ -2527,6 +2674,7 @@ export default function ResidentDetailPage() {
           }}
         />
       )}
+
       </div>
     </div>
   );

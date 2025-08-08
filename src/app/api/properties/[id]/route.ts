@@ -48,7 +48,27 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Property not found' }, { status: 404 });
     }
 
-    return NextResponse.json(property);
+    // Check for pending deletion request
+    const pendingDeletionRequest = await prisma.overrideRequest.findFirst({
+      where: {
+        propertyId: propertyId,
+        type: 'PROPERTY_DELETION',
+        status: 'PENDING'
+      },
+      select: {
+        id: true,
+        userExplanation: true,
+        createdAt: true
+      }
+    });
+
+    // Add the pending deletion request to the property data
+    const propertyWithDeletionStatus = {
+      ...property,
+      pendingDeletionRequest: pendingDeletionRequest || null
+    };
+
+    return NextResponse.json(propertyWithDeletionStatus);
 
   } catch (error: unknown) {
     console.error('Error fetching full property data:', error);

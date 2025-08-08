@@ -124,6 +124,12 @@ export default function IncomeVerificationDocumentUploadForm({
 
         if (!response.ok) {
           const data = await response.json();
+          
+          // Handle duplicate document error specifically
+          if (response.status === 409) {
+            throw new Error(`${data.message || `Duplicate document detected for ${fileData.file.name}`}`);
+          }
+          
           throw new Error(data.error || `Failed to upload ${fileData.file.name}`);
         }
       }
@@ -271,7 +277,7 @@ export default function IncomeVerificationDocumentUploadForm({
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ reason: 'Auto-finalized due to new lease creation' }),
+          body: JSON.stringify({ reason: 'User chose to create new lease instead of using current lease for uploaded documents' }),
         });
         
         if (finalizeResponse.ok) {
@@ -359,6 +365,12 @@ export default function IncomeVerificationDocumentUploadForm({
 
         if (!uploadResponse.ok) {
           const data = await uploadResponse.json();
+          
+          // Handle duplicate document error specifically
+          if (uploadResponse.status === 409) {
+            throw new Error(`${data.message || `Duplicate document detected for ${fileData.file.name}`}`);
+          }
+          
           throw new Error(data.error || `Failed to upload ${fileData.file.name} to new lease`);
         }
       }
@@ -499,6 +511,12 @@ export default function IncomeVerificationDocumentUploadForm({
 
         if (!response.ok) {
           const data = await response.json();
+          
+          // Handle duplicate document error specifically
+          if (response.status === 409) {
+            throw new Error(`${data.message || 'Duplicate document detected'}`);
+          }
+          
           throw new Error(data.error || 'Upload failed');
         }
       }
@@ -603,7 +621,9 @@ export default function IncomeVerificationDocumentUploadForm({
                     <option value="PAYSTUB">Pay Stub</option>
                     <option value="BANK_STATEMENT">Bank Statement</option>
                     <option value="OFFER_LETTER">Offer Letter</option>
-                    <option value="SOCIAL_SECURITY">Social Security</option>
+                    <option value="SOCIAL_SECURITY">Social Security Letter</option>
+                    <option value="SSA_1099">SSA-1099 (Tax Form)</option>
+                    <option value="OTHER">Other</option>
                   </select>
                   <button
                     type="button"

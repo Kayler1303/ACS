@@ -150,6 +150,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
   const [showDeletionModal, setShowDeletionModal] = useState(false);
   const [deletionReason, setDeletionReason] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [hasPendingDeletion, setHasPendingDeletion] = useState(false);
   const [verificationData, setVerificationData] = useState<PropertyVerificationSummary | null>(null);
   const [verificationLoading, setVerificationLoading] = useState(false);
   const [provisionalLeases, setProvisionalLeases] = useState<ProvisionalLease[]>([]);
@@ -202,7 +203,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
   };
 
   // Function to load future lease selections from localStorage
-  const loadFutureLeaseSelections = (): Set<string> => {
+  const loadFutureLeaseSelections = useCallback((): Set<string> => {
     try {
       const saved = localStorage.getItem(`futureLeaseSelections_${property.id}`);
       if (saved) {
@@ -213,7 +214,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       console.error('Error loading future lease selections from localStorage:', error);
     }
     return new Set();
-  };
+  }, [property.id]);
   const [utilitySelection, setUtilitySelection] = useState<string>('NO');
   const [uploadingCompliance, setUploadingCompliance] = useState(false);
   const [verificationStatuses, setVerificationStatuses] = useState<VerificationStatus[]>([]);
@@ -392,7 +393,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
   useEffect(() => {
     const savedSelections = loadFutureLeaseSelections();
     setSelectedFutureLeases(savedSelections);
-  }, [property.id]);
+  }, [property.id, loadFutureLeaseSelections]);
 
   // Function to fetch AMI bucket data for a specific provisional lease
   const fetchAmiBucketForProvisionalLease = async (leaseId: string) => {
@@ -683,7 +684,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
 
     console.log('Final processed tenancies:', processedWithCompliance.length);
     setProcessedTenancies(processedWithCompliance);
-  }, [selectedRentRollId, property.RentRoll, property.Unit, hudIncomeLimits, complianceOption, includeRentAnalysis, lihtcRentData, includeUtilityAllowances, utilityAllowances, verificationData, provisionalLeases, getActualBucket, getActualBucketWithRentAnalysis, getComplianceBucket]);
+  }, [selectedRentRollId, property.RentRoll, property.Unit, hudIncomeLimits, complianceOption, includeRentAnalysis, lihtcRentData, includeUtilityAllowances, utilityAllowances, verificationData, provisionalLeases, getActualBucket, getActualBucketWithRentAnalysis, getComplianceBucket, futureLeases]);
 
   // Handle provisional lease checkbox changes
   const handleProvisionalLeaseToggle = (leaseId: string) => {
@@ -748,6 +749,11 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
 
 
   const handleRequestDeletion = () => {
+    // Check if there's already a pending deletion request
+    if (property.pendingDeletionRequest) {
+      alert('A deletion request for this property is already pending review');
+      return;
+    }
     setShowDeletionModal(true);
   };
 
@@ -776,6 +782,17 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       alert(data.message);
       setShowDeletionModal(false);
       setDeletionReason('');
+      setHasPendingDeletion(true);
+      
+      // Update property state to include the new pending deletion request
+      setProperty(prev => ({
+        ...prev,
+        pendingDeletionRequest: {
+          id: data.requestId,
+          userExplanation: deletionReason,
+          createdAt: new Date()
+        }
+      }));
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : 'An unexpected error occurred');
     } finally {
@@ -1873,29 +1890,63 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
 
       {/* Delete Property Section */}
       <div className="mt-12 pt-8 border-t border-gray-200">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-          <div className="flex items-start">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />                                                              </svg>
-            </div>
-            <div className="ml-3 flex-1">
-                            <h3 className="text-sm font-medium text-red-800">Request Property Deletion</h3>
-              <div className="mt-2 text-sm text-red-700">
-                <p>Submit a request to delete this property. An administrator will review your request before any action is taken.</p>
+        {property.pendingDeletionRequest ? (
+          // Show status when deletion request is pending
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.293l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd" />
+                </svg>
               </div>
-              <div className="mt-4">
-                <button
-                  onClick={handleRequestDeletion}
-                  disabled={isRequestingDeletion}
-                  className="bg-red-600 border border-transparent rounded-md py-2 px-4 inline-flex justify-center text-sm font-medium text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
-                >
-                  {isRequestingDeletion ? 'Submitting...' : 'Request Property Deletion'}
-                </button>
+              <div className="ml-3 flex-1">
+                <h3 className="text-sm font-medium text-yellow-800">Property Deletion Request Has Been Submitted & Is Under Review</h3>
+                <div className="mt-2 text-sm text-yellow-700">
+                  <p>Your request to delete this property has been submitted and is currently being reviewed by an administrator.</p>
+                  <p className="mt-2">
+                    <strong>Submitted:</strong> {new Date(property.pendingDeletionRequest.createdAt).toLocaleDateString()} at {new Date(property.pendingDeletionRequest.createdAt).toLocaleTimeString()}
+                  </p>
+                  <p className="mt-1">
+                    <strong>Reason:</strong> {property.pendingDeletionRequest.userExplanation}
+                  </p>
+                </div>
+                <div className="mt-4">
+                  <div className="inline-flex items-center px-3 py-2 border border-yellow-300 shadow-sm text-sm leading-4 font-medium rounded-md text-yellow-700 bg-yellow-100 cursor-not-allowed">
+                    <svg className="h-4 w-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                    </svg>
+                    Pending Admin Review
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        ) : (
+          // Show normal deletion request interface
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />                                                              </svg>
+              </div>
+              <div className="ml-3 flex-1">
+                <h3 className="text-sm font-medium text-red-800">Request Property Deletion</h3>
+                <div className="mt-2 text-sm text-red-700">
+                  <p>Submit a request to delete this property. An administrator will review your request before any action is taken.</p>
+                </div>
+                <div className="mt-4">
+                  <button
+                    onClick={handleRequestDeletion}
+                    disabled={isRequestingDeletion}
+                    className="bg-red-600 border border-transparent rounded-md py-2 px-4 inline-flex justify-center text-sm font-medium text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
+                  >
+                    {isRequestingDeletion ? 'Submitting...' : 'Request Property Deletion'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Utility Allowances Modal */}
