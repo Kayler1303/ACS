@@ -73,7 +73,7 @@ export async function GET(
 
     const latestRentRollDate = new Date(property.RentRoll[0].date);
     const units: UnitVerificationData[] = [];
-    let summary = {
+    const summary = {
       verified: 0,
       outOfDate: 0,
       vacant: 0,
@@ -258,19 +258,9 @@ export async function GET(
         }
       }
       
-      // Automatically create override request for "Needs Investigation" status
-      if (verificationStatus === 'Needs Investigation') {
-        try {
-          await createAutoOverrideRequest({
-            type: 'INCOME_DISCREPANCY',
-            unitId: unit.id,
-            userId: session.user.id,
-            systemExplanation: `System detected income discrepancy for Unit ${unit.unitNumber}. Verified income does not match compliance income. Admin review required to resolve discrepancy.`
-          });
-        } catch (overrideError) {
-          console.error('Failed to create auto-override request for income discrepancy:', overrideError);
-        }
-      }
+      // Note: Income discrepancy requests should be created at the resident level, not unit level
+      // This automatic unit-level override creation was causing inappropriate admin review requests
+      // Resident-level discrepancy handling is done through the ResidentFinalizationDialog and individual resident workflows
       
       
         
@@ -280,6 +270,29 @@ export async function GET(
         console.log(`[DEBUG Unit 0101] Total verified income: $${totalVerifiedIncome}`);
         console.log(`[DEBUG Unit 0101] Discrepancy: $${Math.abs(totalUploadedIncome - totalVerifiedIncome)}`);
         console.log(`[DEBUG Unit 0101] Verification status: ${verificationStatus}`);
+      }
+
+      // Debug logging for Unit 0208 to understand finalization issue
+      if (unit.unitNumber === '0208') {
+        console.log(`[DEBUG Unit 0208] Unit ID: ${unit.id}`);
+        console.log(`[DEBUG Unit 0208] Current lease:`, currentLease?.id);
+        console.log(`[DEBUG Unit 0208] Residents in lease:`, (currentLease?.Resident || []).map((r: any) => ({
+          id: r.id,
+          name: r.name,
+          incomeFinalized: r.incomeFinalized,
+          hasNoIncome: r.hasNoIncome,
+          calculatedAnnualizedIncome: r.calculatedAnnualizedIncome
+        })));
+        console.log(`[DEBUG Unit 0208] Documents count:`, (currentLease?.Resident || []).flatMap((r: any) => r.IncomeDocument || []).length);
+        console.log(`[DEBUG Unit 0208] Document statuses:`, (currentLease?.Resident || []).flatMap((r: any) => r.IncomeDocument || []).map((d: any) => ({
+          id: d.id,
+          type: d.documentType,
+          status: d.status,
+          residentId: d.residentId
+        })));
+        console.log(`[DEBUG Unit 0208] Verification from service: ${verificationStatus}`);
+        console.log(`[DEBUG Unit 0208] Total uploaded income: $${totalUploadedIncome}`);
+        console.log(`[DEBUG Unit 0208] Total verified income: $${totalVerifiedIncome}`);
       }
 
       // Count documents
