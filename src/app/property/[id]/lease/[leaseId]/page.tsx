@@ -4,6 +4,11 @@ import { useParams, useRouter } from 'next/navigation';
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import IncomeVerificationUploadDialog from '@/components/IncomeVerificationUploadDialog';
+import CreateLeaseDialog from '@/components/CreateLeaseDialog';
+import InitialAddResidentDialog from '@/components/InitialAddResidentDialog';
+import AddResidentDialog from '@/components/AddResidentDialog';
+import RenewalDialog from '@/components/RenewalDialog';
+import VerificationFinalizationDialog from '@/components/VerificationFinalizationDialog';
 
 interface Resident {
   id: string;
@@ -65,12 +70,17 @@ export default function LeaseDetailPage() {
   const [isCreateLeaseDialogOpen, setCreateLeaseDialogOpen] = useState(false);
   const [isInitialAddResidentDialogOpen, setInitialAddResidentDialogOpen] = useState(false);
   const [isAddResidentDialogOpen, setAddResidentDialogOpen] = useState(false);
+  const [isRenewalDialogOpen, setRenewalDialogOpen] = useState(false);
   const [isUploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [finalizationDialog, setFinalizationDialog] = useState<{
     isOpen: boolean;
     verification: IncomeVerification | null;
   }>({ isOpen: false, verification: null });
   const [selectedResidentForUpload, setSelectedResidentForUpload] = useState<Resident | null>(null);
+  
+  // Workflow state
+  const [selectedLeaseForResident, setSelectedLeaseForResident] = useState<any>(null);
+  const [isNewLeaseWorkflow, setIsNewLeaseWorkflow] = useState(false);
 
   // Define handleRefresh first (before any conditional returns)
   const handleRefresh = useCallback(async () => {
@@ -86,7 +96,6 @@ export default function LeaseDetailPage() {
       
       const data = await response.json();
       setLeaseData(data);
-      console.log('Lease data loaded:', data);
 
       // If this lease has a tenancy (is part of a rent roll), redirect to the unit page
       if (data.lease.Tenancy) {
@@ -120,6 +129,127 @@ export default function LeaseDetailPage() {
     } catch (error) {
       console.error('Error marking resident as no income:', error);
       // Could add toast notification here
+    }
+  };
+
+  // Create New Lease workflow functions
+  const handleCreateLease = async (leaseData: { name: string; leaseStartDate: string; leaseEndDate: string; leaseRent: number | null }) => {
+    try {
+      const res = await fetch(`/api/units/${unit.id}/leases`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(leaseData),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to create lease');
+      }
+
+      const newLease = await res.json();
+      
+      setCreateLeaseDialogOpen(false);
+      
+      // Automatically open the "Add Resident" dialog for the newly created lease
+      setSelectedLeaseForResident(newLease);
+      setIsNewLeaseWorkflow(true);
+      setInitialAddResidentDialogOpen(true);
+      
+      handleRefresh();
+    } catch (err: unknown) {
+      alert(`Error creating lease: ${err instanceof Error ? err.message : 'An unexpected error occurred'}`);
+    }
+  };
+
+  // Resident addition workflow functions
+  const handleAddResidents = async (residents: Array<{ name: string }>) => {
+    if (!selectedLeaseForResident) return;
+
+    try {
+      const response = await fetch(`/api/leases/${selectedLeaseForResident.id}/residents`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ residents }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to add residents');
+      }
+
+      setAddResidentDialogOpen(false);
+      setRenewalDialogOpen(false);
+      setSelectedLeaseForResident(null);
+      setIsNewLeaseWorkflow(false);
+      
+      handleRefresh();
+    } catch (error) {
+      console.error('Error adding residents:', error);
+      alert(`Error adding residents: ${error instanceof Error ? error.message : 'An unexpected error occurred'}`);
+    }
+  };
+
+  // Handler for renewal dialog (handles both selected existing residents and new residents)
+  const handleRenewalSelection = async (selectedResidentIds: string[], newResidents: Array<{ name: string }>) => {
+    if (!selectedLeaseForResident) return;
+
+    try {
+      // Convert selected resident IDs to resident objects and combine with new residents
+      const selectedResidents = lease.Resident.filter(r => selectedResidentIds.includes(r.id));
+      const allResidents = [
+        ...selectedResidents.map(r => ({ name: r.name })),
+        ...newResidents
+      ];
+
+      const response = await fetch(`/api/leases/${selectedLeaseForResident.id}/residents`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ residents: allResidents }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to add residents');
+      }
+
+      setRenewalDialogOpen(false);
+      setSelectedLeaseForResident(null);
+      setIsNewLeaseWorkflow(false);
+      
+      handleRefresh();
+    } catch (error) {
+      console.error('Error adding residents:', error);
+      alert(`Error adding residents: ${error instanceof Error ? error.message : 'An unexpected error occurred'}`);
+    }
+  };
+
+  const handleStartIncomeVerification = async () => {
+    try {
+      const response = await fetch(`/api/leases/${leaseId}/verifications`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          reason: 'FUTURE_LEASE_VERIFICATION'
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to start income verification');
+      }
+
+      handleRefresh();
+    } catch (error) {
+      console.error('Error starting income verification:', error);
+      alert(`Error starting income verification: ${error instanceof Error ? error.message : 'An unexpected error occurred'}`);
     }
   };
 
@@ -186,7 +316,6 @@ export default function LeaseDetailPage() {
 
   const { lease, unit, property } = leaseData;
   const verification = lease.IncomeVerification?.[0];
-  console.log('Current verification:', verification);
 
   // If we get here, it's a future lease (no tenancy record)
   return (
@@ -302,11 +431,8 @@ export default function LeaseDetailPage() {
                       <div className="flex space-x-2 mt-2">
                         <button
                           onClick={() => {
-                            console.log('Upload Documents clicked for resident:', resident.id);
-                            console.log('Current verification:', verification);
                             setSelectedResidentForUpload(resident);
                             setUploadDialogOpen(true);
-                            console.log('Upload dialog should be open:', true);
                           }}
                           className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
                         >
@@ -393,14 +519,7 @@ export default function LeaseDetailPage() {
             <div className="text-center p-4 border-dashed border-2 border-gray-300 rounded-lg">
               <p className="text-gray-500 mb-3">No income verification started yet.</p>
               <button
-                onClick={() => {
-                  // Create income verification for this lease
-                  fetch(`/api/leases/${leaseId}/verifications`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ reason: 'Initial verification for future lease' })
-                  }).then(() => handleRefresh());
-                }}
+                onClick={handleStartIncomeVerification}
                 className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
               >
                 Start Income Verification
@@ -449,6 +568,96 @@ export default function LeaseDetailPage() {
             leaseStartDate: lease.leaseStartDate,
             leaseEndDate: lease.leaseEndDate,
           }}
+        />
+      )}
+
+      {/* Create New Lease Dialog */}
+      <CreateLeaseDialog
+        isOpen={isCreateLeaseDialogOpen}
+        onClose={() => setCreateLeaseDialogOpen(false)}
+        onSubmit={handleCreateLease}
+        unitId={unit.id}
+      />
+
+      {/* Initial Add Resident Dialog */}
+      <InitialAddResidentDialog
+        isOpen={isInitialAddResidentDialogOpen}
+        onClose={() => {
+          setInitialAddResidentDialogOpen(false);
+          setSelectedLeaseForResident(null);
+          setIsNewLeaseWorkflow(false);
+        }}
+        onRenewal={() => {
+          setInitialAddResidentDialogOpen(false);
+          setRenewalDialogOpen(true);
+        }}
+        onNewApplicant={() => {
+          setInitialAddResidentDialogOpen(false);
+          setAddResidentDialogOpen(true);
+        }}
+        leaseName={selectedLeaseForResident?.name || 'New Lease'}
+      />
+
+      {/* Add Resident Dialog */}
+      <AddResidentDialog
+        isOpen={isAddResidentDialogOpen}
+        onClose={() => {
+          setAddResidentDialogOpen(false);
+          setSelectedLeaseForResident(null);
+          setIsNewLeaseWorkflow(false);
+        }}
+        onSubmit={handleAddResidents}
+        leaseName={selectedLeaseForResident?.name || 'New Lease'}
+      />
+
+      {/* Renewal Dialog */}
+      <RenewalDialog
+        isOpen={isRenewalDialogOpen}
+        onClose={() => {
+          setRenewalDialogOpen(false);
+          setSelectedLeaseForResident(null);
+          setIsNewLeaseWorkflow(false);
+        }}
+        onAddSelected={handleRenewalSelection}
+        currentResidents={lease.Resident || []}
+        leaseName={selectedLeaseForResident?.name || 'New Lease'}
+      />
+
+      {/* Finalization Dialog */}
+      {verification && finalizationDialog.verification && (
+        <VerificationFinalizationDialog
+          isOpen={finalizationDialog.isOpen}
+          onClose={() => setFinalizationDialog({ isOpen: false, verification: null })}
+          onConfirm={async () => {
+            try {
+              const response = await fetch(`/api/leases/${leaseId}/verifications/${verification.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'finalize' }),
+              });
+
+              if (!response.ok) {
+                throw new Error('Failed to finalize verification');
+              }
+
+              setFinalizationDialog({ isOpen: false, verification: null });
+              handleRefresh();
+            } catch (error) {
+              console.error('Error finalizing verification:', error);
+              alert('Error finalizing verification');
+            }
+          }}
+          verification={finalizationDialog.verification}
+          residents={lease.Resident.map(r => ({
+            id: r.id,
+            name: r.name,
+            verifiedIncome: r.calculatedAnnualizedIncome || r.annualizedIncome || 0,
+            annualizedIncome: r.annualizedIncome || 0,
+            calculatedAnnualizedIncome: r.calculatedAnnualizedIncome || null,
+            incomeFinalized: r.incomeFinalized,
+            finalizedAt: r.finalizedAt,
+            hasNoIncome: r.hasNoIncome
+          }))}
         />
       )}
     </div>
