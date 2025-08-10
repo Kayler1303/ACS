@@ -17,6 +17,8 @@ export async function POST(
     const { leaseId } = await params;
     const { name, annualizedIncome } = await req.json();
 
+    console.log(`[RESIDENT CREATION DEBUG] Received data:`, { leaseId, name, annualizedIncome, type: typeof annualizedIncome });
+
     if (!name) {
       return NextResponse.json(
         { error: 'Name is required.' },
@@ -51,11 +53,21 @@ export async function POST(
     }
 
     // 2. Create the new resident
+    let parsedIncome = null;
+    if (annualizedIncome != null && annualizedIncome !== '') {
+      const parsed = parseFloat(annualizedIncome.toString());
+      if (!isNaN(parsed)) {
+        parsedIncome = parsed;
+      }
+    }
+
+    console.log(`[RESIDENT CREATION DEBUG] Parsed income:`, { original: annualizedIncome, parsed: parsedIncome });
+
     const newResident = await prisma.resident.create({
       data: {
         id: randomUUID(),
         name,
-        annualizedIncome: annualizedIncome ? parseFloat(annualizedIncome) : null,
+        annualizedIncome: parsedIncome,
         updatedAt: new Date(),
         Lease: {
           connect: { id: leaseId },
@@ -63,6 +75,7 @@ export async function POST(
       },
     });
 
+    console.log(`[RESIDENT CREATION DEBUG] Successfully created resident:`, { id: newResident.id, name: newResident.name });
     return NextResponse.json(newResident, { status: 201 });
   } catch (error) {
     console.error('Error adding resident:', error);
