@@ -290,10 +290,10 @@ export default function LeaseDetailPage() {
         )}
       </div>
 
-      {/* Residents and Income Verification */}
+      {/* Resident Income Verification by Lease */}
       <div className="bg-white p-6 rounded-lg shadow-md">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold text-gray-900">Resident Income Verification</h2>
+          <h2 className="text-xl font-semibold text-gray-900">Resident Income Verification by Lease</h2>
           <button
             onClick={() => setCreateLeaseDialogOpen(true)}
             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
@@ -302,73 +302,90 @@ export default function LeaseDetailPage() {
           </button>
         </div>
 
-        {/* Residents List */}
-        <div className="mb-6">
-          <h3 className="text-lg font-medium text-gray-900 mb-3">Residents</h3>
-          {leaseData.lease.Resident.length === 0 ? (
-            <div className="text-center p-4 border-dashed border-2 border-gray-300 rounded-lg">
-              <p className="text-gray-500">No residents found.</p>
-              <button
-                onClick={() => setInitialAddResidentDialogOpen(true)}
-                className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-              >
-                Add Resident
-              </button>
+        {/* Lease Section */}
+        <div className="border-b border-gray-200 pb-4 mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold text-gray-900">{lease.name}</h3>
+              <p className="text-sm text-gray-500">Lease Term Not Defined</p>
+              <p className="text-xs text-gray-400">
+                {lease.Resident.length} resident{lease.Resident.length !== 1 ? 's' : ''}
+              </p>
             </div>
-          ) : (
-            <div className="space-y-3">
-              {leaseData.lease.Resident.map((resident) => (
-                <div key={resident.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-md">
-                  <div>
-                    <p className="font-medium text-gray-900">{resident.name}</p>
-                    {resident.hasNoIncome ? (
-                      <p className="text-sm text-gray-500">No Income</p>
-                    ) : resident.calculatedAnnualizedIncome ? (
-                      <p className="text-sm text-gray-500">
-                        Verified Income: ${resident.calculatedAnnualizedIncome.toLocaleString()}
-                      </p>
-                    ) : resident.annualizedIncome && resident.annualizedIncome > 0 ? (
-                      <p className="text-sm text-gray-500">
-                        Rent Roll Income: ${resident.annualizedIncome.toLocaleString()}
-                      </p>
-                    ) : (
-                      <div className="flex space-x-2 mt-2">
-                        <button
-                          onClick={() => {
-                            setSelectedResidentForUpload(resident);
-                            setUploadDialogOpen(true);
-                          }}
-                          className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
-                        >
-                          Upload Documents
-                        </button>
-                        <button
-                          onClick={() => {
-                            // Mark resident as no income
-                            if (verification) {
-                              markResidentNoIncome(resident.id, verification.id);
-                            }
-                          }}
-                          className="text-xs px-2 py-1 bg-gray-600 text-white rounded hover:bg-gray-700"
-                        >
-                          No Income
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                    resident.incomeFinalized ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                  }`}>
-                    {resident.incomeFinalized ? 'Finalized' : 'Not Finalized'}
-                  </span>
-                </div>
-              ))}
-              <div className="w-full p-3 border-2 border-dashed border-gray-300 rounded-md text-center text-gray-400 text-sm">
-                Residents are populated from rent roll data
+            <div className="flex items-center space-x-4">
+              <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                verification?.status === 'FINALIZED' ? 'bg-green-100 text-green-800' :
+                verification?.status === 'IN_PROGRESS' ? 'bg-yellow-100 text-yellow-800' :
+                'bg-gray-100 text-gray-800'
+              }`}>
+                {verification?.status === 'FINALIZED' ? 'Verified' :
+                 verification?.status === 'IN_PROGRESS' ? 'In Progress - Finalize to Process' :
+                 'Not Started'}
+              </span>
+              <div className="text-right text-sm text-gray-500">
+                <div>Lease Verified Income</div>
+                <div className="font-medium text-gray-400">Not Finalized</div>
+              </div>
+              <div className="text-right text-sm">
+                <button className="text-blue-600 hover:text-blue-700 underline">Add Resident</button>
+                <div className="text-red-600 hover:text-red-700 underline cursor-pointer mt-1">Delete Lease</div>
               </div>
             </div>
-          )}
+          </div>
+
+          {/* Residents under this lease */}
+          <div className="space-y-2 pl-4">
+            {lease.Resident.map((resident) => (
+              <div key={resident.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+                <div className="flex-1">
+                  <div className="flex items-center space-x-3">
+                    <span className="text-sm font-medium text-gray-900">{resident.name}</span>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                      resident.incomeFinalized ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {resident.incomeFinalized ? 'Finalized' : 'Not Started'}
+                    </span>
+                  </div>
+                  {resident.annualizedIncome && resident.annualizedIncome > 0 ? (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Original Income: ${resident.annualizedIncome.toLocaleString()}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-500 mt-1">Original Income: $0.00</p>
+                  )}
+                  {resident.calculatedAnnualizedIncome ? (
+                    <p className="text-xs text-gray-600 mt-1">
+                      Verified Income: ${resident.calculatedAnnualizedIncome.toLocaleString()}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-400 mt-1">Verified Income: Not Finalized</p>
+                  )}
                 </div>
+                <div className="flex flex-col space-y-1">
+                  <button
+                    onClick={() => {
+                      setSelectedResidentForUpload(resident);
+                      setUploadDialogOpen(true);
+                    }}
+                    className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+                  >
+                    📄 Upload Documents
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (verification) {
+                        markResidentNoIncome(resident.id, verification.id);
+                      }
+                    }}
+                    className="px-3 py-1 bg-gray-600 text-white text-xs rounded hover:bg-gray-700"
+                  >
+                    ❌ No Income
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
 
         {/* Finalize Verification Button - Show when verification is ready to be finalized */}
         {verification && verification.status === 'IN_PROGRESS' && (() => {
