@@ -86,6 +86,7 @@ export default function LeaseDetailPage() {
       
       const data = await response.json();
       setLeaseData(data);
+      console.log('Lease data loaded:', data);
 
       // If this lease has a tenancy (is part of a rent roll), redirect to the unit page
       if (data.lease.Tenancy) {
@@ -185,6 +186,7 @@ export default function LeaseDetailPage() {
 
   const { lease, unit, property } = leaseData;
   const verification = lease.IncomeVerification?.[0];
+  console.log('Current verification:', verification);
 
   // If we get here, it's a future lease (no tenancy record)
   return (
@@ -300,8 +302,11 @@ export default function LeaseDetailPage() {
                       <div className="flex space-x-2 mt-2">
                         <button
                           onClick={() => {
+                            console.log('Upload Documents clicked for resident:', resident.id);
+                            console.log('Current verification:', verification);
                             setSelectedResidentForUpload(resident);
                             setUploadDialogOpen(true);
+                            console.log('Upload dialog should be open:', true);
                           }}
                           className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
                         >
@@ -419,7 +424,7 @@ export default function LeaseDetailPage() {
       </div>
 
       {/* Upload Dialog */}
-      {verification && (
+      {verification && isUploadDialogOpen && (
         <IncomeVerificationUploadDialog
           isOpen={isUploadDialogOpen}
           onClose={() => {
@@ -427,14 +432,17 @@ export default function LeaseDetailPage() {
             setSelectedResidentForUpload(null);
           }}
           verificationId={verification.id}
-          onUploadComplete={handleRefresh}
+          onUploadComplete={() => {
+            handleRefresh();
+            // Keep dialog open for additional uploads
+          }}
           residents={selectedResidentForUpload ? [selectedResidentForUpload] : lease.Resident}
           allCurrentLeaseResidents={lease.Resident}
           hasExistingDocuments={false}
           leaseName={lease.name}
           unitId={unit.id}
           propertyId={propertyId as string}
-          rentRollId=""
+          rentRollId="future-lease" // Use placeholder for future leases
           currentLease={{
             id: lease.id,
             name: lease.name,
