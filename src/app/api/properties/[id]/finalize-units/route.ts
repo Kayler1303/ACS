@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
+import { randomUUID } from 'crypto';
 
 type BedroomCount = number | string;
 type UnitNumber = string;
@@ -46,10 +47,13 @@ export async function POST(
       const unitsToCreate = parsedUnits.map((unit) => {
         const bdrCount = unit.squareFootage ? bedroomMap[unit.squareFootage] : null;
         return {
+          id: randomUUID(),
           propertyId,
           unitNumber: unit.unitNumber,
           squareFootage: unit.squareFootage,
           bedroomCount: bdrCount ? parseInt(String(bdrCount), 10) : null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
         };
       });
 

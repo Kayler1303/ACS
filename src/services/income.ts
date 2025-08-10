@@ -1,4 +1,5 @@
 import { differenceInDays } from 'date-fns';
+import { IncomeDocument, Resident, Prisma } from '@prisma/client';
 
 const PAY_PERIOD_FREQUENCIES = {
   WEEKLY: 7,
@@ -22,15 +23,15 @@ interface PaystubAnalysisResult {
 }
 
 // Type for paystub documents with required fields
-type PaystubDocument = any & {
+type PaystubDocument = IncomeDocument & {
   grossPayAmount: number;
 };
 
 // Helper type for documents that might have paystub fields
-type PotentialPaystubDocument = any & {
+type PotentialPaystubDocument = IncomeDocument & {
   payPeriodStartDate?: Date | null;
   payPeriodEndDate?: Date | null;
-  grossPayAmount?: any; // Could be Decimal or number
+  grossPayAmount?: Prisma.Decimal | number | null; // Could be Decimal or number
 };
 
 /**
@@ -57,7 +58,7 @@ export function analyzePaystubs(paystubs: PotentialPaystubDocument[]): PaystubAn
         return {
             ...p,
             grossPayAmount: grossPayAmount,
-        };
+        } as PaystubDocument;
     })
     .filter((p): p is PaystubDocument => p !== null);
 
@@ -70,9 +71,27 @@ export function analyzePaystubs(paystubs: PotentialPaystubDocument[]): PaystubAn
   const uploadFrequency = processedPaystubs[0]?.payFrequency || 'BI-WEEKLY';
   const payFrequency = uploadFrequency.replace('-', '_') as keyof typeof PAY_PERIOD_FREQUENCIES;
   
-  // Calculate the average gross pay from all available paystubs
-  const totalGrossPay = processedPaystubs.reduce((acc, p) => acc + p.grossPayAmount, 0);
-  const averageGrossPay = totalGrossPay / processedPaystubs.length;
+  // Group paystubs by pay period (start date + end date) and sum amounts within same period
+  const payPeriodGroups = new Map<string, number>();
+  
+  for (const paystub of processedPaystubs) {
+    // Create a unique key for each pay period based on start and end dates
+    const startDate = paystub.payPeriodStartDate ? new Date(paystub.payPeriodStartDate).toISOString().split('T')[0] : 'unknown-start';
+    const endDate = paystub.payPeriodEndDate ? new Date(paystub.payPeriodEndDate).toISOString().split('T')[0] : 'unknown-end';
+    const payPeriodKey = `${startDate}_${endDate}`;
+    
+    // Sum amounts for the same pay period
+    const currentAmount = payPeriodGroups.get(payPeriodKey) || 0;
+    payPeriodGroups.set(payPeriodKey, currentAmount + paystub.grossPayAmount);
+  }
+  
+  // Calculate average gross pay from pay period totals (not individual paystubs)
+  const payPeriodTotals = Array.from(payPeriodGroups.values());
+  const totalGrossPay = payPeriodTotals.reduce((acc, total) => acc + total, 0);
+  const averageGrossPay = totalGrossPay / payPeriodTotals.length;
+  
+  console.log(`[PAYSTUB ANALYSIS] Grouped ${processedPaystubs.length} paystubs into ${payPeriodTotals.length} pay periods:`, 
+    Array.from(payPeriodGroups.entries()).map(([key, amount]) => ({ period: key, amount })));
 
   // Get the multiplier for annualization
   const multiplier = FREQUENCY_MULTIPLIERS[payFrequency] || FREQUENCY_MULTIPLIERS.BI_WEEKLY; // Default to bi-weekly
@@ -187,7 +206,7 @@ export function getComplianceAmiBucket(
 /**
  * Calculate total verified income from income documents using correct business logic
  */
-export function calculateTotalVerifiedIncome(incomeDocuments: any[]): number {
+export function calculateTotalVerifiedIncome(incomeDocuments: IncomeDocument[]): number {
   const verifiedDocuments = incomeDocuments.filter(d => d.status === 'COMPLETED');
   
   // Group documents by type
@@ -200,16 +219,30 @@ export function calculateTotalVerifiedIncome(incomeDocuments: any[]): number {
     const box1 = doc.box1_wages || 0;
     const box3 = doc.box3_ss_wages || 0;
     const box5 = doc.box5_med_wages || 0;
-    const highestAmount = Math.max(box1, box3, box5);
+    const highestAmount = Math.max(Number(box1), Number(box3), Number(box5));
     return acc + highestAmount;
   }, 0);
   
-  // Calculate paystub income - average gross pay then annualize based on frequency
+  // Calculate paystub income - group by pay period, sum amounts, then average and annualize
   let paystubIncome = 0;
   if (paystubDocuments.length > 0) {
-    // Average the gross pay amounts
-    const totalGrossPay = paystubDocuments.reduce((acc, doc) => acc + (doc.grossPayAmount || 0), 0);
-    const averageGrossPay = totalGrossPay / paystubDocuments.length;
+    // Group paystubs by pay period and sum amounts within same period
+    const payPeriodGroups = new Map<string, number>();
+    
+    for (const doc of paystubDocuments) {
+      const grossPayAmount = doc.grossPayAmount ? Number(doc.grossPayAmount) : 0;
+      const startDate = doc.payPeriodStartDate ? new Date(doc.payPeriodStartDate).toISOString().split('T')[0] : 'unknown-start';
+      const endDate = doc.payPeriodEndDate ? new Date(doc.payPeriodEndDate).toISOString().split('T')[0] : 'unknown-end';
+      const payPeriodKey = `${startDate}_${endDate}`;
+      
+      const currentAmount = payPeriodGroups.get(payPeriodKey) || 0;
+      payPeriodGroups.set(payPeriodKey, currentAmount + grossPayAmount);
+    }
+    
+    // Calculate average gross pay from pay period totals (not individual paystubs)
+    const payPeriodTotals = Array.from(payPeriodGroups.values());
+    const totalGrossPay = payPeriodTotals.reduce((acc, total) => acc + total, 0);
+    const averageGrossPay = totalGrossPay / payPeriodTotals.length;
     
     // Get pay frequency from any paystub (should be the same for all from same resident)
     const payFrequency = paystubDocuments[0]?.payFrequency || 'BI-WEEKLY';
@@ -230,7 +263,7 @@ export function calculateTotalVerifiedIncome(incomeDocuments: any[]): number {
   // Calculate other income types (use existing calculatedAnnualizedIncome)
   const otherIncome = otherDocuments
     .filter(d => d.calculatedAnnualizedIncome)
-    .reduce((acc, d) => acc + d.calculatedAnnualizedIncome!, 0);
+    .reduce((acc, d) => acc + Number(d.calculatedAnnualizedIncome!), 0);
 
   return w2Income + paystubIncome + otherIncome;
 }
@@ -239,8 +272,8 @@ export function calculateTotalVerifiedIncome(incomeDocuments: any[]): number {
  * Calculate comprehensive AMI bucket information for a lease
  */
 export function calculateAmiBucketForLease(
-  residents: any[],
-  incomeDocuments: any[],
+  residents: Resident[],
+  incomeDocuments: IncomeDocument[],
   hudIncomeLimits: HudIncomeLimits,
   complianceOption: string = "20% at 50% AMI, 55% at 80% AMI"
 ): AmiBucketCalculation {

@@ -2,7 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import bcrypt from 'bcryptjs';
 import { NextResponse } from 'next/server';
-import { randomBytes } from 'crypto';
+import { randomBytes, randomUUID } from 'crypto';
 import { Resend } from 'resend';
 import VerificationEmail from '@/emails/VerificationEmail';
 
@@ -46,10 +46,12 @@ export async function POST(req: Request) {
 
     const user = await prisma.user.create({
       data: {
+        id: randomUUID(),
         name,
         company,
         email,
         password: hashedPassword,
+        updatedAt: new Date(),
       },
     });
 

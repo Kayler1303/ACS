@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { randomUUID } from 'crypto';
+import { DocumentStatus } from '@prisma/client';
 
 export async function POST(request: NextRequest) {
   try {
@@ -48,6 +49,29 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Try to determine propertyId for easier triage by admins
+    let propertyId: string | null = null;
+    try {
+      if (verificationId) {
+        const verification = await prisma.incomeVerification.findUnique({
+          where: { id: verificationId },
+          select: { Lease: { select: { Unit: { select: { propertyId: true } } } } }
+        });
+        propertyId = verification?.Lease?.Unit?.propertyId || null;
+      } else if (finalUnitId) {
+        const unit = await prisma.unit.findUnique({ where: { id: finalUnitId }, select: { propertyId: true } });
+        propertyId = unit?.propertyId || null;
+      } else if (documentId) {
+        const doc = await prisma.incomeDocument.findUnique({
+          where: { id: documentId },
+          select: { IncomeVerification: { select: { Lease: { select: { Unit: { select: { propertyId: true } } } } } } }
+        });
+        propertyId = doc?.IncomeVerification?.Lease?.Unit?.propertyId || null;
+      }
+    } catch (e) {
+      console.warn('Could not resolve propertyId for override request');
+    }
+
     // Create the override request
     const overrideRequest = await (prisma as any).overrideRequest.create({
       data: {
@@ -60,7 +84,8 @@ export async function POST(request: NextRequest) {
         documentId: documentId || null,
         requesterId: session.user.id,
         status: 'PENDING',
-        updatedAt: new Date()
+        updatedAt: new Date(),
+        propertyId: propertyId || undefined
       },
       include: {
         User_OverrideRequest_requesterIdToUser: {
@@ -73,6 +98,18 @@ export async function POST(request: NextRequest) {
         }
       }
     });
+
+    // If the request is for a specific document review, mark the document as NEEDS_REVIEW
+    if (type === 'DOCUMENT_REVIEW' && documentId) {
+      try {
+        await prisma.incomeDocument.update({
+          where: { id: documentId },
+          data: { status: DocumentStatus.NEEDS_REVIEW }
+        });
+      } catch (e) {
+        console.warn('Failed to set document to NEEDS_REVIEW for user-initiated review', e);
+      }
+    }
 
     // TODO: In the future, we might want to:
     // 1. Send email notification to admins about the new request

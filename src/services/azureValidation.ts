@@ -38,6 +38,8 @@ export interface W2ValidationResult extends AzureValidationResult {
 // Realistic confidence thresholds based on Azure performance
 const MIN_CONFIDENCE_THRESHOLD = 0.50; // 50% - Many valid paystubs have lower confidence
 const REVIEW_CONFIDENCE_THRESHOLD = 0.65; // 65% - Flag for review but don't block
+// W-2 specific review threshold (slightly more lenient due to model confidence behavior)
+const W2_REVIEW_CONFIDENCE_THRESHOLD = 0.60;
 
 // Sanity check thresholds for paystubs
 const MAX_REASONABLE_GROSS_PAY = 50000; // $50k per paycheck seems unreasonable
@@ -396,6 +398,10 @@ export function validateW2Extraction(azureResult: any): W2ValidationResult {
 
   const fields = documentsArray[0].fields;
 
+  // Debug: Log all available field names from Azure W2 extraction
+  console.log(`🔥🔥🔥 [URGENT W2 DEBUG] All Azure W2 fields available:`, Object.keys(fields || {}));
+  console.log(`🔥🔥🔥 [URGENT W2 DEBUG] Full field details:`, JSON.stringify(fields, null, 2));
+
   function extractNumericValue(field: any): { value: number | null; confidence: number } {
     if (!field) return { value: null, confidence: 0 };
     
@@ -454,6 +460,305 @@ export function validateW2Extraction(azureResult: any): W2ValidationResult {
     }
   }
 
+  // Helper function to extract text value and confidence from Azure field
+  function extractTextValue(field: any): { value: string | null; confidence: number } {
+    if (!field) return { value: null, confidence: 0 };
+    
+    const confidence = field.confidence || 0;
+    let value = null;
+
+    if (typeof field.valueString === 'string') value = field.valueString.trim();
+    else if (typeof field.content === 'string') value = field.content.trim();
+
+    return { value: value || null, confidence };
+  }
+
+  // Heuristic: ensure extracted names are not numeric identifiers (e.g., SSN/EIN/TIN)
+  function hasAlphabeticCharacter(text: string | null | undefined): boolean {
+    if (!text) return false;
+    return /[A-Za-z]/.test(text);
+  }
+
+  function looksLikeIdNumber(text: string | null | undefined): boolean {
+    if (!text) return false;
+    const digitsOnly = (text || '').replace(/[^0-9]/g, '');
+    // Most IDs will be 4+ digits and often have no alphabetic characters
+    return digitsOnly.length >= 4 && !hasAlphabeticCharacter(text);
+  }
+
+  // Extract a human name from Azure fields that may be strings or nested objects
+  function extractNameFromField(field: any): { value: string | null; confidence: number } {
+    if (!field) return { value: null, confidence: 0 };
+    // Try simple string-first
+    const simple = extractTextValue(field);
+    if (simple.value) {
+      // If the simple value contains multiple lines (e.g., name + address), try to isolate the first plausible name line
+      const lines = simple.value.split(/\r?\n|\s{2,}/).map(l => l.trim()).filter(Boolean);
+      let candidate = simple.value;
+      for (const line of lines) {
+        // Prefer the first line that contains alphabetic characters and does not look like an address line starting with numbers
+        if (/[A-Za-z]/.test(line) && !/^\d{1,5}[\s,].*/.test(line)) {
+          candidate = line;
+          break;
+        }
+      }
+      if (candidate && hasAlphabeticCharacter(candidate) && !looksLikeIdNumber(candidate)) {
+        return { value: candidate, confidence: simple.confidence };
+      }
+    }
+
+    let bestName: string | null = null;
+    let confidence = field.confidence || 0;
+
+    // Handle object-shaped fields (Azure valueObject)
+    const valueObject = (field as any).valueObject;
+    if (valueObject && typeof valueObject === 'object') {
+      // Candidate subfield keys in priority order
+      const nameKeys = [
+        'Name', 'FullName', 'EmployeeName', 'EmployerName', 'RecipientName', 'PayeeName',
+        'PersonName', 'NameLine1', 'Line1', 'Employee', 'Employer'
+      ];
+      for (const key of nameKeys) {
+        const sub = (valueObject as any)[key];
+        if (!sub) continue;
+        const { value: subVal, confidence: subConf } = extractTextValue(sub);
+        if (subVal && hasAlphabeticCharacter(subVal) && !looksLikeIdNumber(subVal)) {
+          bestName = subVal;
+          confidence = Math.min(confidence || 1, subConf || 1);
+          break;
+        }
+      }
+      // Combine FirstName + LastName if present
+      if (!bestName) {
+        const first = extractTextValue(valueObject.FirstName)?.value;
+        const last = extractTextValue(valueObject.LastName)?.value;
+        const maybe = [first, last].filter(Boolean).join(' ').trim();
+        if (maybe && hasAlphabeticCharacter(maybe) && !looksLikeIdNumber(maybe)) {
+          bestName = maybe;
+        }
+      }
+      // Nested AddressAndName object
+      if (!bestName && valueObject.AddressAndName) {
+        const nested = extractNameFromField(valueObject.AddressAndName);
+        if (nested.value) {
+          bestName = nested.value;
+          confidence = Math.min(confidence || 1, nested.confidence || 1);
+        }
+      }
+    }
+
+    // Handle arrays (valueArray) by taking the first line-like entry
+    const valueArray = (field as any).valueArray;
+    if (!bestName && Array.isArray(valueArray)) {
+      for (const item of valueArray) {
+        const { value } = extractTextValue(item);
+        if (value && hasAlphabeticCharacter(value) && !looksLikeIdNumber(value)) {
+          bestName = value;
+          break;
+        }
+      }
+    }
+
+    return { value: bestName, confidence: confidence || 0 };
+  }
+
+  // Extract Employee Name (comprehensive mapping of all possible Azure W2 field names)
+  console.log(`[W2 NAME DEBUG] Employee field candidates:`, Object.keys(fields).filter(k => 
+    k.toLowerCase().includes('employee') || k.toLowerCase().includes('name') || k.toLowerCase().includes('person')
+  ));
+  
+  // Azure W2 prebuilt model - prefer strictly name-like fields only (exclude SSN/TIN/EIN-like)
+  const employeeNameField =
+    fields?.Employee ||
+    fields?.EmployeeName ||
+    fields?.EmployeeFullName ||
+    fields?.EmployeeAddressAndName ||
+    fields?.EmployeeFirstLastName ||
+    fields?.TaxpayerName ||
+    // Common variations found in production
+    fields?.Name ||
+    fields?.FullName ||
+    fields?.PersonName ||
+    fields?.W2Employee ||
+    fields?.WorkerName ||
+    fields?.Recipient ||
+    fields?.PayeeName ||
+    fields?.Payee ||
+    fields?.FormRecipient ||
+    // Legacy support
+    fields?.EmployeeNameAndAddress ||
+    fields?.EmployeeInfo ||
+    fields?.EmployeeData ||
+    fields?.EmployeeAddress ||
+    fields?.RecipientName ||
+    fields?.EmployeeDetails ||
+    fields?.W2EmployeeName ||
+    fields?.W2_Employee ||
+    fields?.EmployeeName_Line1;
+  const employeeNameResult = extractNameFromField(employeeNameField);
+  let employeeNameValue = employeeNameResult.value;
+  if (employeeNameValue && (looksLikeIdNumber(employeeNameValue) || !hasAlphabeticCharacter(employeeNameValue))) {
+    // Guard against numeric identifiers being misread as names
+    console.log('[W2 NAME GUARD] Discarding employee name candidate that looks like an ID number:', employeeNameValue);
+    employeeNameValue = null;
+  }
+ 
+  console.log(`[W2 NAME DEBUG] Employee name extraction:`, {
+    fieldFound: !!employeeNameField,
+    extractedValue: employeeNameValue,
+    confidence: employeeNameResult.confidence
+  });
+  
+  // Fallback: scan all fields for a plausible employee name
+  if (!employeeNameValue) {
+    for (const [key, f] of Object.entries(fields)) {
+      const lower = key.toLowerCase();
+      if (
+        (lower.includes('employee') || lower.includes('recipient') || lower.includes('payee') || lower.includes('name')) &&
+        !(lower.includes('ssn') || lower.includes('ein') || lower.includes('tin') || lower.includes('id') || lower.includes('identification') || lower.includes('number'))
+      ) {
+        const candidate = extractNameFromField(f as any);
+        if (candidate.value) {
+          console.log('[W2 NAME FALLBACK] Using employee name from field', key, '=>', candidate.value);
+          employeeNameValue = candidate.value;
+          break;
+        }
+      }
+    }
+    // Fallback: try keyValuePairs if available (layout/auxiliary data)
+    if (!employeeNameValue) {
+      const kvPairs = azureResult?.analyzeResult?.keyValuePairs as any[] | undefined;
+      if (Array.isArray(kvPairs)) {
+        for (const pair of kvPairs) {
+          const keyText = pair?.key?.content?.toLowerCase?.() || '';
+          const valText = pair?.value?.content || '';
+          if (keyText.includes("employee") && keyText.includes("name") && hasAlphabeticCharacter(valText) && !looksLikeIdNumber(valText)) {
+            console.log('[W2 NAME KVP FALLBACK] Using employee name from keyValuePairs =>', valText);
+            employeeNameValue = valText.trim();
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  if (employeeNameValue) {
+    extractedData.employeeName = employeeNameValue;
+    overallConfidence = Math.min(overallConfidence, employeeNameResult.confidence);
+    
+    if (employeeNameResult.confidence < MIN_CONFIDENCE_THRESHOLD) {
+      warnings.push("Low confidence on employee name extraction");
+      needsAdminReview = true;
+    }
+  } else {
+    warnings.push("Employee name could not be extracted from W2");
+    needsAdminReview = true;
+  }
+
+  // Extract Employer Name (try multiple field names)
+  console.log(`[W2 NAME DEBUG] Employer field candidates:`, Object.keys(fields).filter(k => 
+    k.toLowerCase().includes('employer') || k.toLowerCase().includes('company') || k.toLowerCase().includes('business')
+  ));
+  
+  // Azure W2 prebuilt model - employer name candidates (exclude EIN/TIN fields)
+  const employerNameField =
+    fields?.Employer ||
+    fields?.EmployerName ||
+    fields?.Company ||
+    fields?.EmployerNameAddress ||
+    // Common variations
+    fields?.CompanyName ||
+    fields?.BusinessName ||
+    fields?.PayerName ||
+    fields?.Payer ||
+    fields?.W2Employer ||
+    fields?.Organization ||
+    // Legacy and additional support
+    fields?.W2_Employer ||
+    fields?.EmployerInfo ||
+    fields?.EmployerData ||
+    fields?.EmployerIdentification ||
+    fields?.W2EmployerName ||
+    fields?.EmployerName_Line1;
+  const employerNameResult = extractNameFromField(employerNameField);
+  let employerNameValue = employerNameResult.value;
+  if (employerNameValue && (looksLikeIdNumber(employerNameValue) || !hasAlphabeticCharacter(employerNameValue))) {
+    console.log('[W2 NAME GUARD] Discarding employer name candidate that looks like an ID number:', employerNameValue);
+    employerNameValue = null;
+  }
+   
+  console.log(`[W2 NAME DEBUG] Employer name extraction:`, {
+    fieldFound: !!employerNameField,
+    extractedValue: employerNameValue,
+    confidence: employerNameResult.confidence
+  });
+  
+  // Fallback: scan all fields for a plausible employer name
+  if (!employerNameValue) {
+    for (const [key, f] of Object.entries(fields)) {
+      const lower = key.toLowerCase();
+      if (
+        (lower.includes('employer') || lower.includes('company') || lower.includes('business') || lower.includes('payer') || lower.includes('organization') || lower.includes('name')) &&
+        !(lower.includes('ein') || lower.includes('tin') || lower.includes('id') || lower.includes('identification') || lower.includes('number'))
+      ) {
+        const candidate = extractNameFromField(f as any);
+        if (candidate.value) {
+          console.log('[W2 NAME FALLBACK] Using employer name from field', key, '=>', candidate.value);
+          employerNameValue = candidate.value;
+          break;
+        }
+      }
+    }
+    // Fallback: try keyValuePairs if available
+    if (!employerNameValue) {
+      const kvPairs = azureResult?.analyzeResult?.keyValuePairs as any[] | undefined;
+      if (Array.isArray(kvPairs)) {
+        for (const pair of kvPairs) {
+          const keyText = pair?.key?.content?.toLowerCase?.() || '';
+          const valText = pair?.value?.content || '';
+          if ((keyText.includes("employer") || keyText.includes("company")) && hasAlphabeticCharacter(valText) && !looksLikeIdNumber(valText)) {
+            console.log('[W2 NAME KVP FALLBACK] Using employer name from keyValuePairs =>', valText);
+            employerNameValue = valText.trim();
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  if (employerNameValue) {
+    extractedData.employerName = employerNameValue;
+    overallConfidence = Math.min(overallConfidence, employerNameResult.confidence);
+    
+    if (employerNameResult.confidence < MIN_CONFIDENCE_THRESHOLD) {
+      warnings.push("Low confidence on employer name extraction");
+      needsAdminReview = true;
+    }
+  } else {
+    warnings.push("Employer name could not be extracted from W2");
+    needsAdminReview = true;
+  }
+
+  // Extract Tax Year (try multiple field names)
+  const taxYearField = fields?.TaxYear || fields?.Year || fields?.W2Year || fields?.FormYear;
+  const taxYearResult = extractTextValue(taxYearField);
+  if (taxYearResult.value) {
+    // Convert tax year string to integer (database expects Int)
+    const taxYearInt = parseInt(taxYearResult.value, 10);
+    if (!isNaN(taxYearInt) && taxYearInt >= 1900 && taxYearInt <= 2050) {
+      extractedData.taxYear = taxYearInt.toString(); // Keep as string for interface compatibility
+      overallConfidence = Math.min(overallConfidence, taxYearResult.confidence);
+      
+      if (taxYearResult.confidence < MIN_CONFIDENCE_THRESHOLD) {
+        warnings.push("Low confidence on tax year extraction");
+        needsAdminReview = true;
+      }
+    } else {
+      warnings.push(`Invalid tax year extracted: ${taxYearResult.value}`);
+      needsAdminReview = true;
+    }
+  }
+
   // Check if we got at least one wage amount
   const wageAmounts = [extractedData.box1_wages, extractedData.box3_ss_wages, extractedData.box5_med_wages].filter(v => v !== null);
   if (wageAmounts.length === 0) {
@@ -472,7 +777,7 @@ export function validateW2Extraction(azureResult: any): W2ValidationResult {
   }
 
   // Overall validation
-  if (overallConfidence < REVIEW_CONFIDENCE_THRESHOLD) {
+  if (overallConfidence < W2_REVIEW_CONFIDENCE_THRESHOLD) {
     needsAdminReview = true;
   }
 

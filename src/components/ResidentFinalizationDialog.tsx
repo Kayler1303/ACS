@@ -87,6 +87,13 @@ export default function ResidentFinalizationDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showOverrideRequest, setShowOverrideRequest] = useState(false);
   const [overrideRequested, setOverrideRequested] = useState(false);
+  // Document review modal state (for requesting admin review of a specific document)
+  const [docReviewModal, setDocReviewModal] = useState<{
+    isOpen: boolean;
+    documentId: string | null;
+    title: string;
+    description: string;
+  }>({ isOpen: false, documentId: null, title: '', description: '' });
   const [manualW2Income, setManualW2Income] = useState<string>('');
   const [showManualW2Entry, setShowManualW2Entry] = useState(false);
   const [showDiscrepancyModal, setShowDiscrepancyModal] = useState(false);
@@ -516,6 +523,44 @@ export default function ResidentFinalizationDialog({
     }
   };
 
+  // Open the document review modal for a specific document
+  const openDocumentReviewModal = (doc: IncomeDocument) => {
+    setDocReviewModal({
+      isOpen: true,
+      documentId: doc.id,
+      title: 'Request Admin Review of Document',
+      description: `If the automatic analysis for this ${doc.documentType} looks incorrect, you can request an admin review for ${resident.name}. Please describe what seems wrong so an admin can take a look.`,
+    });
+  };
+
+  // Submit the document review request
+  const submitDocumentReview = async (userExplanation: string) => {
+    try {
+      const res = await fetch('/api/override-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'DOCUMENT_REVIEW',
+          userExplanation,
+          documentId: docReviewModal.documentId,
+          residentId: resident.id,
+          verificationId: verification.id,
+          leaseId: verification.leaseId,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to request admin review');
+      }
+      setDocReviewModal({ isOpen: false, documentId: null, title: '', description: '' });
+      alert('Requested admin review for this document. An administrator will take a look.');
+      if (onDataRefresh) onDataRefresh();
+    } catch (e) {
+      console.error(e);
+      alert(e instanceof Error ? e.message : 'Failed to request admin review');
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
       <div className="relative top-20 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white">
@@ -622,16 +667,29 @@ export default function ResidentFinalizationDialog({
                   }
 
                   return (
-                    <div key={doc.id} className="flex justify-between items-center p-3 border rounded-lg bg-gray-50">
-                      <span className="text-gray-700">
-                        {displayText}
-                        {doc.employerName && ` - ${doc.employerName}`}
-                        {doc.employeeName && !doc.employerName && ` - ${doc.employeeName}`}
-                      </span>
-                      <span className="font-medium text-green-600">
-                        {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(verifiedAmount)}
-                        {doc.documentType === 'SOCIAL_SECURITY' && '/month'}
-                      </span>
+                    <div key={doc.id} className="flex flex-col space-y-2 p-3 border rounded-lg bg-gray-50">
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-700">
+                          {displayText}
+                          {doc.employerName && ` - ${doc.employerName}`}
+                          {doc.employeeName && !doc.employerName && ` - ${doc.employeeName}`}
+                        </span>
+                        <span className="font-medium text-green-600">
+                          {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(verifiedAmount)}
+                          {doc.documentType === 'SOCIAL_SECURITY' && '/month'}
+                        </span>
+                      </div>
+                      {/* Allow user to request admin review for completed docs */}
+                      {doc.status === 'COMPLETED' && (
+                        <div className="text-right">
+                          <button
+                            onClick={() => openDocumentReviewModal(doc)}
+                            className="text-xs text-orange-600 hover:text-orange-700"
+                          >
+                            Request Admin Review
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -746,6 +804,23 @@ export default function ResidentFinalizationDialog({
           verificationId: verification.id,
         }}
       />
+
+      {/* Document Review Modal */}
+      {docReviewModal.isOpen && (
+        <OverrideRequestModal
+          isOpen={docReviewModal.isOpen}
+          onClose={() => setDocReviewModal({ isOpen: false, documentId: null, title: '', description: '' })}
+          onSubmit={submitDocumentReview}
+          type="DOCUMENT_REVIEW"
+          context={{
+            title: docReviewModal.title,
+            description: docReviewModal.description,
+            documentId: docReviewModal.documentId || undefined,
+            residentId: resident.id,
+            verificationId: verification.id,
+          }}
+        />
+      )}
 
       {/* Individual Income Discrepancy Modal */}
       {showDiscrepancyModal && discrepancyData && (

@@ -15,6 +15,8 @@ const documentTypes = [
   { value: 'BANK_STATEMENT', label: 'Bank Statement' },
   { value: 'OFFER_LETTER', label: 'Offer Letter' },
   { value: 'SOCIAL_SECURITY', label: 'Social Security Letter' },
+  { value: 'SSA_1099', label: 'SSA-1099 (Tax Form)' },
+  { value: 'OTHER', label: 'Other' },
 ];
 
 export default function IncomeDocumentUploadForm({ residentId, onUploadComplete, hasExistingDocuments }: IncomeDocumentUploadFormProps) {

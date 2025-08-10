@@ -26,7 +26,7 @@ export async function POST(
 
   const property = await prisma.property.findFirst({
     where: { id: propertyId, ownerId: session.user.id },
-    include: { units: true }, // Eager load units to validate against
+    include: { Unit: true }, // Eager load units to validate against
   });
 
   if (!property) {

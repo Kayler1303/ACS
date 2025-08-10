@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
 
     // Enhance each request with contextual data
     const enhancedRequests = await Promise.all(requests.map(async (request: any) => {
-      let contextualData: any = {};
+      const contextualData: any = {};
 
       // For property deletion requests
       if (request.type === 'PROPERTY_DELETION' && request.propertyId) {

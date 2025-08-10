@@ -1728,10 +1728,10 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                      <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
                        {unit.futureLease ? (
                          <div className="flex flex-col items-center space-y-1">
-                           <Link
-                             href={`/property/${property.id}/rent-roll/${selectedRentRollId}/unit/${unit.id}`}
-                             className="text-sm text-gray-900 font-medium text-brand-blue hover:text-brand-accent underline cursor-pointer"
-                           >
+                                                     <Link
+                            href={`/property/${property.id}/lease/${unit.futureLease.id}`}
+                            className="text-sm text-gray-900 font-medium text-brand-blue hover:text-brand-accent underline cursor-pointer"
+                          >
                              {unit.futureLease.leaseName}
                            </Link>
                            <div className="flex items-center space-x-1">

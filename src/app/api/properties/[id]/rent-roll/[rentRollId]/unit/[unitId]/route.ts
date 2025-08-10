@@ -19,6 +19,9 @@ export async function GET(req: NextRequest, { params }: { params: { id: string, 
         return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
     }
 
+    // Add debugging to identify unit numbers
+    console.log(`[UNIT DEBUG] Accessing unit ID: ${unitId}`);
+
     // TODO: Implement rent roll reconciliation logic.
     // This endpoint currently fetches the tenancy associated with a specific rent roll.
     // In the future, we will need a mechanism to match provisional leases (leases without a tenancy)
@@ -118,6 +121,9 @@ export async function GET(req: NextRequest, { params }: { params: { id: string, 
         if (!unitWithLeases) {
             return NextResponse.json({ error: 'Unit not found' }, { status: 404 });
         }
+
+        // Add debugging to show unit number for this ID
+        console.log(`[UNIT DEBUG] Unit ID ${unitId} corresponds to Unit Number: ${unitWithLeases.unitNumber}`);
 
         // Enhance residents with income finalization data using batched Prisma query
         for (const lease of unitWithLeases.Lease) {

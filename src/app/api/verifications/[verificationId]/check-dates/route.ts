@@ -87,7 +87,7 @@ export async function POST(
     // Process all files and extract dates
     const documentDates: Date[] = [];
     let readableDocumentCount = 0;
-    let totalDocumentCount = files.length;
+    const totalDocumentCount = files.length;
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
