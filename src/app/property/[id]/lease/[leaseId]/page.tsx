@@ -122,27 +122,31 @@ export default function LeaseDetailPage() {
 
 
 
-  const handleStartIncomeVerification = async () => {
-    try {
-      const response = await fetch(`/api/leases/${leaseId}/verifications`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          reason: 'FUTURE_LEASE_VERIFICATION'
-        }),
-      });
+  // Automatically create income verification for future leases if one doesn't exist
+  const ensureIncomeVerification = async () => {
+    if (!leaseData) return;
+    
+    const { lease } = leaseData;
+    const hasVerification = lease.IncomeVerification && lease.IncomeVerification.length > 0;
+    
+    if (!hasVerification) {
+      try {
+        const response = await fetch(`/api/leases/${leaseId}/verifications`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            reason: 'FUTURE_LEASE_VERIFICATION'
+          }),
+        });
 
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to start income verification');
+        if (response.ok) {
+          handleRefresh();
+        }
+      } catch (error) {
+        console.error('Error auto-creating income verification:', error);
       }
-
-      handleRefresh();
-    } catch (error) {
-      console.error('Error starting income verification:', error);
-      alert(`Error starting income verification: ${error instanceof Error ? error.message : 'An unexpected error occurred'}`);
     }
   };
 
@@ -179,6 +183,13 @@ export default function LeaseDetailPage() {
 
     fetchLeaseData();
   }, [leaseId, propertyId, router]);
+
+  // Auto-create income verification when page loads
+  useEffect(() => {
+    if (leaseData) {
+      ensureIncomeVerification();
+    }
+  }, [leaseData]);
 
   if (loading) {
     return (
@@ -360,60 +371,27 @@ export default function LeaseDetailPage() {
         </div>
 
         {/* Income Verification Section */}
-        {verification ? (
+        {verification && verification.status === 'IN_PROGRESS' && (
           <div className="border-t border-gray-200 pt-6">
-            <h3 className="text-lg font-medium text-gray-900 mb-3">Income Verification</h3>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-gray-900">Verification Status</p>
-                  <p className="text-sm text-gray-500">
-                    Created: {new Date(verification.createdAt).toLocaleDateString()}
-                    {verification.finalizedAt && (
-                      <span> • Finalized: {new Date(verification.finalizedAt).toLocaleDateString()}</span>
-                    )}
-                  </p>
-                </div>
-                <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                  verification.status === 'FINALIZED' ? 'bg-green-100 text-green-800' :
-                  verification.status === 'IN_PROGRESS' ? 'bg-yellow-100 text-yellow-800' :
-                  'bg-gray-100 text-gray-800'
-                }`}>
-                  {verification.status.replace('_', ' ')}
-                </span>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium text-gray-900">Income Verification</h3>
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => {
+                    setSelectedResidentForUpload(null); // Upload for all residents
+                    setUploadDialogOpen(true);
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  Upload Documents
+                </button>
+                <button
+                  onClick={() => setFinalizationDialog({ isOpen: true, verification })}
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                >
+                  Finalize Verification
+                </button>
               </div>
-
-              {verification.status === 'IN_PROGRESS' && (
-                <div className="flex space-x-3">
-                  <button
-                    onClick={() => {
-                      setSelectedResidentForUpload(null); // Upload for all residents
-                      setUploadDialogOpen(true);
-                    }}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                  >
-                    Upload Documents
-                  </button>
-                  <button
-                    onClick={() => setFinalizationDialog({ isOpen: true, verification })}
-                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-                  >
-                    Finalize Verification
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="border-t border-gray-200 pt-6">
-            <div className="text-center p-4 border-dashed border-2 border-gray-300 rounded-lg">
-              <p className="text-gray-500 mb-3">No income verification started yet.</p>
-              <button
-                onClick={handleStartIncomeVerification}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-              >
-                Start Income Verification
-              </button>
             </div>
           </div>
         )}
