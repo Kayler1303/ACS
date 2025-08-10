@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import IncomeVerificationUploadDialog from '@/components/IncomeVerificationUploadDialog';
 import VerificationFinalizationDialog from '@/components/VerificationFinalizationDialog';
+import ResidentFinalizationDialog from '@/components/ResidentFinalizationDialog';
 
 interface Resident {
   id: string;
@@ -21,6 +22,8 @@ interface IncomeVerification {
   status: string;
   createdAt: string;
   finalizedAt?: string;
+  IncomeDocument?: any[];
+  incomeDocuments?: any[];
 }
 
 interface LeaseData {
@@ -69,6 +72,12 @@ export default function LeaseDetailPage() {
     verification: IncomeVerification | null;
   }>({ isOpen: false, verification: null });
   const [selectedResidentForUpload, setSelectedResidentForUpload] = useState<Resident | null>(null);
+  const [residentFinalizationDialog, setResidentFinalizationDialog] = useState<{
+    isOpen: boolean;
+    verification: IncomeVerification | null;
+    resident: Resident | null;
+    leaseName: string;
+  }>({ isOpen: false, verification: null, resident: null, leaseName: '' });
 
   // Define handleRefresh first (before any conditional returns)
   const handleRefresh = useCallback(async () => {
@@ -117,6 +126,51 @@ export default function LeaseDetailPage() {
     } catch (error) {
       console.error('Error marking resident as no income:', error);
       // Could add toast notification here
+    }
+  };
+
+  const handleFinalizeResidentVerification = async (calculatedIncome: number) => {
+    if (!residentFinalizationDialog.verification || !residentFinalizationDialog.resident) return;
+    
+    const { verification, resident } = residentFinalizationDialog;
+    const currentLeaseId = leaseId;
+    const verificationId = verification.id;
+    const residentId = resident.id;
+    
+    try {
+      const res = await fetch(`/api/leases/${currentLeaseId}/verifications/${verificationId}/residents/${residentId}/finalize`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          calculatedVerifiedIncome: calculatedIncome,
+        }),
+      });
+
+      if (!res.ok) {
+        let errorMsg = 'Failed to finalize resident verification';
+        try {
+          const data = await res.json();
+          errorMsg = data.error || errorMsg;
+        } catch (e) {
+          console.error("Could not parse error response as JSON", res.status, res.statusText);
+        }
+        throw new Error(errorMsg);
+      }
+
+      const result = await res.json();
+      
+      // Close dialog and refresh data
+      setResidentFinalizationDialog({ isOpen: false, verification: null, resident: null, leaseName: '' });
+      
+      await handleRefresh();
+      
+      // Optional: Show success message
+      console.log(`${resident.name}'s income finalized successfully!`);
+    } catch (error: unknown) {
+      console.error('Error finalizing resident verification:', error);
+      alert((error instanceof Error ? error.message : 'An error occurred while finalizing the resident verification.'));
     }
   };
 
@@ -335,55 +389,131 @@ export default function LeaseDetailPage() {
 
           {/* Residents under this lease */}
           <div className="space-y-2 pl-4">
-            {lease.Resident.map((resident) => (
-              <div key={resident.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-3">
-                    <span className="text-sm font-medium text-gray-900">{resident.name}</span>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                      resident.incomeFinalized ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'
-                    }`}>
-                      {resident.incomeFinalized ? 'Finalized' : 'Not Started'}
-                    </span>
+            {lease.Resident.map((resident) => {
+              // Filter documents for this resident
+              const residentDocuments = verification?.IncomeDocument?.filter(
+                (doc) => doc.residentId === resident.id && (doc.status === 'COMPLETED' || doc.status === 'NEEDS_REVIEW')
+              ) || [];
+              
+              const hasDocuments = residentDocuments.length > 0;
+              const isResidentFinalized = resident.incomeFinalized;
+              
+              return (
+                <div key={resident.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-3">
+                      <span className="text-sm font-medium text-gray-900">{resident.name}</span>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                        isResidentFinalized ? 'bg-green-100 text-green-800' : 
+                        hasDocuments ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        {isResidentFinalized ? 'Finalized' : hasDocuments ? 'Ready to Finalize' : 'Not Started'}
+                      </span>
+                    </div>
+                    {resident.annualizedIncome && resident.annualizedIncome > 0 ? (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Original Income: ${resident.annualizedIncome.toLocaleString()}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-gray-500 mt-1">Original Income: $0.00</p>
+                    )}
+                    {resident.calculatedAnnualizedIncome ? (
+                      <p className="text-xs text-gray-600 mt-1">
+                        Verified Income: ${resident.calculatedAnnualizedIncome.toLocaleString()}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-gray-400 mt-1">Verified Income: Not Finalized</p>
+                    )}
+
+                    {/* Show uploaded documents */}
+                    {hasDocuments && (
+                      <div className="mt-2 space-y-1">
+                        <p className="text-xs font-medium text-gray-700">Documents:</p>
+                        {residentDocuments.map((doc) => (
+                          <div key={doc.id} className="flex items-center justify-between text-xs">
+                            <span className="text-gray-600">
+                              {doc.documentType} ({doc.status === 'COMPLETED' ? 'Verified' : 'Needs Review'})
+                            </span>
+                            <span className="text-gray-500">
+                              {new Date(doc.uploadDate).toLocaleDateString()}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  {resident.annualizedIncome && resident.annualizedIncome > 0 ? (
-                    <p className="text-xs text-gray-500 mt-1">
-                      Original Income: ${resident.annualizedIncome.toLocaleString()}
-                    </p>
-                  ) : (
-                    <p className="text-xs text-gray-500 mt-1">Original Income: $0.00</p>
-                  )}
-                  {resident.calculatedAnnualizedIncome ? (
-                    <p className="text-xs text-gray-600 mt-1">
-                      Verified Income: ${resident.calculatedAnnualizedIncome.toLocaleString()}
-                    </p>
-                  ) : (
-                    <p className="text-xs text-gray-400 mt-1">Verified Income: Not Finalized</p>
-                  )}
+                  <div className="flex flex-col space-y-1">
+                    {!isResidentFinalized && (
+                      <>
+                        <button
+                          onClick={() => {
+                            setSelectedResidentForUpload(resident);
+                            setUploadDialogOpen(true);
+                          }}
+                          className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+                        >
+                          📄 Upload Documents
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (verification) {
+                              markResidentNoIncome(resident.id, verification.id);
+                            }
+                          }}
+                          className="px-3 py-1 bg-gray-600 text-white text-xs rounded hover:bg-gray-700"
+                        >
+                          ❌ No Income
+                        </button>
+
+                        {/* Finalize Income button - show when resident has documents but isn't finalized */}
+                        {hasDocuments && (
+                          <button
+                            onClick={() => {
+                              setResidentFinalizationDialog({
+                                isOpen: true,
+                                verification: verification,
+                                resident: resident,
+                                leaseName: lease.name
+                              });
+                            }}
+                            className="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                          >
+                            ✓ Finalize Income
+                          </button>
+                        )}
+                      </>
+                    )}
+
+                    {isResidentFinalized && (
+                      <div className="flex flex-col space-y-1">
+                        <div className="flex items-center justify-center px-3 py-1 text-xs bg-green-100 text-green-800 rounded border border-green-200">
+                          <span className="font-medium">Finalized ✓</span>
+                          {resident.finalizedAt && (
+                            <span className="ml-2 text-xs text-green-600">
+                              {new Date(resident.finalizedAt).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => {
+                            setResidentFinalizationDialog({
+                              isOpen: true,
+                              verification: verification,
+                              resident: resident,
+                              leaseName: lease.name
+                            });
+                          }}
+                          className="px-2 py-1 text-xs font-medium text-blue-600 hover:text-blue-800 border border-blue-300 hover:border-blue-400 rounded hover:bg-blue-50"
+                          title={`Modify income verification for ${resident.name}`}
+                        >
+                          Modify
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="flex flex-col space-y-1">
-                  <button
-                    onClick={() => {
-                      setSelectedResidentForUpload(resident);
-                      setUploadDialogOpen(true);
-                    }}
-                    className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
-                  >
-                    📄 Upload Documents
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (verification) {
-                        markResidentNoIncome(resident.id, verification.id);
-                      }
-                    }}
-                    className="px-3 py-1 bg-gray-600 text-white text-xs rounded hover:bg-gray-700"
-                  >
-                    ❌ No Income
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -495,6 +625,19 @@ export default function LeaseDetailPage() {
             finalizedAt: r.finalizedAt,
             hasNoIncome: r.hasNoIncome
           }))}
+        />
+      )}
+
+      {/* Resident Finalization Dialog */}
+      {residentFinalizationDialog.isOpen && residentFinalizationDialog.verification && residentFinalizationDialog.resident && (
+        <ResidentFinalizationDialog
+          isOpen={residentFinalizationDialog.isOpen}
+          onClose={() => setResidentFinalizationDialog({ isOpen: false, verification: null, resident: null, leaseName: '' })}
+          onConfirm={handleFinalizeResidentVerification}
+          verification={residentFinalizationDialog.verification}
+          resident={residentFinalizationDialog.resident}
+          leaseName={residentFinalizationDialog.leaseName}
+          onDataRefresh={handleRefresh}
         />
       )}
     </div>
