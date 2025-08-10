@@ -3,6 +3,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import IncomeVerificationUploadDialog from '@/components/IncomeVerificationUploadDialog';
 
 interface Resident {
   id: string;
@@ -69,6 +70,7 @@ export default function LeaseDetailPage() {
     isOpen: boolean;
     verification: IncomeVerification | null;
   }>({ isOpen: false, verification: null });
+  const [selectedResidentForUpload, setSelectedResidentForUpload] = useState<Resident | null>(null);
 
   // Define handleRefresh first (before any conditional returns)
   const handleRefresh = useCallback(async () => {
@@ -100,6 +102,25 @@ export default function LeaseDetailPage() {
       setLoading(false);
     }
   }, [leaseId, propertyId, router]);
+
+  const markResidentNoIncome = async (residentId: string, verificationId: string) => {
+    try {
+      const response = await fetch(`/api/leases/${leaseId}/verifications/${verificationId}/residents/${residentId}/no-income`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to mark resident as no income');
+      }
+
+      // Refresh the lease data to show updated status
+      handleRefresh();
+    } catch (error) {
+      console.error('Error marking resident as no income:', error);
+      // Could add toast notification here
+    }
+  };
 
   useEffect(() => {
     const fetchLeaseData = async () => {
@@ -265,17 +286,40 @@ export default function LeaseDetailPage() {
                 <div key={resident.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-md">
                   <div>
                     <p className="font-medium text-gray-900">{resident.name}</p>
-                    <p className="text-sm text-gray-500">
-                      {resident.hasNoIncome ? (
-                        'No Income'
-                      ) : resident.calculatedAnnualizedIncome ? (
-                        `Verified Income: $${resident.calculatedAnnualizedIncome.toLocaleString()}`
-                      ) : resident.annualizedIncome && resident.annualizedIncome > 0 ? (
-                        `Rent Roll Income: $${resident.annualizedIncome.toLocaleString()}`
-                      ) : (
-                        'No income information available'
-                      )}
-                    </p>
+                    {resident.hasNoIncome ? (
+                      <p className="text-sm text-gray-500">No Income</p>
+                    ) : resident.calculatedAnnualizedIncome ? (
+                      <p className="text-sm text-gray-500">
+                        Verified Income: ${resident.calculatedAnnualizedIncome.toLocaleString()}
+                      </p>
+                    ) : resident.annualizedIncome && resident.annualizedIncome > 0 ? (
+                      <p className="text-sm text-gray-500">
+                        Rent Roll Income: ${resident.annualizedIncome.toLocaleString()}
+                      </p>
+                    ) : (
+                      <div className="flex space-x-2 mt-2">
+                        <button
+                          onClick={() => {
+                            setSelectedResidentForUpload(resident);
+                            setUploadDialogOpen(true);
+                          }}
+                          className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
+                        >
+                          Upload Documents
+                        </button>
+                        <button
+                          onClick={() => {
+                            // Mark resident as no income
+                            if (verification) {
+                              markResidentNoIncome(resident.id, verification.id);
+                            }
+                          }}
+                          className="text-xs px-2 py-1 bg-gray-600 text-white rounded hover:bg-gray-700"
+                        >
+                          No Income
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                     resident.incomeFinalized ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
@@ -321,7 +365,10 @@ export default function LeaseDetailPage() {
               {verification.status === 'IN_PROGRESS' && (
                 <div className="flex space-x-3">
                   <button
-                    onClick={() => setUploadDialogOpen(true)}
+                    onClick={() => {
+                      setSelectedResidentForUpload(null); // Upload for all residents
+                      setUploadDialogOpen(true);
+                    }}
                     className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
                   >
                     Upload Documents
@@ -370,6 +417,32 @@ export default function LeaseDetailPage() {
           Back to Property Overview
         </Link>
       </div>
+
+      {/* Upload Dialog */}
+      {verification && (
+        <IncomeVerificationUploadDialog
+          isOpen={isUploadDialogOpen}
+          onClose={() => {
+            setUploadDialogOpen(false);
+            setSelectedResidentForUpload(null);
+          }}
+          verificationId={verification.id}
+          onUploadComplete={handleRefresh}
+          residents={selectedResidentForUpload ? [selectedResidentForUpload] : lease.Resident}
+          allCurrentLeaseResidents={lease.Resident}
+          hasExistingDocuments={false}
+          leaseName={lease.name}
+          unitId={unit.id}
+          propertyId={propertyId as string}
+          rentRollId=""
+          currentLease={{
+            id: lease.id,
+            name: lease.name,
+            leaseStartDate: lease.leaseStartDate,
+            leaseEndDate: lease.leaseEndDate,
+          }}
+        />
+      )}
     </div>
   );
 } 
