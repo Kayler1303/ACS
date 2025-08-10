@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
+import { randomUUID } from 'crypto';
 
 interface TenancyData {
   id: string;
@@ -53,20 +54,23 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     
     const property = await prisma.property.findFirst({
         where: { id: propertyId, ownerId: session.user.id },
-        include: { units: true }
+        include: { Unit: true }
     });
 
     if (!property) {
         return NextResponse.json({ error: 'Property not found' }, { status: 404 });
     }
     
-    const unitMap = new Map(property.units.map((u: Unit) => [parseInt(String(u.unitNumber), 10), u.id]));
+    const unitMap = new Map(property.Unit.map((u: any) => [parseInt(String(u.unitNumber), 10), u.id]));
 
     const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const newRentRoll = await tx.rentRoll.create({
         data: {
+          id: randomUUID(),
           propertyId: propertyId,
           date: new Date(rentRollDate),
+          createdAt: new Date(),
+          updatedAt: new Date(),
         },
       });
 
@@ -148,11 +152,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           const timestamp = Date.now().toString();
           const randomSuffix = Math.random().toString(36).substr(2, 9);
           
+          // For future leases (start date after rent roll date), don't assign rent roll income
+          // since these leases haven't started yet and the income is prospective
+          const isFutureLease = leaseStart > rentRollDate;
+          
           residentsData.push({
             id: `resident_${timestamp}_${randomSuffix}`,
             leaseId: leaseId, // Updated to reference lease instead of tenancy
             name: row.resident,
-            annualizedIncome: Number(row.totalIncome) || 0,
+            annualizedIncome: isFutureLease ? 0 : (Number(row.totalIncome) || 0),
             createdAt: new Date(),
             updatedAt: new Date(),
           });
