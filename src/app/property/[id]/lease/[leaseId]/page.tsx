@@ -4,10 +4,6 @@ import { useParams, useRouter } from 'next/navigation';
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import IncomeVerificationUploadDialog from '@/components/IncomeVerificationUploadDialog';
-import CreateLeaseDialog from '@/components/CreateLeaseDialog';
-import InitialAddResidentDialog from '@/components/InitialAddResidentDialog';
-import AddResidentDialog from '@/components/AddResidentDialog';
-import RenewalDialog from '@/components/RenewalDialog';
 import VerificationFinalizationDialog from '@/components/VerificationFinalizationDialog';
 
 interface Resident {
@@ -67,20 +63,12 @@ export default function LeaseDetailPage() {
   const [error, setError] = useState<string | null>(null);
   
   // Modal states
-  const [isCreateLeaseDialogOpen, setCreateLeaseDialogOpen] = useState(false);
-  const [isInitialAddResidentDialogOpen, setInitialAddResidentDialogOpen] = useState(false);
-  const [isAddResidentDialogOpen, setAddResidentDialogOpen] = useState(false);
-  const [isRenewalDialogOpen, setRenewalDialogOpen] = useState(false);
   const [isUploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [finalizationDialog, setFinalizationDialog] = useState<{
     isOpen: boolean;
     verification: IncomeVerification | null;
   }>({ isOpen: false, verification: null });
   const [selectedResidentForUpload, setSelectedResidentForUpload] = useState<Resident | null>(null);
-  
-  // Workflow state
-  const [selectedLeaseForResident, setSelectedLeaseForResident] = useState<any>(null);
-  const [isNewLeaseWorkflow, setIsNewLeaseWorkflow] = useState(false);
 
   // Define handleRefresh first (before any conditional returns)
   const handleRefresh = useCallback(async () => {
@@ -132,102 +120,7 @@ export default function LeaseDetailPage() {
     }
   };
 
-  // Create New Lease workflow functions
-  const handleCreateLease = async (leaseData: { name: string; leaseStartDate: string; leaseEndDate: string; leaseRent: number | null }) => {
-    try {
-      const res = await fetch(`/api/units/${unit.id}/leases`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(leaseData),
-      });
 
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Failed to create lease');
-      }
-
-      const newLease = await res.json();
-      
-      setCreateLeaseDialogOpen(false);
-      
-      // Automatically open the "Add Resident" dialog for the newly created lease
-      setSelectedLeaseForResident(newLease);
-      setIsNewLeaseWorkflow(true);
-      setInitialAddResidentDialogOpen(true);
-      
-      handleRefresh();
-    } catch (err: unknown) {
-      alert(`Error creating lease: ${err instanceof Error ? err.message : 'An unexpected error occurred'}`);
-    }
-  };
-
-  // Resident addition workflow functions
-  const handleAddResidents = async (residents: Array<{ name: string }>) => {
-    if (!selectedLeaseForResident) return;
-
-    try {
-      const response = await fetch(`/api/leases/${selectedLeaseForResident.id}/residents`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ residents }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to add residents');
-      }
-
-      setAddResidentDialogOpen(false);
-      setRenewalDialogOpen(false);
-      setSelectedLeaseForResident(null);
-      setIsNewLeaseWorkflow(false);
-      
-      handleRefresh();
-    } catch (error) {
-      console.error('Error adding residents:', error);
-      alert(`Error adding residents: ${error instanceof Error ? error.message : 'An unexpected error occurred'}`);
-    }
-  };
-
-  // Handler for renewal dialog (handles both selected existing residents and new residents)
-  const handleRenewalSelection = async (selectedResidentIds: string[], newResidents: Array<{ name: string }>) => {
-    if (!selectedLeaseForResident) return;
-
-    try {
-      // Convert selected resident IDs to resident objects and combine with new residents
-      const selectedResidents = lease.Resident.filter(r => selectedResidentIds.includes(r.id));
-      const allResidents = [
-        ...selectedResidents.map(r => ({ name: r.name })),
-        ...newResidents
-      ];
-
-      const response = await fetch(`/api/leases/${selectedLeaseForResident.id}/residents`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ residents: allResidents }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to add residents');
-      }
-
-      setRenewalDialogOpen(false);
-      setSelectedLeaseForResident(null);
-      setIsNewLeaseWorkflow(false);
-      
-      handleRefresh();
-    } catch (error) {
-      console.error('Error adding residents:', error);
-      alert(`Error adding residents: ${error instanceof Error ? error.message : 'An unexpected error occurred'}`);
-    }
-  };
 
   const handleStartIncomeVerification = async () => {
     try {
@@ -459,12 +352,9 @@ export default function LeaseDetailPage() {
                   </span>
                 </div>
               ))}
-              <button
-                onClick={() => setAddResidentDialogOpen(true)}
-                className="w-full p-3 border-2 border-dashed border-gray-300 rounded-md text-gray-500 hover:border-gray-400 hover:text-gray-600"
-              >
-                + Add Another Resident
-              </button>
+              <div className="w-full p-3 border-2 border-dashed border-gray-300 rounded-md text-center text-gray-400 text-sm">
+                Residents are populated from rent roll data
+              </div>
             </div>
           )}
         </div>
@@ -571,57 +461,7 @@ export default function LeaseDetailPage() {
         />
       )}
 
-      {/* Create New Lease Dialog */}
-      <CreateLeaseDialog
-        isOpen={isCreateLeaseDialogOpen}
-        onClose={() => setCreateLeaseDialogOpen(false)}
-        onSubmit={handleCreateLease}
-        unitId={unit.id}
-      />
 
-      {/* Initial Add Resident Dialog */}
-      <InitialAddResidentDialog
-        isOpen={isInitialAddResidentDialogOpen}
-        onClose={() => {
-          setInitialAddResidentDialogOpen(false);
-          setSelectedLeaseForResident(null);
-          setIsNewLeaseWorkflow(false);
-        }}
-        onRenewal={() => {
-          setInitialAddResidentDialogOpen(false);
-          setRenewalDialogOpen(true);
-        }}
-        onNewApplicant={() => {
-          setInitialAddResidentDialogOpen(false);
-          setAddResidentDialogOpen(true);
-        }}
-        leaseName={selectedLeaseForResident?.name || 'New Lease'}
-      />
-
-      {/* Add Resident Dialog */}
-      <AddResidentDialog
-        isOpen={isAddResidentDialogOpen}
-        onClose={() => {
-          setAddResidentDialogOpen(false);
-          setSelectedLeaseForResident(null);
-          setIsNewLeaseWorkflow(false);
-        }}
-        onSubmit={handleAddResidents}
-        leaseName={selectedLeaseForResident?.name || 'New Lease'}
-      />
-
-      {/* Renewal Dialog */}
-      <RenewalDialog
-        isOpen={isRenewalDialogOpen}
-        onClose={() => {
-          setRenewalDialogOpen(false);
-          setSelectedLeaseForResident(null);
-          setIsNewLeaseWorkflow(false);
-        }}
-        onAddSelected={handleRenewalSelection}
-        currentResidents={lease.Resident || []}
-        leaseName={selectedLeaseForResident?.name || 'New Lease'}
-      />
 
       {/* Finalization Dialog */}
       {verification && finalizationDialog.verification && (
