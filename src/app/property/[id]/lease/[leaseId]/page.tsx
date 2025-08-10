@@ -436,7 +436,10 @@ export default function LeaseDetailPage() {
           }}
           verificationId={verification.id}
           onUploadComplete={() => {
-            handleRefresh();
+            // Delay refresh to allow success message to be seen
+            setTimeout(() => {
+              handleRefresh();
+            }, 2000); // 2 second delay
             // Keep dialog open for additional uploads
           }}
           residents={selectedResidentForUpload ? [selectedResidentForUpload] : lease.Resident}
