@@ -370,31 +370,7 @@ export default function LeaseDetailPage() {
           )}
         </div>
 
-        {/* Income Verification Section */}
-        {verification && verification.status === 'IN_PROGRESS' && (
-          <div className="border-t border-gray-200 pt-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium text-gray-900">Income Verification</h3>
-              <div className="flex space-x-3">
-                <button
-                  onClick={() => {
-                    setSelectedResidentForUpload(null); // Upload for all residents
-                    setUploadDialogOpen(true);
-                  }}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                >
-                  Upload Documents
-                </button>
-                <button
-                  onClick={() => setFinalizationDialog({ isOpen: true, verification })}
-                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-                >
-                  Finalize Verification
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+
       </div>
 
       <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mt-6">
