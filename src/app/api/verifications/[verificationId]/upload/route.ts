@@ -92,7 +92,7 @@ async function checkForDuplicateDocument(
         const newBox1Wages = extractedData.box1_wages;
         const newEmployer = extractedData.employerName;
 
-        if (existingTaxYear && newTaxYear && existingTaxYear === newTaxYear) {
+        if (existingTaxYear && newTaxYear && String(existingTaxYear) === String(newTaxYear)) {
           const sameBox1Wages = existingBox1Wages && newBox1Wages && 
                                Math.abs(Number(existingBox1Wages) - Number(newBox1Wages)) < 0.01;
           const sameEmployer = existingEmployer && newEmployer && 
