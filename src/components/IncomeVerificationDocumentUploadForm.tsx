@@ -533,7 +533,7 @@ export default function IncomeVerificationDocumentUploadForm({
       // Delay the parent notification to allow success message to show
       setTimeout(() => {
         onUploadComplete();
-      }, 100); // Small delay to ensure success message renders
+      }, 3000); // 3 second delay to show success message properly
       
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');

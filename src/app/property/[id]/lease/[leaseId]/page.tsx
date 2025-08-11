@@ -782,7 +782,7 @@ export default function LeaseDetailPage() {
             // Delay refresh to allow success message to be seen - no immediate action
             setTimeout(() => {
               handleRefresh();
-            }, 3000); // 3 second delay to see success message
+            }, 1000); // 1 second delay - success message handled by upload form
             // Keep dialog open for additional uploads
           }}
           residents={selectedResidentForUpload ? [selectedResidentForUpload] : lease.Resident}
