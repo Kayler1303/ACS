@@ -530,9 +530,10 @@ export default function IncomeVerificationDocumentUploadForm({
       }
       (e.target as HTMLFormElement).reset();
 
-
-      // Notify parent component
-      onUploadComplete();
+      // Delay the parent notification to allow success message to show
+      setTimeout(() => {
+        onUploadComplete();
+      }, 100); // Small delay to ensure success message renders
       
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
