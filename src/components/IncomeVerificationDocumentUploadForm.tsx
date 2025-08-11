@@ -514,7 +514,7 @@ export default function IncomeVerificationDocumentUploadForm({
           
           // Handle duplicate document error specifically
           if (response.status === 409) {
-            throw new Error(`${data.message || 'Duplicate document detected'}`);
+            throw new Error(`🚫 Duplicate Document Blocked: ${data.message || `A similar ${fileData.documentType} document has already been uploaded for this resident. Please check your existing documents.`}`);
           }
           
           throw new Error(data.error || 'Upload failed');

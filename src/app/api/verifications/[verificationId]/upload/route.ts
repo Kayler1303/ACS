@@ -19,6 +19,8 @@ async function checkForDuplicateDocument(
   extractedData: any
 ): Promise<{ isDuplicate: boolean, duplicateId?: string, reason?: string }> {
   try {
+    console.log(`🔍 [DUPLICATE CHECK] Searching for existing documents for resident: ${residentId}, type: ${documentType}`);
+    
     // Get existing documents for this resident of the same type that are not failed/deleted
     const existingDocuments = await prisma.incomeDocument.findMany({
       where: {
@@ -33,7 +35,19 @@ async function checkForDuplicateDocument(
       }
     });
 
+    console.log(`🔍 [DUPLICATE CHECK] Found ${existingDocuments.length} existing documents:`, 
+      existingDocuments.map(doc => ({
+        id: doc.id,
+        status: doc.status,
+        taxYear: doc.taxYear,
+        box1_wages: doc.box1_wages,
+        employerName: doc.employerName,
+        uploadDate: doc.uploadDate
+      }))
+    );
+
     if (existingDocuments.length === 0) {
+      console.log(`🔍 [DUPLICATE CHECK] No existing documents found, allowing upload`);
       return { isDuplicate: false };
     }
 
