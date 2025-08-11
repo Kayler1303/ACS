@@ -425,20 +425,206 @@ export default function LeaseDetailPage() {
                       <p className="text-xs text-gray-400 mt-1">Verified Income: Not Finalized</p>
                     )}
 
-                    {/* Show uploaded documents */}
+                    {/* Show uploaded documents with detailed pills */}
                     {hasDocuments && (
-                      <div className="mt-2 space-y-1">
-                        <p className="text-xs font-medium text-gray-700">Documents:</p>
-                        {residentDocuments.map((doc) => (
-                          <div key={doc.id} className="flex items-center justify-between text-xs">
-                            <span className="text-gray-600">
-                              {doc.documentType} ({doc.status === 'COMPLETED' ? 'Verified' : 'Needs Review'})
-                            </span>
-                            <span className="text-gray-500">
-                              {new Date(doc.uploadDate).toLocaleDateString()}
-                            </span>
-                          </div>
-                        ))}
+                      <div className="mt-3">
+                        <div className="text-xs font-medium text-gray-500 mb-2">Documents ({residentDocuments.length}):</div>
+                        <div className="space-y-2">
+                          {residentDocuments.map(doc => {
+                            // Determine UI styling based on document status
+                            let containerClasses, badgeClasses, statusText, statusIcon;
+                            
+                            if (doc.status === 'COMPLETED') {
+                              containerClasses = "p-3 bg-green-50 border border-green-200 rounded-md";
+                              badgeClasses = "inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-green-100 text-green-800";
+                              statusText = "Approved";
+                              statusIcon = "✅";
+                            } else if (doc.status === 'NEEDS_REVIEW') {
+                              containerClasses = "p-3 bg-yellow-50 border border-yellow-200 rounded-md";
+                              badgeClasses = "inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-yellow-100 text-yellow-800";
+                              statusText = "Waiting for Admin Review";
+                              statusIcon = "⚠️";
+                            } else {
+                              containerClasses = "p-3 bg-gray-50 border border-gray-200 rounded-md";
+                              badgeClasses = "inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-800";
+                              statusText = "Processing";
+                              statusIcon = "⏳";
+                            }
+                            
+                            return (
+                              <div key={doc.id} className={containerClasses}>
+                                <div className={`mb-2 text-xs font-medium flex items-center ${
+                                  doc.status === 'COMPLETED' ? 'text-green-700' : 
+                                  doc.status === 'NEEDS_REVIEW' ? 'text-yellow-700' : 'text-gray-700'
+                                }`}>
+                                  <span className="mr-1">{statusIcon}</span>
+                                  {statusText}
+                                </div>
+                                
+                                <div className="flex justify-between items-start mb-2">
+                                  <div className="flex items-center space-x-2">
+                                    <span className={badgeClasses}>
+                                      {doc.documentType}
+                                    </span>
+                                    {doc.employeeName && (
+                                      <span className="text-xs text-gray-600">
+                                        {doc.employeeName}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center space-x-2">
+                                    <span className="text-xs text-gray-500">
+                                      {new Date(doc.uploadDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                    </span>
+                                  </div>
+                                </div>
+                                
+                                {/* Document-specific details */}
+                                {doc.documentType === 'PAYSTUB' && doc.status === 'COMPLETED' && (
+                                  <div className="grid grid-cols-2 gap-3 text-xs">
+                                    {doc.payPeriodStartDate && doc.payPeriodEndDate && (
+                                      <div>
+                                        <span className="font-medium text-gray-700">Pay Period:</span>
+                                        <div className="text-gray-600">
+                                          {new Date(doc.payPeriodStartDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} - {new Date(doc.payPeriodEndDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {doc.grossPayAmount && (
+                                      <div>
+                                        <span className="font-medium text-gray-700">Gross Pay:</span>
+                                        <div className="text-green-700 font-semibold">
+                                          {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(doc.grossPayAmount)}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {doc.payFrequency && (
+                                      <div>
+                                        <span className="font-medium text-gray-700">Frequency:</span>
+                                        <div className="text-gray-600">
+                                          {doc.payFrequency.replace('_', '-')}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {doc.employerName && (
+                                      <div className="col-span-2">
+                                        <span className="font-medium text-gray-700">Employer:</span>
+                                        <div className="text-gray-600">
+                                          {doc.employerName}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                {doc.documentType === 'W2' && doc.status === 'COMPLETED' && (
+                                  <div className="grid grid-cols-2 gap-3 text-xs">
+                                    {doc.box1_wages && (
+                                      <div>
+                                        <span className="font-medium text-gray-700">Box 1 Wages:</span>
+                                        <div className="text-green-700 font-semibold">
+                                          {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(doc.box1_wages)}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {doc.taxYear && (
+                                      <div>
+                                        <span className="font-medium text-gray-700">Tax Year:</span>
+                                        <div className="text-gray-600">
+                                          {doc.taxYear}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {doc.employerName && (
+                                      <div className="col-span-2">
+                                        <span className="font-medium text-gray-700">Employer:</span>
+                                        <div className="text-gray-600">
+                                          {doc.employerName}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                                
+                                {doc.documentType === 'SOCIAL_SECURITY' && doc.status === 'COMPLETED' && (
+                                  <div className="grid grid-cols-2 gap-3 text-xs">
+                                    {doc.documentDate && (
+                                      <div>
+                                        <span className="font-medium text-gray-700">Letter Date:</span>
+                                        <div className="text-gray-600">
+                                          {new Date(doc.documentDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {doc.grossPayAmount && (
+                                      <div>
+                                        <span className="font-medium text-gray-700">Monthly Benefit:</span>
+                                        <div className="text-green-700 font-semibold">
+                                          {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(doc.grossPayAmount)}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                {doc.documentType === 'SSA_1099' && doc.status === 'COMPLETED' && (
+                                  <div className="grid grid-cols-2 gap-3 text-xs">
+                                    {(doc as any).beneficiaryName && (
+                                      <div>
+                                        <span className="font-medium text-gray-700">Beneficiary:</span>
+                                        <div className="text-gray-600">
+                                          {(doc as any).beneficiaryName}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {(doc as any).annualBenefits && (
+                                      <div>
+                                        <span className="font-medium text-gray-700">Annual Benefits:</span>
+                                        <div className="text-green-700 font-semibold">
+                                          {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format((doc as any).annualBenefits)}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {doc.taxYear && (
+                                      <div>
+                                        <span className="font-medium text-gray-700">Tax Year:</span>
+                                        <div className="text-gray-600">
+                                          {doc.taxYear}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* Request Admin Review for completed documents */}
+                                {doc.status === 'COMPLETED' && (
+                                  <div className="mt-2 pt-2 border-t border-gray-100">
+                                    <button
+                                      onClick={() => {
+                                        // TODO: Implement admin review request modal
+                                        console.log('Request admin review for doc:', doc.id);
+                                      }}
+                                      className="text-xs text-orange-600 hover:text-orange-700 hover:underline"
+                                    >
+                                      🔍 Request Admin Review
+                                    </button>
+                                    <div className="text-xs text-gray-500 mt-1">
+                                      Think the extraction is incorrect? Request manual review.
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Admin review message for NEEDS_REVIEW documents */}
+                                {doc.status === 'NEEDS_REVIEW' && (
+                                  <div className="mt-2 p-2 bg-yellow-100 border border-yellow-200 rounded text-xs">
+                                    <div className="font-medium text-yellow-800 mb-1">⏳ Waiting for Admin Review</div>
+                                    <div className="text-yellow-700">Needs Admin Review for Verification</div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -454,16 +640,20 @@ export default function LeaseDetailPage() {
                         >
                           📄 Upload Documents
                         </button>
-                        <button
-                          onClick={() => {
-                            if (verification) {
-                              markResidentNoIncome(resident.id, verification.id);
-                            }
-                          }}
-                          className="px-3 py-1 bg-gray-600 text-white text-xs rounded hover:bg-gray-700"
-                        >
-                          ❌ No Income
-                        </button>
+                        
+                        {/* Only show No Income button if resident has no documents */}
+                        {!hasDocuments && (
+                          <button
+                            onClick={() => {
+                              if (verification) {
+                                markResidentNoIncome(resident.id, verification.id);
+                              }
+                            }}
+                            className="px-3 py-1 bg-gray-600 text-white text-xs rounded hover:bg-gray-700"
+                          >
+                            ❌ No Income
+                          </button>
+                        )}
 
                         {/* Finalize Income button - show when resident has documents but isn't finalized */}
                         {hasDocuments && (
