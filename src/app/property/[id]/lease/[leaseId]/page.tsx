@@ -400,7 +400,27 @@ export default function LeaseDetailPage() {
               </span>
               <div className="text-right text-sm text-gray-500">
                 <div>Lease Verified Income</div>
-                <div className="font-medium text-gray-400">Not Finalized</div>
+                <div className="font-medium text-gray-400">
+                  {(() => {
+                    // Check if ALL residents are finalized (not just some)
+                    const allResidents = lease.Resident;
+                    const finalizedResidents = allResidents.filter(resident => resident.incomeFinalized);
+                    const allResidentsFinalized = allResidents.length > 0 && finalizedResidents.length === allResidents.length;
+                    
+                    if (!allResidentsFinalized) {
+                      return 'Not Finalized';
+                    }
+                    
+                    // Calculate verified income only when all residents are finalized
+                    const leaseVerifiedIncome = finalizedResidents.reduce((total, resident) => {
+                      return total + (resident.calculatedAnnualizedIncome || 0);
+                    }, 0);
+                    
+                    return leaseVerifiedIncome > 0 
+                      ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(leaseVerifiedIncome)
+                      : '$0.00';
+                  })()}
+                </div>
               </div>
               <div className="text-right text-sm">
                 <button className="text-blue-600 hover:text-blue-700 underline">Add Resident</button>
@@ -641,9 +661,9 @@ export default function LeaseDetailPage() {
                                   </div>
                                 )}
 
-                                {/* Action buttons for documents */}
-                                <div className="mt-3 flex justify-end space-x-2">
-                                  {doc.status === 'COMPLETED' && (
+                                {/* Request Admin Review for completed documents */}
+                                {doc.status === 'COMPLETED' && (
+                                  <div className="mt-2 pt-2 border-t border-gray-100">
                                     <button
                                       onClick={() => {
                                         // TODO: Implement admin review request modal
@@ -653,21 +673,21 @@ export default function LeaseDetailPage() {
                                     >
                                       🔍 Request Admin Review
                                     </button>
-                                  )}
-                                  {doc.status !== 'FINALIZED' && ( // Only allow deletion if not finalized
+                                    <div className="text-xs text-gray-500 mt-1">
+                                      Think the extraction is incorrect? Request manual review.
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Delete button positioned separately on the right */}
+                                {doc.status !== 'FINALIZED' && ( // Only allow deletion if not finalized
+                                  <div className="mt-3 flex justify-end">
                                     <button
                                       onClick={() => handleDeleteDocument(doc.id)}
                                       className="text-xs text-red-600 hover:text-red-700 hover:underline"
                                     >
                                       🗑️ Delete
                                     </button>
-                                  )}
-                                </div>
-
-                                {/* Help text for admin review */}
-                                {doc.status === 'COMPLETED' && (
-                                  <div className="text-xs text-gray-500 mt-1">
-                                    Think the extraction is incorrect? Request manual review.
                                   </div>
                                 )}
 
