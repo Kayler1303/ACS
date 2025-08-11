@@ -33,6 +33,14 @@ export async function GET(
           }
         },
         IncomeVerification: {
+          include: {
+            IncomeDocument: {
+              where: {
+                status: { in: ['COMPLETED', 'NEEDS_REVIEW'] }
+              },
+              orderBy: { uploadDate: 'desc' }
+            }
+          },
           orderBy: { createdAt: 'desc' }
         },
         Tenancy: {
