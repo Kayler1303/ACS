@@ -842,10 +842,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     // Validation passed - now check for duplicates before proceeding
+    console.log(`🔍 [DUPLICATE CHECK] Starting duplicate check for resident ${residentId}, document type: ${documentType}`);
+    console.log(`🔍 [DUPLICATE CHECK] Extracted data for comparison:`, JSON.stringify(validationResult.extractedData, null, 2));
+    
     const duplicateCheck = await checkForDuplicateDocument(residentId, documentType, validationResult.extractedData);
     
+    console.log(`🔍 [DUPLICATE CHECK] Result:`, duplicateCheck);
+    
     if (duplicateCheck.isDuplicate) {
-      console.log(`Duplicate document detected for resident ${residentId}: ${duplicateCheck.reason}`);
+      console.log(`❌ [DUPLICATE DETECTED] Blocking upload for resident ${residentId}: ${duplicateCheck.reason}`);
       
       // Delete the newly created document since it's a duplicate
       await prisma.incomeDocument.delete({
@@ -861,6 +866,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         { status: 409 } // Conflict status code
       );
     }
+    
+    console.log(`✅ [DUPLICATE CHECK] No duplicates found, proceeding with upload for resident ${residentId}`);
 
     // No duplicates found - continue with timeliness and name matching validation
     // Get lease information for validation

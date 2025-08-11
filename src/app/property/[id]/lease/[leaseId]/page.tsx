@@ -517,32 +517,55 @@ export default function LeaseDetailPage() {
                                   </div>
                                 )}
 
-                                {doc.documentType === 'W2' && doc.status === 'COMPLETED' && (
-                                  <div className="grid grid-cols-2 gap-3 text-xs">
-                                    {doc.box1_wages && (
+                                {doc.documentType === 'W2' && doc.status === 'COMPLETED' && doc.box1_wages && (
+                                  <div className="space-y-2">
+                                    {/* Successfully extracted W2 data */}
+                                    <div className="grid grid-cols-2 gap-3 text-xs">
+                                      {doc.taxYear && (
+                                        <div>
+                                          <span className="font-medium text-gray-700">Tax Year:</span>
+                                          <div className="text-gray-600">{doc.taxYear}</div>
+                                        </div>
+                                      )}
                                       <div>
                                         <span className="font-medium text-gray-700">Box 1 Wages:</span>
                                         <div className="text-green-700 font-semibold">
                                           {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(doc.box1_wages)}
                                         </div>
                                       </div>
-                                    )}
-                                    {doc.taxYear && (
-                                      <div>
-                                        <span className="font-medium text-gray-700">Tax Year:</span>
-                                        <div className="text-gray-600">
-                                          {doc.taxYear}
+                                      {doc.box3_ss_wages && (
+                                        <div>
+                                          <span className="font-medium text-gray-700">Box 3 SS Wages:</span>
+                                          <div className="text-green-700 font-semibold">
+                                            {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(doc.box3_ss_wages)}
+                                          </div>
                                         </div>
-                                      </div>
-                                    )}
-                                    {doc.employerName && (
-                                      <div className="col-span-2">
-                                        <span className="font-medium text-gray-700">Employer:</span>
-                                        <div className="text-gray-600">
-                                          {doc.employerName}
+                                      )}
+                                      {doc.box5_med_wages && (
+                                        <div>
+                                          <span className="font-medium text-gray-700">Box 5 Medicare:</span>
+                                          <div className="text-green-700 font-semibold">
+                                            {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(doc.box5_med_wages)}
+                                          </div>
                                         </div>
-                                      </div>
-                                    )}
+                                      )}
+                                      {doc.employeeName && (
+                                        <div className="col-span-2">
+                                          <span className="font-medium text-gray-700">Employee:</span>
+                                          <div className="text-gray-600">
+                                            {doc.employeeName}
+                                          </div>
+                                        </div>
+                                      )}
+                                      {doc.employerName && (
+                                        <div className="col-span-2">
+                                          <span className="font-medium text-gray-700">Employer:</span>
+                                          <div className="text-gray-600">
+                                            {doc.employerName}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
                                 )}
                                 
