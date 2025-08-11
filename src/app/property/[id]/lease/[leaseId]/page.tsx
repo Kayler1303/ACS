@@ -129,6 +129,28 @@ export default function LeaseDetailPage() {
     }
   };
 
+  const handleDeleteDocument = async (documentId: string) => {
+    if (!confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/documents/${documentId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete document');
+      }
+
+      handleRefresh(); // Refresh data
+    } catch (error: unknown) {
+      console.error('Error deleting document:', error);
+      alert((error instanceof Error ? error.message : 'An error occurred while deleting the document.'));
+    }
+  };
+
   const handleFinalizeResidentVerification = async (calculatedIncome: number) => {
     if (!residentFinalizationDialog.verification || !residentFinalizationDialog.resident) return;
     
@@ -619,9 +641,9 @@ export default function LeaseDetailPage() {
                                   </div>
                                 )}
 
-                                {/* Request Admin Review for completed documents */}
-                                {doc.status === 'COMPLETED' && (
-                                  <div className="mt-2 pt-2 border-t border-gray-100">
+                                {/* Action buttons for documents */}
+                                <div className="mt-3 flex justify-end space-x-2">
+                                  {doc.status === 'COMPLETED' && (
                                     <button
                                       onClick={() => {
                                         // TODO: Implement admin review request modal
@@ -631,9 +653,21 @@ export default function LeaseDetailPage() {
                                     >
                                       🔍 Request Admin Review
                                     </button>
-                                    <div className="text-xs text-gray-500 mt-1">
-                                      Think the extraction is incorrect? Request manual review.
-                                    </div>
+                                  )}
+                                  {doc.status !== 'FINALIZED' && ( // Only allow deletion if not finalized
+                                    <button
+                                      onClick={() => handleDeleteDocument(doc.id)}
+                                      className="text-xs text-red-600 hover:text-red-700 hover:underline"
+                                    >
+                                      🗑️ Delete
+                                    </button>
+                                  )}
+                                </div>
+
+                                {/* Help text for admin review */}
+                                {doc.status === 'COMPLETED' && (
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    Think the extraction is incorrect? Request manual review.
                                   </div>
                                 )}
 

@@ -43,13 +43,18 @@ export async function DELETE(
           },
         },
       },
+      include: {
+        Resident: true, // Include resident info for income recalculation
+      },
     });
 
     if (!document) {
       return NextResponse.json({ error: 'Document not found or access denied.' }, { status: 404 });
     }
 
-    // Use a transaction to delete both the document and any associated override requests
+    const residentId = document.residentId;
+
+    // Use a transaction to delete document and recalculate income
     await prisma.$transaction(async (tx) => {
       // First, delete any override requests associated with this document
       const deletedOverrideRequests = await tx.overrideRequest.deleteMany({
@@ -64,6 +69,58 @@ export async function DELETE(
       await tx.incomeDocument.delete({
         where: { id: documentId },
       });
+
+      // Recalculate resident's verified income after document deletion
+      if (residentId) {
+        // Get all remaining COMPLETED documents for this resident
+        const remainingDocuments = await tx.incomeDocument.findMany({
+          where: {
+            residentId: residentId,
+            status: 'COMPLETED'
+          }
+        });
+
+        console.log(`📊 Recalculating income for resident after document deletion. Remaining documents: ${remainingDocuments.length}`);
+
+        // Calculate new verified income based on remaining documents
+        let newVerifiedIncome = 0;
+
+                 for (const doc of remainingDocuments) {
+           if (doc.documentType === 'W2') {
+             // For W2s, use the highest of boxes 1, 3, 5
+             const box1 = Number(doc.box1_wages || 0);
+             const box3 = Number(doc.box3_ss_wages || 0);
+             const box5 = Number(doc.box5_med_wages || 0);
+             const highestAmount = Math.max(box1, box3, box5);
+             newVerifiedIncome += highestAmount;
+           } else if (doc.documentType === 'PAYSTUB') {
+             // For paystubs, use calculatedAnnualizedIncome
+             newVerifiedIncome += Number(doc.calculatedAnnualizedIncome || 0);
+           } else if (doc.documentType === 'SOCIAL_SECURITY') {
+             // For Social Security, use calculatedAnnualizedIncome
+             newVerifiedIncome += Number(doc.calculatedAnnualizedIncome || 0);
+           } else if (doc.documentType === 'SSA_1099') {
+             // For SSA-1099, use calculatedAnnualizedIncome
+             newVerifiedIncome += Number(doc.calculatedAnnualizedIncome || 0);
+           }
+         }
+
+        console.log(`📊 New verified income for resident: $${newVerifiedIncome}`);
+
+        // Update the resident's verified income and related fields
+        await tx.resident.update({
+          where: { id: residentId },
+          data: {
+            verifiedIncome: newVerifiedIncome,
+            calculatedAnnualizedIncome: newVerifiedIncome > 0 ? newVerifiedIncome : null,
+            // If no documents remain, mark as not finalized
+            incomeFinalized: remainingDocuments.length > 0,
+            finalizedAt: remainingDocuments.length > 0 ? undefined : null,
+          }
+        });
+
+        console.log(`✅ Updated resident verified income to $${newVerifiedIncome}, finalized: ${remainingDocuments.length > 0}`);
+      }
     });
 
     // Delete the physical file after successful database operations
@@ -71,7 +128,10 @@ export async function DELETE(
       await deleteFileLocally(document.filePath);
     }
 
-    return NextResponse.json({ message: 'Document and associated override requests deleted successfully' });
+    return NextResponse.json({ 
+      message: 'Document deleted and resident income recalculated successfully',
+      recalculatedIncome: true
+    });
   } catch (error) {
     console.error('Error deleting document:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

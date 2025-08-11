@@ -75,6 +75,19 @@ export default function IncomeVerificationDocumentUploadForm({
     isOpen: boolean;
     data: DateDiscrepancyData | null;
   }>({ isOpen: false, data: null });
+  const [duplicateError, setDuplicateError] = useState<{
+    isVisible: boolean;
+    message: string;
+    documentType: string;
+    residentId: string;
+    duplicateDocumentId?: string;
+  }>({
+    isVisible: false,
+    message: '',
+    documentType: '',
+    residentId: '',
+    duplicateDocumentId: ''
+  });
   
   // Lease creation workflow state
   const [createLeaseDialogOpen, setCreateLeaseDialogOpen] = useState(false);
@@ -98,6 +111,37 @@ export default function IncomeVerificationDocumentUploadForm({
 
   // Generate unique ID for file tracking
   const generateFileId = () => Math.random().toString(36).substr(2, 9);
+
+  // Handle admin override request for duplicate detection
+  const handleDuplicateOverride = async () => {
+    try {
+      const response = await fetch('/api/admin/override-requests', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          type: 'DUPLICATE_DOCUMENT',
+          userExplanation: `User requests override for duplicate ${duplicateError.documentType} detection. They believe this is not a duplicate document.`,
+          residentId: duplicateError.residentId,
+          documentId: duplicateError.duplicateDocumentId,
+          contextualData: {
+            duplicateMessage: duplicateError.message,
+            documentType: duplicateError.documentType
+          }
+        }),
+      });
+
+      if (response.ok) {
+        setSuccess('Admin override request submitted successfully. You will be notified when reviewed.');
+        setDuplicateError({ isVisible: false, message: '', documentType: '', residentId: '', duplicateDocumentId: '' });
+      } else {
+        setError('Failed to submit override request. Please try again.');
+      }
+    } catch (err) {
+      setError('Failed to submit override request. Please try again.');
+    }
+  };
 
   // Handle date discrepancy modal actions
   const handleConfirmCurrentLease = async () => {
@@ -504,17 +548,30 @@ export default function IncomeVerificationDocumentUploadForm({
         formData.append('documentType', fileData.documentType);
         formData.append('residentId', selectedResident);
 
+        console.log(`🔄 [FRONTEND] Uploading ${fileData.documentType} for resident...`);
+        
         const response = await fetch(`/api/verifications/${verificationId}/upload`, {
           method: 'POST',
           body: formData,
         });
 
+        console.log(`📡 [FRONTEND] Upload response status: ${response.status}`);
+
         if (!response.ok) {
           const data = await response.json();
+          console.log(`❌ [FRONTEND] Upload failed with data:`, data);
           
           // Handle duplicate document error specifically
           if (response.status === 409) {
-            throw new Error(`🚫 Duplicate Document Blocked: ${data.message || `A similar ${fileData.documentType} document has already been uploaded for this resident. Please check your existing documents.`}`);
+            console.log(`🚫 [FRONTEND] Duplicate detected, throwing error...`);
+            setDuplicateError({
+              isVisible: true,
+              message: data.message || `A similar ${fileData.documentType} document has already been uploaded for this resident.`,
+              documentType: fileData.documentType,
+              residentId: selectedResident,
+              duplicateDocumentId: data.duplicateDocumentId
+            });
+            return; // Don't throw error, show duplicate dialog instead
           }
           
           throw new Error(data.error || 'Upload failed');
@@ -536,7 +593,10 @@ export default function IncomeVerificationDocumentUploadForm({
       }, 3000); // 3 second delay to show success message properly
       
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
+      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
+      console.log(`🚨 [FRONTEND] Caught error in handleSubmit:`, errorMessage);
+      setError(errorMessage);
+      console.log(`🚨 [FRONTEND] Error state set to:`, errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -547,6 +607,43 @@ export default function IncomeVerificationDocumentUploadForm({
       <form onSubmit={handleSubmit} className="space-y-6 bg-white p-6 rounded-lg shadow-sm border border-gray-200">
       {error && <div className="p-3 bg-red-100 text-red-700 rounded-md">{error}</div>}
       {success && <div className="p-3 bg-green-100 text-green-700 rounded-md">{success}</div>}
+      
+      {/* Duplicate Detection Error with Override Option */}
+      {duplicateError.isVisible && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-md">
+          <div className="flex items-start">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3 flex-1">
+              <h3 className="text-sm font-medium text-red-800">
+                {duplicateError.message}
+              </h3>
+              <div className="mt-3 flex space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setDuplicateError({ isVisible: false, message: '', documentType: '', residentId: '', duplicateDocumentId: '' })}
+                  className="inline-flex items-center px-3 py-2 border border-red-300 shadow-sm text-sm leading-4 font-medium rounded-md text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDuplicateOverride}
+                  className="inline-flex items-center px-3 py-2 border border-transparent shadow-sm text-sm leading-4 font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                >
+                  Request Admin Override
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-red-600">
+                If you believe this is not a duplicate document, click "Request Admin Override" to have an administrator review this decision.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
       
       <div className="mb-6">
         <label htmlFor="resident" className="block text-sm font-medium text-gray-700 mb-1">

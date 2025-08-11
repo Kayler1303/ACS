@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Type and explanation are required' }, { status: 400 });
     }
 
-    if (!['VALIDATION_EXCEPTION', 'INCOME_DISCREPANCY', 'DOCUMENT_REVIEW'].includes(type)) {
+    if (!['VALIDATION_EXCEPTION', 'INCOME_DISCREPANCY', 'DOCUMENT_REVIEW', 'DUPLICATE_DOCUMENT'].includes(type)) {
       return NextResponse.json({ error: 'Invalid override request type' }, { status: 400 });
     }
 
