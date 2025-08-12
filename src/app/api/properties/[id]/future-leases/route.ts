@@ -126,7 +126,14 @@ export async function GET(
               const calculatedIncome = resident.calculatedAnnualizedIncome ? Number(resident.calculatedAnnualizedIncome) : 0;
               const verifiedIncome = resident.verifiedIncome ? Number(resident.verifiedIncome) : 0;
               const income = calculatedIncome || verifiedIncome || 0;
-              console.log(`[FUTURE LEASE AMI DEBUG] Resident ${resident.name}: calculated=${calculatedIncome}, verified=${verifiedIncome}, final=${income}`);
+              
+              // CRITICAL: Future leases should NEVER use annualizedIncome (rent roll income)
+              // They should ONLY use verified income from the income verification process
+              if (income === 0 && resident.annualizedIncome) {
+                console.log(`[FUTURE LEASE AMI WARNING] Resident ${resident.name} has rent roll income ($${resident.annualizedIncome}) but no verified income - CORRECTLY not using rent roll income for AMI calculation`);
+              }
+              
+              console.log(`[FUTURE LEASE AMI DEBUG] Resident ${resident.name}: calculated=${calculatedIncome}, verified=${verifiedIncome}, final=${income}, rentRollIncome=${resident.annualizedIncome || 0}`);
               return acc + income;
             }, 0);
             
@@ -140,11 +147,12 @@ export async function GET(
             ? `${residentNames[0]} + ${residentNames.length - 1} other${residentNames.length > 2 ? 's' : ''}`
             : residentNames[0] || 'Future Lease';
 
-          // Only calculate compliance bucket if income is verified
+          // Only calculate compliance bucket if income is verified AND we have actual verified income
           let complianceBucket = '-';
-          if (verificationStatus === 'Verified') {
+          if (verificationStatus === 'Verified' && totalIncome > 0) {
             const hudIncomeLimits = await getHudIncomeLimits(property.county, property.state);
             console.log(`[FUTURE LEASE AMI DEBUG] AMI calculation for lease ${futureLease.id}:`, {
+              verificationStatus,
               totalIncome,
               residentCount: (futureLease.Resident || []).length,
               complianceOption: property.complianceOption || "20% at 50% AMI, 55% at 80% AMI",
@@ -160,6 +168,12 @@ export async function GET(
             );
             
             console.log(`[FUTURE LEASE AMI DEBUG] Calculated AMI bucket: ${complianceBucket}`);
+          } else {
+            console.log(`[FUTURE LEASE AMI DEBUG] Lease ${futureLease.id} - Not calculating AMI bucket:`, {
+              verificationStatus,
+              totalIncome,
+              reason: verificationStatus !== 'Verified' ? 'Not verified' : 'No verified income'
+            });
           }
 
         unitData.futureLease = {
