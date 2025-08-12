@@ -115,10 +115,22 @@ export async function GET(
           let totalIncome = 0;
           if (verificationStatus === 'Verified') {
             // For verified leases, use verified income (calculatedAnnualizedIncome or verifiedIncome)
+            console.log(`[FUTURE LEASE AMI DEBUG] Lease ${futureLease.id} residents:`, (futureLease.Resident || []).map(r => ({
+              name: r.name,
+              calculatedAnnualizedIncome: r.calculatedAnnualizedIncome,
+              verifiedIncome: r.verifiedIncome,
+              incomeFinalized: r.incomeFinalized
+            })));
+            
             totalIncome = (futureLease.Resident || []).reduce((acc: number, resident: any) => {
-              const verifiedIncome = resident.calculatedAnnualizedIncome || resident.verifiedIncome || 0;
-              return acc + verifiedIncome;
+              const calculatedIncome = resident.calculatedAnnualizedIncome ? Number(resident.calculatedAnnualizedIncome) : 0;
+              const verifiedIncome = resident.verifiedIncome ? Number(resident.verifiedIncome) : 0;
+              const income = calculatedIncome || verifiedIncome || 0;
+              console.log(`[FUTURE LEASE AMI DEBUG] Resident ${resident.name}: calculated=${calculatedIncome}, verified=${verifiedIncome}, final=${income}`);
+              return acc + income;
             }, 0);
+            
+            console.log(`[FUTURE LEASE AMI DEBUG] Lease ${futureLease.id} total income: $${totalIncome}`);
           }
           // For non-verified future leases, totalIncome stays 0 (no rent roll data exists)
 
@@ -132,12 +144,22 @@ export async function GET(
           let complianceBucket = '-';
           if (verificationStatus === 'Verified') {
             const hudIncomeLimits = await getHudIncomeLimits(property.county, property.state);
+            console.log(`[FUTURE LEASE AMI DEBUG] AMI calculation for lease ${futureLease.id}:`, {
+              totalIncome,
+              residentCount: (futureLease.Resident || []).length,
+              complianceOption: property.complianceOption || "20% at 50% AMI, 55% at 80% AMI",
+              county: property.county,
+              state: property.state
+            });
+            
             complianceBucket = getActualAmiBucket(
               totalIncome,
               (futureLease.Resident || []).length,
               hudIncomeLimits,
               property.complianceOption || "20% at 50% AMI, 55% at 80% AMI"
             );
+            
+            console.log(`[FUTURE LEASE AMI DEBUG] Calculated AMI bucket: ${complianceBucket}`);
           }
 
         unitData.futureLease = {
