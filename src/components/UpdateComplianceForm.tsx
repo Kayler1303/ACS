@@ -151,7 +151,14 @@ export default function UpdateComplianceForm({ propertyId }: UpdateComplianceFor
 
       const result = await res.json();
 
-      router.push(`/property/${propertyId}`);
+      // Check if reconciliation is required due to discrepancies
+      if (result.requiresReconciliation && result.hasDiscrepancies) {
+        console.log(`[COMPLIANCE] Discrepancies detected, redirecting to reconciliation:`, result.discrepancies);
+        router.push(`/property/${propertyId}/reconciliation?rentRollId=${result.rentRollId}&reason=income-discrepancies`);
+      } else {
+        console.log(`[COMPLIANCE] No discrepancies found, proceeding to property page`);
+        router.push(`/property/${propertyId}`);
+      }
       router.refresh();
 
     } catch (err: unknown) {
