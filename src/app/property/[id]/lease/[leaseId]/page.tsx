@@ -413,7 +413,8 @@ export default function LeaseDetailPage() {
                     
                     // Calculate verified income only when all residents are finalized
                     const leaseVerifiedIncome = finalizedResidents.reduce((total, resident) => {
-                      return total + (resident.calculatedAnnualizedIncome || 0);
+                      const income = resident.calculatedAnnualizedIncome ? Number(resident.calculatedAnnualizedIncome) : 0;
+                      return total + income;
                     }, 0);
                     
                     return leaseVerifiedIncome > 0 
@@ -461,7 +462,7 @@ export default function LeaseDetailPage() {
                     )}
                     {resident.calculatedAnnualizedIncome ? (
                       <p className="text-xs text-gray-600 mt-1">
-                        Verified Income: ${resident.calculatedAnnualizedIncome.toLocaleString()}
+                        Verified Income: ${Number(resident.calculatedAnnualizedIncome).toLocaleString()}
                       </p>
                     ) : (
                       <p className="text-xs text-gray-400 mt-1">Verified Income: Not Finalized</p>

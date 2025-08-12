@@ -133,7 +133,7 @@ export default function VerificationFinalizationDialog({
   // Calculate total verified income (Only include finalized residents)
   const totalVerifiedIncome = residents.reduce((sum, resident) => {
     if (resident.incomeFinalized) {
-      return sum + (resident.calculatedAnnualizedIncome || 0);
+              return sum + (resident.calculatedAnnualizedIncome ? Number(resident.calculatedAnnualizedIncome) : 0);
     }
     return sum;
   }, 0);
