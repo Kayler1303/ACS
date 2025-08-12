@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
+import { sendAdminDecisionNotification } from '@/services/emailNotification';
 
 export async function PATCH(
   request: NextRequest,
@@ -77,6 +78,24 @@ export async function PATCH(
             id: true,
             name: true,
             address: true
+          }
+        },
+        Unit: {
+          select: {
+            id: true,
+            unitNumber: true
+          }
+        },
+        Resident: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        IncomeDocument: {
+          select: {
+            id: true,
+            documentType: true
           }
         }
       }
@@ -256,10 +275,35 @@ export async function PATCH(
       }
     }
 
-    // TODO: In the future, we might want to:
-    // 1. Send email notification to the requester
-    // 2. If approved, automatically apply the override (depending on the type)
-    // 3. Log the admin action for audit purposes
+    // Send automatic email notification to user
+    const requester = updatedRequest.User_OverrideRequest_requesterIdToUser;
+    const reviewer = updatedRequest.User_OverrideRequest_reviewerIdToUser;
+    
+    if (requester && reviewer) {
+      try {
+        const emailResult = await sendAdminDecisionNotification({
+          adminName: reviewer.name || reviewer.email || 'Admin',
+          userEmail: requester.email,
+          userFirstName: requester.name?.split(' ')[0] || 'there',
+          decision: action === 'approve' ? 'APPROVED' : 'DENIED',
+          adminNotes: adminNotes.trim(),
+          overrideRequestType: updatedRequest.type,
+          propertyName: updatedRequest.Property?.name,
+          unitNumber: updatedRequest.Unit?.unitNumber?.toString(),
+          documentType: updatedRequest.IncomeDocument?.documentType,
+          residentName: updatedRequest.Resident?.name
+        });
+
+        if (emailResult.success) {
+          console.log(`[ADMIN DECISION] Successfully sent ${action === 'approve' ? 'approval' : 'denial'} notification email to ${requester.email}`);
+        } else {
+          console.warn(`[ADMIN DECISION] Failed to send notification email: ${emailResult.error}`);
+        }
+      } catch (emailError) {
+        console.error('[ADMIN DECISION] Error sending notification email:', emailError);
+        // Continue execution - don't fail the admin decision because of email issues
+      }
+    }
 
     return NextResponse.json({
       success: true,

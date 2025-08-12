@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { DocumentStatus } from '@prisma/client';
+import { sendAdminDecisionNotification } from '@/services/emailNotification';
 
 /**
  * Admin API endpoint to handle document review decisions
@@ -149,15 +150,53 @@ export async function POST(
       }
 
       // Update the override request
-      await prisma.overrideRequest.update({
+      const updatedOverrideRequest = await prisma.overrideRequest.update({
         where: { id: overrideRequest.id },
         data: {
           status: 'APPROVED',
           adminNotes: adminNotes || `Document approved by admin. ${correctedValues ? 'Values were corrected during review.' : 'Original extracted values were accepted.'}`,
           reviewerId: session.user.id,
           reviewedAt: new Date()
+        },
+        include: {
+          User_OverrideRequest_requesterIdToUser: {
+            select: { id: true, name: true, email: true }
+          },
+          Unit: {
+            select: { unitNumber: true, Property: { select: { name: true } } }
+          },
+          Resident: {
+            select: { name: true }
+          }
         }
       });
+
+      // Send approval notification email
+      const admin = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { name: true, email: true }
+      });
+
+      if (updatedOverrideRequest.User_OverrideRequest_requesterIdToUser && admin) {
+        const requester = updatedOverrideRequest.User_OverrideRequest_requesterIdToUser;
+        try {
+          await sendAdminDecisionNotification({
+            adminName: admin.name || admin.email || 'Admin',
+            userEmail: requester.email,
+            userFirstName: requester.name?.split(' ')[0] || 'there',
+            decision: 'APPROVED',
+            adminNotes: adminNotes || `Document approved by admin. ${correctedValues ? 'Values were corrected during review.' : 'Original extracted values were accepted.'}`,
+            overrideRequestType: 'DOCUMENT_REVIEW',
+            propertyName: updatedOverrideRequest.Unit?.Property?.name,
+            unitNumber: updatedOverrideRequest.Unit?.unitNumber?.toString(),
+            documentType: document.documentType,
+            residentName: updatedOverrideRequest.Resident?.name
+          });
+          console.log(`[DOCUMENT APPROVAL] Sent approval notification to ${requester.email}`);
+        } catch (emailError) {
+          console.error('[DOCUMENT APPROVAL] Failed to send notification email:', emailError);
+        }
+      }
 
       return NextResponse.json({
         message: 'Document approved successfully',
@@ -175,15 +214,53 @@ export async function POST(
       });
 
       // Update the override request
-      await prisma.overrideRequest.update({
+      const updatedOverrideRequest = await prisma.overrideRequest.update({
         where: { id: overrideRequest.id },
         data: {
           status: 'DENIED',
           adminNotes: adminNotes || 'Document rejected by admin. Manual data entry required.',
           reviewerId: session.user.id,
           reviewedAt: new Date()
+        },
+        include: {
+          User_OverrideRequest_requesterIdToUser: {
+            select: { id: true, name: true, email: true }
+          },
+          Unit: {
+            select: { unitNumber: true, Property: { select: { name: true } } }
+          },
+          Resident: {
+            select: { name: true }
+          }
         }
       });
+
+      // Send denial notification email
+      const admin = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { name: true, email: true }
+      });
+
+      if (updatedOverrideRequest.User_OverrideRequest_requesterIdToUser && admin) {
+        const requester = updatedOverrideRequest.User_OverrideRequest_requesterIdToUser;
+        try {
+          await sendAdminDecisionNotification({
+            adminName: admin.name || admin.email || 'Admin',
+            userEmail: requester.email,
+            userFirstName: requester.name?.split(' ')[0] || 'there',
+            decision: 'DENIED',
+            adminNotes: adminNotes || 'Document rejected by admin. Manual data entry required.',
+            overrideRequestType: 'DOCUMENT_REVIEW',
+            propertyName: updatedOverrideRequest.Unit?.Property?.name,
+            unitNumber: updatedOverrideRequest.Unit?.unitNumber?.toString(),
+            documentType: document.documentType,
+            residentName: updatedOverrideRequest.Resident?.name
+          });
+          console.log(`[DOCUMENT DENIAL] Sent denial notification to ${requester.email}`);
+        } catch (emailError) {
+          console.error('[DOCUMENT DENIAL] Failed to send notification email:', emailError);
+        }
+      }
 
       console.log(`Admin rejected document ${documentId} - Manual data entry will be required`);
 
