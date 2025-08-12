@@ -75,59 +75,92 @@ export async function POST(
         status: DocumentStatus.COMPLETED
       };
 
-      // If admin provided corrected values, use them
+      // If admin provided corrected values, use them - handle all document types
       if (correctedValues) {
-        if (correctedValues.grossPayAmount) updateData.grossPayAmount = correctedValues.grossPayAmount;
-        if (correctedValues.box1_wages) updateData.box1_wages = correctedValues.box1_wages;
-        if (correctedValues.box3_ss_wages) updateData.box3_ss_wages = correctedValues.box3_ss_wages;
-        if (correctedValues.box5_med_wages) updateData.box5_med_wages = correctedValues.box5_med_wages;
+        // Common fields
         if (correctedValues.employeeName) updateData.employeeName = correctedValues.employeeName;
         if (correctedValues.employerName) updateData.employerName = correctedValues.employerName;
+        
+        // Paystub fields
+        if (correctedValues.grossPayAmount) updateData.grossPayAmount = correctedValues.grossPayAmount;
+        if (correctedValues.payFrequency) updateData.payFrequency = correctedValues.payFrequency;
         if (correctedValues.payPeriodStartDate) {
-          // Parse date in local timezone to avoid UTC conversion issues
           const startDate = new Date(correctedValues.payPeriodStartDate + 'T12:00:00');
           updateData.payPeriodStartDate = startDate;
         }
         if (correctedValues.payPeriodEndDate) {
-          // Parse date in local timezone to avoid UTC conversion issues  
           const endDate = new Date(correctedValues.payPeriodEndDate + 'T12:00:00');
           updateData.payPeriodEndDate = endDate;
         }
-        if (correctedValues.payFrequency) updateData.payFrequency = correctedValues.payFrequency;
+        
+        // W2 fields
+        if (correctedValues.box1_wages) updateData.box1_wages = correctedValues.box1_wages;
+        if (correctedValues.box3_ss_wages) updateData.box3_ss_wages = correctedValues.box3_ss_wages;
+        if (correctedValues.box5_med_wages) updateData.box5_med_wages = correctedValues.box5_med_wages;
+        if (correctedValues.taxYear) updateData.taxYear = correctedValues.taxYear;
+        
+        // Social Security / SSA-1099 fields (direct annual income)
+        if (correctedValues.calculatedAnnualizedIncome) {
+          updateData.calculatedAnnualizedIncome = correctedValues.calculatedAnnualizedIncome;
+        }
+        
+        // Other document type (direct annual income)
+        if (correctedValues.annualIncome) {
+          updateData.calculatedAnnualizedIncome = correctedValues.annualIncome;
+        }
       }
 
       // Calculate annualized income based on document type
       let calculatedAnnualizedIncome = null;
       
-      if (document.documentType === 'W2') {
-        // For W2, use highest of boxes 1, 3, 5
-        const amounts = [
-          correctedValues?.box1_wages || document.box1_wages,
-          correctedValues?.box3_ss_wages || document.box3_ss_wages,
-          correctedValues?.box5_med_wages || document.box5_med_wages
-        ].filter(amount => amount != null);
-        
-        if (amounts.length > 0) {
-          calculatedAnnualizedIncome = Math.max(...amounts);
-        }
-      } else if (document.documentType === 'PAYSTUB') {
-        // For paystub, calculate based on pay frequency
-        const grossPay = correctedValues?.grossPayAmount || document.grossPayAmount;
-        const frequency = correctedValues?.payFrequency || document.payFrequency;
-        
-        if (grossPay && frequency) {
-          const frequencyMultipliers: Record<string, number> = {
-            'WEEKLY': 52,
-            'BI-WEEKLY': 26,
-            'SEMI-MONTHLY': 24,
-            'MONTHLY': 12
-          };
-          
-          const multiplier = frequencyMultipliers[frequency] || 26; // Default to bi-weekly
-          calculatedAnnualizedIncome = grossPay * multiplier;
+      // Check if admin directly provided annual income (for non-paystub/W2 types)
+      if (correctedValues?.annualIncome) {
+        calculatedAnnualizedIncome = correctedValues.annualIncome;
+      } else if (correctedValues?.calculatedAnnualizedIncome) {
+        calculatedAnnualizedIncome = correctedValues.calculatedAnnualizedIncome;
+      } else {
+        // Calculate based on document type
+        switch (document.documentType) {
+          case 'W2':
+            // For W2, use highest of boxes 1, 3, 5
+            const amounts = [
+              correctedValues?.box1_wages || document.box1_wages,
+              correctedValues?.box3_ss_wages || document.box3_ss_wages,
+              correctedValues?.box5_med_wages || document.box5_med_wages
+            ].filter(amount => amount != null);
+            
+            if (amounts.length > 0) {
+              calculatedAnnualizedIncome = Math.max(...amounts);
+            }
+            break;
+            
+          case 'PAYSTUB':
+            // For paystub, calculate based on pay frequency
+            const grossPay = correctedValues?.grossPayAmount || document.grossPayAmount;
+            const frequency = correctedValues?.payFrequency || document.payFrequency;
+            
+            if (grossPay && frequency) {
+              const frequencyMultipliers: Record<string, number> = {
+                'WEEKLY': 52,
+                'BI-WEEKLY': 26,
+                'SEMI-MONTHLY': 24,
+                'MONTHLY': 12
+              };
+              
+              const multiplier = frequencyMultipliers[frequency] || 26; // Default to bi-weekly
+              calculatedAnnualizedIncome = grossPay * multiplier;
+            }
+            break;
+            
+          default:
+            // For SOCIAL_SECURITY, SSA_1099, OTHER, BANK_STATEMENT, OFFER_LETTER
+            // Use the existing calculatedAnnualizedIncome if available
+            calculatedAnnualizedIncome = document.calculatedAnnualizedIncome;
+            break;
         }
       }
 
+      // Store the calculated income if we have one
       if (calculatedAnnualizedIncome) {
         updateData.calculatedAnnualizedIncome = calculatedAnnualizedIncome;
       }

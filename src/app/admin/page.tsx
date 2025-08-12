@@ -494,28 +494,72 @@ function OverrideRequestItem({
   const [actionType, setActionType] = useState<'approve' | 'deny'>('approve');
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   
-  // Manual data entry state for document review
+  // Manual data entry state for document review - dynamic based on document type
   const [correctedValues, setCorrectedValues] = useState<{
+    // Common fields
     employeeName?: string;
     employerName?: string;
+    
+    // Paystub fields
     grossPayAmount?: number;
     payFrequency?: string;
     payPeriodStartDate?: string;
     payPeriodEndDate?: string;
+    
+    // W2 fields
+    box1_wages?: number;
+    box3_ss_wages?: number;
+    box5_med_wages?: number;
+    taxYear?: number;
+    
+    // Social Security / SSA-1099 fields
+    calculatedAnnualizedIncome?: number;
+    
+    // Other document type - simple annual income
+    annualIncome?: number;
   }>({});
 
   // Pre-populate form with Azure's extracted values when dialog opens for document review
   useEffect(() => {
     if (showReviewDialog && request.type === 'DOCUMENT_REVIEW' && request.contextualData?.document) {
       const doc = request.contextualData.document;
-      setCorrectedValues({
+      const documentType = doc.documentType;
+      
+      // Base values common to all document types
+      const baseValues = {
         employeeName: doc.employeeName || '',
         employerName: doc.employerName || '',
-        grossPayAmount: doc.grossPayAmount || undefined,
-        payFrequency: doc.payFrequency || '',
-        payPeriodStartDate: doc.payPeriodStartDate ? doc.payPeriodStartDate.split('T')[0] : '',
-        payPeriodEndDate: doc.payPeriodEndDate ? doc.payPeriodEndDate.split('T')[0] : '',
-      });
+      };
+      
+      // Add document-type specific fields
+      if (documentType === 'PAYSTUB') {
+        setCorrectedValues({
+          ...baseValues,
+          grossPayAmount: doc.grossPayAmount || undefined,
+          payFrequency: doc.payFrequency || '',
+          payPeriodStartDate: doc.payPeriodStartDate ? doc.payPeriodStartDate.split('T')[0] : '',
+          payPeriodEndDate: doc.payPeriodEndDate ? doc.payPeriodEndDate.split('T')[0] : '',
+        });
+      } else if (documentType === 'W2') {
+        setCorrectedValues({
+          ...baseValues,
+          box1_wages: doc.box1_wages || undefined,
+          box3_ss_wages: doc.box3_ss_wages || undefined,
+          box5_med_wages: doc.box5_med_wages || undefined,
+          taxYear: doc.taxYear || undefined,
+        });
+      } else if (documentType === 'SOCIAL_SECURITY' || documentType === 'SSA_1099') {
+        setCorrectedValues({
+          ...baseValues,
+          calculatedAnnualizedIncome: doc.calculatedAnnualizedIncome || undefined,
+        });
+      } else {
+        // OTHER, BANK_STATEMENT, OFFER_LETTER or any other document type - simple annual income entry
+        setCorrectedValues({
+          ...baseValues,
+          annualIncome: doc.calculatedAnnualizedIncome || doc.grossPayAmount || undefined,
+        });
+      }
     } else if (!showReviewDialog) {
       // Reset form when dialog closes
       setCorrectedValues({});
@@ -1591,76 +1635,182 @@ function OverrideRequestItem({
                     Azure's extracted values are pre-filled below. Correct any inaccurate information by editing the fields.
                   </p>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Employee Name</label>
-                      <input
-                        type="text"
-                        value={correctedValues.employeeName || ''}
-                        onChange={(e) => setCorrectedValues(prev => ({ ...prev, employeeName: e.target.value }))}
-                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
-                        placeholder="Correct employee name if needed"
-                      />
-                    </div>
+                  {(() => {
+                    const documentType = request.contextualData?.document?.documentType;
                     
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Employer Name</label>
-                      <input
-                        type="text"
-                        value={correctedValues.employerName || ''}
-                        onChange={(e) => setCorrectedValues(prev => ({ ...prev, employerName: e.target.value }))}
-                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
-                        placeholder="Correct employer name if needed"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Gross Pay Amount</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={correctedValues.grossPayAmount || ''}
-                        onChange={(e) => setCorrectedValues(prev => ({ ...prev, grossPayAmount: parseFloat(e.target.value) || undefined }))}
-                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
-                        placeholder="Correct gross pay amount if needed"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Pay Frequency</label>
-                      <select
-                        value={correctedValues.payFrequency || ''}
-                        onChange={(e) => setCorrectedValues(prev => ({ ...prev, payFrequency: e.target.value }))}
-                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
-                      >
-                        <option value="">Select frequency</option>
-                        <option value="WEEKLY">Weekly</option>
-                        <option value="BI-WEEKLY">Bi-Weekly</option>
-                        <option value="SEMI-MONTHLY">Semi-Monthly</option>
-                        <option value="MONTHLY">Monthly</option>
-                      </select>
-                    </div>
-                    
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Pay Period Start</label>
-                      <input
-                        type="date"
-                        value={correctedValues.payPeriodStartDate || ''}
-                        onChange={(e) => setCorrectedValues(prev => ({ ...prev, payPeriodStartDate: e.target.value }))}
-                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Pay Period End</label>
-                      <input
-                        type="date"
-                        value={correctedValues.payPeriodEndDate || ''}
-                        onChange={(e) => setCorrectedValues(prev => ({ ...prev, payPeriodEndDate: e.target.value }))}
-                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
-                      />
-                    </div>
-                  </div>
+                    return (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Common fields for all document types */}
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Employee Name</label>
+                          <input
+                            type="text"
+                            value={correctedValues.employeeName || ''}
+                            onChange={(e) => setCorrectedValues(prev => ({ ...prev, employeeName: e.target.value }))}
+                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                            placeholder="Correct employee name if needed"
+                          />
+                        </div>
+                        
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Employer Name</label>
+                          <input
+                            type="text"
+                            value={correctedValues.employerName || ''}
+                            onChange={(e) => setCorrectedValues(prev => ({ ...prev, employerName: e.target.value }))}
+                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                            placeholder="Correct employer name if needed"
+                          />
+                        </div>
+                        
+                        {/* Document-type specific fields */}
+                        {documentType === 'PAYSTUB' && (
+                          <>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Gross Pay Amount</label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={correctedValues.grossPayAmount || ''}
+                                onChange={(e) => setCorrectedValues(prev => ({ ...prev, grossPayAmount: parseFloat(e.target.value) || undefined }))}
+                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                                placeholder="Correct gross pay amount if needed"
+                              />
+                            </div>
+                            
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Pay Frequency</label>
+                              <select
+                                value={correctedValues.payFrequency || ''}
+                                onChange={(e) => setCorrectedValues(prev => ({ ...prev, payFrequency: e.target.value }))}
+                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                              >
+                                <option value="">Select frequency</option>
+                                <option value="WEEKLY">Weekly</option>
+                                <option value="BI-WEEKLY">Bi-Weekly</option>
+                                <option value="SEMI-MONTHLY">Semi-Monthly</option>
+                                <option value="MONTHLY">Monthly</option>
+                              </select>
+                            </div>
+                            
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Pay Period Start</label>
+                              <input
+                                type="date"
+                                value={correctedValues.payPeriodStartDate || ''}
+                                onChange={(e) => setCorrectedValues(prev => ({ ...prev, payPeriodStartDate: e.target.value }))}
+                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                              />
+                            </div>
+                            
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Pay Period End</label>
+                              <input
+                                type="date"
+                                value={correctedValues.payPeriodEndDate || ''}
+                                onChange={(e) => setCorrectedValues(prev => ({ ...prev, payPeriodEndDate: e.target.value }))}
+                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                              />
+                            </div>
+                          </>
+                        )}
+                        
+                        {documentType === 'W2' && (
+                          <>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Box 1 Wages</label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={correctedValues.box1_wages || ''}
+                                onChange={(e) => setCorrectedValues(prev => ({ ...prev, box1_wages: parseFloat(e.target.value) || undefined }))}
+                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                                placeholder="Wages, tips, other compensation"
+                              />
+                            </div>
+                            
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Box 3 Social Security Wages</label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={correctedValues.box3_ss_wages || ''}
+                                onChange={(e) => setCorrectedValues(prev => ({ ...prev, box3_ss_wages: parseFloat(e.target.value) || undefined }))}
+                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                                placeholder="Social security wages"
+                              />
+                            </div>
+                            
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Box 5 Medicare Wages</label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={correctedValues.box5_med_wages || ''}
+                                onChange={(e) => setCorrectedValues(prev => ({ ...prev, box5_med_wages: parseFloat(e.target.value) || undefined }))}
+                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                                placeholder="Medicare wages and tips"
+                              />
+                            </div>
+                            
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-1">Tax Year</label>
+                              <input
+                                type="number"
+                                value={correctedValues.taxYear || ''}
+                                onChange={(e) => setCorrectedValues(prev => ({ ...prev, taxYear: parseInt(e.target.value) || undefined }))}
+                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                                placeholder="e.g., 2023"
+                              />
+                            </div>
+                          </>
+                        )}
+                        
+                        {(documentType === 'SOCIAL_SECURITY' || documentType === 'SSA_1099') && (
+                          <div className="md:col-span-2">
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Annual Income Amount</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={correctedValues.calculatedAnnualizedIncome || ''}
+                              onChange={(e) => setCorrectedValues(prev => ({ ...prev, calculatedAnnualizedIncome: parseFloat(e.target.value) || undefined }))}
+                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                              placeholder="Total annual income from this document"
+                            />
+                          </div>
+                        )}
+                        
+                        {(documentType === 'OTHER' || documentType === 'BANK_STATEMENT' || documentType === 'OFFER_LETTER') && (
+                          <div className="md:col-span-2">
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Annual Income Amount</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={correctedValues.annualIncome || ''}
+                              onChange={(e) => setCorrectedValues(prev => ({ ...prev, annualIncome: parseFloat(e.target.value) || undefined }))}
+                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                              placeholder="Total annual income from this document"
+                            />
+                          </div>
+                        )}
+                        
+                        {/* Default case for any unhandled document type */}
+                        {!['PAYSTUB', 'W2', 'SOCIAL_SECURITY', 'SSA_1099', 'OTHER', 'BANK_STATEMENT', 'OFFER_LETTER'].includes(documentType) && (
+                          <div className="md:col-span-2">
+                            <label className="block text-xs font-medium text-gray-700 mb-1">Annual Income Amount</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={correctedValues.annualIncome || ''}
+                              onChange={(e) => setCorrectedValues(prev => ({ ...prev, annualIncome: parseFloat(e.target.value) || undefined }))}
+                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                              placeholder="Total annual income from this document"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
