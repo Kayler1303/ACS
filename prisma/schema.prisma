@@ -136,6 +136,7 @@ model Property {
   User                     User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   RentRoll                 RentRoll[]
   Unit                     Unit[]
+  PropertyShare            PropertyShare[]
 }
 
 model RentRoll {
@@ -214,6 +215,8 @@ model User {
   OverrideRequest_OverrideRequest_reviewerIdToUser  OverrideRequest[]   @relation("OverrideRequest_reviewerIdToUser")
   Property                                          Property[]
   VerificationToken                                 VerificationToken[]
+  PropertyShare_SharedWith                          PropertyShare[]     @relation("PropertyShare_userId")
+  PropertyShare_SharedBy                            PropertyShare[]     @relation("PropertyShare_sharedById")
 }
 
 model VerificationToken {
@@ -274,4 +277,26 @@ enum VerificationStatus {
   IN_PROGRESS
   FINALIZED
   OVERDUE
+}
+
+enum PermissionLevel {
+  READ_ONLY
+  CONFIGURE
+  EDIT
+}
+
+model PropertyShare {
+  id          String          @id @default(cuid())
+  propertyId  String
+  userId      String
+  sharedById  String
+  permission  PermissionLevel
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  property    Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user        User            @relation("PropertyShare_userId", fields: [userId], references: [id], onDelete: Cascade)
+  sharedBy    User            @relation("PropertyShare_sharedById", fields: [sharedById], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, userId])
 }

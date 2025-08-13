@@ -412,10 +412,20 @@ export default function LeaseDetailPage() {
                     }
                     
                     // Calculate verified income only when all residents are finalized
+                    console.log(`[LEASE DETAIL AMI DEBUG] Calculating lease verified income for lease ${lease.id}:`);
+                    console.log(`[LEASE DETAIL AMI DEBUG] Finalized residents:`, finalizedResidents.map(r => ({
+                      name: r.name,
+                      calculatedAnnualizedIncome: r.calculatedAnnualizedIncome,
+                      incomeFinalized: r.incomeFinalized
+                    })));
+                    
                     const leaseVerifiedIncome = finalizedResidents.reduce((total, resident) => {
                       const income = resident.calculatedAnnualizedIncome ? Number(resident.calculatedAnnualizedIncome) : 0;
+                      console.log(`[LEASE DETAIL AMI DEBUG] ${resident.name}: $${income}`);
                       return total + income;
                     }, 0);
+                    
+                    console.log(`[LEASE DETAIL AMI DEBUG] Total lease verified income: $${leaseVerifiedIncome}`);
                     
                     return leaseVerifiedIncome > 0 
                       ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(leaseVerifiedIncome)

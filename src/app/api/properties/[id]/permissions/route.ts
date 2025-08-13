@@ -3,7 +3,6 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { getPropertyPermissions } from '@/lib/permissions';
 
-// GET /api/properties/[id]/permissions - Get user permissions for a property
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -15,15 +14,21 @@ export async function GET(
     }
 
     const { id: propertyId } = await params;
-
     const permissions = await getPropertyPermissions(propertyId, session.user.id);
 
-    return NextResponse.json(permissions);
+    return NextResponse.json({
+      isOwner: permissions.canShare, // Only owners can share
+      canRead: permissions.canRead,
+      canConfigure: permissions.canConfigure,
+      canEdit: permissions.canEdit,
+      canShare: permissions.canShare,
+      canDelete: permissions.canDelete
+    });
 
   } catch (error) {
     console.error('Error fetching user permissions:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch user permissions' },
+      { error: 'Failed to fetch permissions' },
       { status: 500 }
     );
   }

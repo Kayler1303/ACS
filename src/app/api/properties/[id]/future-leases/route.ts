@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '../../../auth/[...nextauth]/route';
-import { prisma } from '@/lib/prisma';
-import { getActualAmiBucket } from '@/services/income';
-import { getHudIncomeLimits } from '@/services/hud';
+import { prisma } from '../../../../../lib/prisma';
+import { getActualAmiBucket } from '../../../../../services/income';
+import { getHudIncomeLimits } from '../../../../../services/hud';
+
+// Disable caching for this route
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 interface UnitFutureLeaseData {
   unitId: string;
@@ -24,6 +28,10 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  console.log(`[FUTURE LEASE API] ======================== GET REQUEST RECEIVED ========================`);
+  console.log(`[FUTURE LEASE API] Property ID: ${params.id}`);
+  console.log(`[FUTURE LEASE API] Request URL: ${request.url}`);
+  console.log(`[FUTURE LEASE API] ============================================================================`);
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
@@ -36,7 +44,7 @@ export async function GET(
     const property = await prisma.property.findUnique({
       where: { 
         id: propertyId,
-        ownerId: session.user.id 
+        ownerId: (session.user as any).id 
       },
       include: {
         Unit: {
@@ -108,8 +116,8 @@ export async function GET(
           const futureLease = futureLeases[0];
           
                           // Use the lease-specific verification function
-        const { getLeaseVerificationStatus } = await import('@/services/verification');
-        const verificationStatus = getLeaseVerificationStatus(futureLease);
+        const { getLeaseVerificationStatus } = await import('../../../../../services/verification');
+        const verificationStatus = getLeaseVerificationStatus({...futureLease, Tenancy: null} as any);
 
           // Calculate total income - only for verified leases
           let totalIncome = 0;
@@ -147,34 +155,46 @@ export async function GET(
             ? `${residentNames[0]} + ${residentNames.length - 1} other${residentNames.length > 2 ? 's' : ''}`
             : residentNames[0] || 'Future Lease';
 
-          // Only calculate compliance bucket if income is verified AND we have actual verified income
-          let complianceBucket = '-';
-          if (verificationStatus === 'Verified' && totalIncome > 0) {
-            const hudIncomeLimits = await getHudIncomeLimits(property.county, property.state);
-            console.log(`[FUTURE LEASE AMI DEBUG] AMI calculation for lease ${futureLease.id}:`, {
-              verificationStatus,
-              totalIncome,
-              residentCount: (futureLease.Resident || []).length,
-              complianceOption: property.complianceOption || "20% at 50% AMI, 55% at 80% AMI",
-              county: property.county,
-              state: property.state
-            });
-            
-            complianceBucket = getActualAmiBucket(
-              totalIncome,
-              (futureLease.Resident || []).length,
-              hudIncomeLimits,
-              property.complianceOption || "20% at 50% AMI, 55% at 80% AMI"
-            );
-            
-            console.log(`[FUTURE LEASE AMI DEBUG] Calculated AMI bucket: ${complianceBucket}`);
-          } else {
-            console.log(`[FUTURE LEASE AMI DEBUG] Lease ${futureLease.id} - Not calculating AMI bucket:`, {
-              verificationStatus,
-              totalIncome,
-              reason: verificationStatus !== 'Verified' ? 'Not verified' : 'No verified income'
-            });
-          }
+                  console.log(`[FUTURE LEASE AMI DEBUG] Processing lease ${futureLease.id} (Unit ${unit.unitNumber}):`, {
+          leaseName,
+          verificationStatus,
+          totalIncome,
+          residents: (futureLease.Resident || []).map(r => ({
+            name: r.name,
+            calculatedIncome: r.calculatedAnnualizedIncome ? Number(r.calculatedAnnualizedIncome) : 0,
+            verifiedIncome: r.verifiedIncome ? Number(r.verifiedIncome) : 0,
+            incomeFinalized: r.incomeFinalized
+          }))
+        });
+
+        // Only calculate compliance bucket if income is verified AND we have actual verified income
+        let complianceBucket = '-';
+        if (verificationStatus === 'Verified' && totalIncome > 0) {
+          const hudIncomeLimits = await getHudIncomeLimits(property.county, property.state);
+          console.log(`[FUTURE LEASE AMI DEBUG] AMI calculation for lease ${futureLease.id}:`, {
+            verificationStatus,
+            totalIncome,
+            residentCount: (futureLease.Resident || []).length,
+            complianceOption: property.complianceOption || "20% at 50% AMI, 55% at 80% AMI",
+            county: property.county,
+            state: property.state
+          });
+          
+          complianceBucket = getActualAmiBucket(
+            totalIncome,
+            (futureLease.Resident || []).length,
+            hudIncomeLimits,
+            property.complianceOption || "20% at 50% AMI, 55% at 80% AMI"
+          );
+          
+          console.log(`[FUTURE LEASE AMI DEBUG] Calculated AMI bucket: ${complianceBucket}`);
+        } else {
+          console.log(`[FUTURE LEASE AMI DEBUG] Lease ${futureLease.id} - Not calculating AMI bucket:`, {
+            verificationStatus,
+            totalIncome,
+            reason: verificationStatus !== 'Verified' ? 'Not verified' : 'No verified income'
+          });
+        }
 
         unitData.futureLease = {
           id: futureLease.id,

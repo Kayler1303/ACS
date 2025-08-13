@@ -6,6 +6,7 @@ import type { FullProperty, FullRentRoll, FullTenancy, Unit } from '@/types/prop
 import type { Resident } from '@prisma/client';
 import { format } from 'date-fns';
 import { PropertyVerificationSummary, VerificationStatus } from '@/services/verification';
+import PropertyShareManager from './PropertyShareManager';
 
 interface PropertyPageClientProps {
   initialProperty: FullProperty;
@@ -159,6 +160,26 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
   const [selectedFutureLeases, setSelectedFutureLeases] = useState<Set<string>>(new Set());
   const [utilityCategory, setUtilityCategory] = useState<string>('');
   const [utilityAllowance, setUtilityAllowance] = useState<number>(0);
+  const [userPermissions, setUserPermissions] = useState<{ isOwner: boolean; canShare: boolean } | null>(null);
+
+  // Fetch user permissions
+  useEffect(() => {
+    const fetchPermissions = async () => {
+      try {
+        const response = await fetch(`/api/properties/${property.id}/permissions`, {
+          credentials: 'include'
+        });
+        if (response.ok) {
+          const permissions = await response.json();
+          setUserPermissions(permissions);
+        }
+      } catch (error) {
+        console.error('Failed to fetch user permissions:', error);
+      }
+    };
+
+    fetchPermissions();
+  }, [property.id]);
 
   // Function to save property settings to database
   const savePropertySettings = async (settings: {
@@ -372,11 +393,18 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
   useEffect(() => {
     const fetchFutureLeases = async () => {
       try {
-        const res = await fetch(`/api/properties/${property.id}/future-leases`, {
-          credentials: 'include'
+        const url = `/api/properties/${property.id}/future-leases?bust=${Date.now()}`;
+        console.log(`[PROPERTY PAGE DEBUG] ====== FRONTEND FETCH STARTING ======`);
+        console.log(`[PROPERTY PAGE DEBUG] Fetching URL: ${url}`);
+        console.log(`[PROPERTY PAGE DEBUG] Property ID: ${property.id}`);
+        console.log(`[PROPERTY PAGE DEBUG] ===================================`);
+        const res = await fetch(url, {
+          credentials: 'include',
+          cache: 'no-cache'
         });
         if (res.ok) {
           const data = await res.json();
+          console.log(`[PROPERTY PAGE DEBUG] Future leases response:`, data);
           setFutureLeases(data.units);
         } else {
           console.error('Failed to fetch future leases:', res.status, res.statusText);
@@ -386,6 +414,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       }
     };
 
+    console.log(`[PROPERTY PAGE DEBUG] useEffect triggered for future leases`);
     fetchFutureLeases();
   }, [property.id]);
 
@@ -1885,6 +1914,17 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Property Sharing Section */}
+      {userPermissions?.isOwner && (
+        <div className="mt-12">
+          <PropertyShareManager 
+            propertyId={property.id}
+            propertyName={property.name}
+            isOwner={userPermissions.isOwner}
+          />
         </div>
       )}
 
