@@ -2273,23 +2273,11 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                            Annual Income
                          </th>
-                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                           AMI Bucket
-                         </th>
                        </tr>
                      </thead>
                      <tbody className="bg-white divide-y divide-gray-200">
                        {Array.from({ length: amiCheckResidents }, (_, i) => i + 1).map((residentNum) => {
                          const income = amiCheckIncomes[residentNum] || 0;
-                         const totalIncome = Object.values(amiCheckIncomes).reduce((sum, val) => sum + (val || 0), 0);
-                         const amiBucket = hudIncomeLimits && totalIncome > 0 
-                           ? getActualAmiBucket(
-                               totalIncome,
-                               amiCheckResidents,
-                               hudIncomeLimits,
-                               complianceOption === 'NC_CUSTOM_80_AMI' ? `${customNCPercentage}% at 80% AMI (NC Custom)` : complianceOption
-                             )
-                           : 'N/A';
                            
                          return (
                            <tr key={residentNum}>
@@ -2313,17 +2301,6 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                                  placeholder="$0.00"
                                />
                              </td>
-                             <td className="px-6 py-4 whitespace-nowrap">
-                               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                 amiBucket === '50% AMI' ? 'bg-green-100 text-green-800' :
-                                 amiBucket === '60% AMI' ? 'bg-blue-100 text-blue-800' :
-                                 amiBucket === '80% AMI' ? 'bg-yellow-100 text-yellow-800' :
-                                 amiBucket === 'Market' ? 'bg-red-100 text-red-800' :
-                                 'bg-gray-100 text-gray-800'
-                               }`}>
-                                 {amiBucket}
-                               </span>
-                             </td>
                            </tr>
                          );
                        })}
@@ -2333,7 +2310,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                  
                  {Object.values(amiCheckIncomes).some(income => income > 0) && (
                    <div className="mt-4 p-4 bg-gray-50 rounded-md">
-                     <div className="flex justify-between items-center">
+                     <div className="flex justify-between items-center mb-3">
                        <span className="text-sm font-medium text-gray-700">
                          Total Combined Income:
                        </span>
@@ -2341,6 +2318,34 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                          ${Object.values(amiCheckIncomes).reduce((sum, val) => sum + (val || 0), 0).toLocaleString()}
                        </span>
                      </div>
+                     {(() => {
+                       const totalIncome = Object.values(amiCheckIncomes).reduce((sum, val) => sum + (val || 0), 0);
+                       const amiBucket = hudIncomeLimits && totalIncome > 0 
+                         ? getActualAmiBucket(
+                             totalIncome,
+                             amiCheckResidents,
+                             hudIncomeLimits,
+                             complianceOption === 'NC_CUSTOM_80_AMI' ? `${customNCPercentage}% at 80% AMI (NC Custom)` : complianceOption
+                           )
+                         : 'N/A';
+                       
+                       return totalIncome > 0 && (
+                         <div className="flex justify-between items-center">
+                           <span className="text-sm font-medium text-gray-700">
+                             AMI Classification:
+                           </span>
+                           <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                             amiBucket === '50% AMI' ? 'bg-green-100 text-green-800' :
+                             amiBucket === '60% AMI' ? 'bg-blue-100 text-blue-800' :
+                             amiBucket === '80% AMI' ? 'bg-yellow-100 text-yellow-800' :
+                             amiBucket === 'Market' ? 'bg-red-100 text-red-800' :
+                             'bg-gray-100 text-gray-800'
+                           }`}>
+                             {amiBucket}
+                           </span>
+                         </div>
+                       );
+                     })()}
                    </div>
                  )}
                </div>
