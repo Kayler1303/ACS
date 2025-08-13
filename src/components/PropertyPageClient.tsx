@@ -6,6 +6,7 @@ import type { FullProperty, FullRentRoll, FullTenancy, Unit } from '@/types/prop
 import type { Resident } from '@prisma/client';
 import { format } from 'date-fns';
 import { PropertyVerificationSummary, VerificationStatus } from '@/services/verification';
+import { getActualAmiBucket } from '@/services/income';
 import PropertyShareManager from './PropertyShareManager';
 
 interface PropertyPageClientProps {
@@ -182,6 +183,12 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
   const [utilityCategory, setUtilityCategory] = useState<string>('');
   const [utilityAllowance, setUtilityAllowance] = useState<number>(0);
   const [userPermissions, setUserPermissions] = useState<{ isOwner: boolean; canShare: boolean } | null>(null);
+  
+  // AMI Check Modal State
+  const [showAmiCheckModal, setShowAmiCheckModal] = useState<boolean>(false);
+  const [showAmiResultsModal, setShowAmiResultsModal] = useState<boolean>(false);
+  const [amiCheckResidents, setAmiCheckResidents] = useState<number>(1);
+  const [amiCheckIncomes, setAmiCheckIncomes] = useState<{ [key: number]: number }>({});
 
   // Fetch user permissions
   useEffect(() => {
@@ -1227,6 +1234,12 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
               >
                 📁 Update Compliance Data
               </a>
+              <button
+                onClick={() => setShowAmiCheckModal(true)}
+                className="inline-flex items-center px-4 py-2 text-base font-bold text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-blue transition-colors"
+              >
+                🏠 AMI Check
+              </button>
             </div>
             <div className="text-sm text-gray-500">
               Upload new resident & rent roll data to refresh analysis
@@ -2150,6 +2163,223 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
         </div>
       )}
 
-    </div>
+      {/* AMI Check Modal - Step 1: Number of Residents */}
+      {showAmiCheckModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50" onClick={() => setShowAmiCheckModal(false)}>
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white" onClick={(e) => e.stopPropagation()}>
+            <div className="mt-3">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">AMI Check Calculator</h3>
+                <button
+                  onClick={() => setShowAmiCheckModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <span className="sr-only">Close</span>
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              
+              <div className="mb-4">
+                <p className="text-sm text-gray-600 mb-4">
+                  Enter the number of residents for this AMI calculation:
+                </p>
+                
+                <label htmlFor="resident-count" className="block text-sm font-medium text-gray-700 mb-2">
+                  Number of Residents
+                </label>
+                <input
+                  type="number"
+                  id="resident-count"
+                  min="1"
+                  max="10"
+                  value={amiCheckResidents}
+                  onChange={(e) => setAmiCheckResidents(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-brand-blue focus:border-brand-blue"
+                  placeholder="Enter number of residents"
+                />
+              </div>
+              
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowAmiCheckModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    // Initialize income fields for each resident
+                    const initialIncomes: { [key: number]: number } = {};
+                    for (let i = 1; i <= amiCheckResidents; i++) {
+                      initialIncomes[i] = 0;
+                    }
+                    setAmiCheckIncomes(initialIncomes);
+                    setShowAmiCheckModal(false);
+                    setShowAmiResultsModal(true);
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-white bg-brand-blue border border-transparent rounded-md hover:bg-brand-blue-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-blue"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </div>
+                 </div>
+       )}
+
+       {/* AMI Check Modal - Step 2: Income Input and Results */}
+       {showAmiResultsModal && (
+         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50" onClick={() => setShowAmiResultsModal(false)}>
+           <div className="relative top-10 mx-auto p-5 border w-4/5 max-w-4xl shadow-lg rounded-md bg-white" onClick={(e) => e.stopPropagation()}>
+             <div className="mt-3">
+               <div className="flex items-center justify-between mb-4">
+                 <h3 className="text-lg font-medium text-gray-900">AMI Check Results - {amiCheckResidents} Resident{amiCheckResidents > 1 ? 's' : ''}</h3>
+                 <button
+                   onClick={() => setShowAmiResultsModal(false)}
+                   className="text-gray-400 hover:text-gray-600"
+                 >
+                   <span className="sr-only">Close</span>
+                   <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                   </svg>
+                 </button>
+               </div>
+               
+               <div className="mb-6">
+                 <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
+                   <div className="flex items-center">
+                     <svg className="h-5 w-5 text-blue-400 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                       <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                     </svg>
+                     <div className="text-sm">
+                       <p className="font-medium text-blue-800">Property Settings:</p>
+                       <p className="text-blue-700">
+                         📍 Location: {property.county}, {property.state} &nbsp;•&nbsp;
+                         📊 Compliance: {complianceOption === 'NC_CUSTOM_80_AMI' ? `${customNCPercentage}% at 80% AMI (NC Custom)` : complianceOption}
+                       </p>
+                     </div>
+                   </div>
+                 </div>
+                 
+                 <div className="overflow-x-auto">
+                   <table className="min-w-full divide-y divide-gray-200">
+                     <thead className="bg-gray-50">
+                       <tr>
+                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                           Resident
+                         </th>
+                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                           Annual Income
+                         </th>
+                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                           AMI Bucket
+                         </th>
+                       </tr>
+                     </thead>
+                     <tbody className="bg-white divide-y divide-gray-200">
+                       {Array.from({ length: amiCheckResidents }, (_, i) => i + 1).map((residentNum) => {
+                         const income = amiCheckIncomes[residentNum] || 0;
+                         const totalIncome = Object.values(amiCheckIncomes).reduce((sum, val) => sum + (val || 0), 0);
+                         const amiBucket = hudIncomeLimits && totalIncome > 0 
+                           ? getActualAmiBucket(
+                               totalIncome,
+                               amiCheckResidents,
+                               hudIncomeLimits,
+                               complianceOption === 'NC_CUSTOM_80_AMI' ? `${customNCPercentage}% at 80% AMI (NC Custom)` : complianceOption
+                             )
+                           : 'N/A';
+                           
+                         return (
+                           <tr key={residentNum}>
+                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                               Resident {residentNum}
+                             </td>
+                             <td className="px-6 py-4 whitespace-nowrap">
+                               <input
+                                 type="number"
+                                 min="0"
+                                 step="0.01"
+                                 value={income || ''}
+                                 onChange={(e) => {
+                                   const newValue = parseFloat(e.target.value) || 0;
+                                   setAmiCheckIncomes(prev => ({
+                                     ...prev,
+                                     [residentNum]: newValue
+                                   }));
+                                 }}
+                                 className="w-32 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-brand-blue focus:border-brand-blue text-sm"
+                                 placeholder="$0.00"
+                               />
+                             </td>
+                             <td className="px-6 py-4 whitespace-nowrap">
+                               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                 amiBucket === '50% AMI' ? 'bg-green-100 text-green-800' :
+                                 amiBucket === '60% AMI' ? 'bg-blue-100 text-blue-800' :
+                                 amiBucket === '80% AMI' ? 'bg-yellow-100 text-yellow-800' :
+                                 amiBucket === 'Market' ? 'bg-red-100 text-red-800' :
+                                 'bg-gray-100 text-gray-800'
+                               }`}>
+                                 {amiBucket}
+                               </span>
+                             </td>
+                           </tr>
+                         );
+                       })}
+                     </tbody>
+                   </table>
+                 </div>
+                 
+                 {Object.values(amiCheckIncomes).some(income => income > 0) && (
+                   <div className="mt-4 p-4 bg-gray-50 rounded-md">
+                     <div className="flex justify-between items-center">
+                       <span className="text-sm font-medium text-gray-700">
+                         Total Combined Income:
+                       </span>
+                       <span className="text-lg font-bold text-gray-900">
+                         ${Object.values(amiCheckIncomes).reduce((sum, val) => sum + (val || 0), 0).toLocaleString()}
+                       </span>
+                     </div>
+                   </div>
+                 )}
+               </div>
+               
+               <div className="flex justify-between items-center">
+                 <button
+                   onClick={() => {
+                     setShowAmiResultsModal(false);
+                     setShowAmiCheckModal(true);
+                   }}
+                   className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                 >
+                   ← Back
+                 </button>
+                 <div className="flex space-x-3">
+                   <button
+                     onClick={() => {
+                       // Reset all values
+                       setAmiCheckResidents(1);
+                       setAmiCheckIncomes({});
+                       setShowAmiResultsModal(false);
+                     }}
+                     className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                   >
+                     Reset
+                   </button>
+                   <button
+                     onClick={() => setShowAmiResultsModal(false)}
+                     className="px-4 py-2 text-sm font-medium text-white bg-brand-blue border border-transparent rounded-md hover:bg-brand-blue-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-blue"
+                   >
+                     Done
+                   </button>
+                 </div>
+               </div>
+             </div>
+           </div>
+         </div>
+       )}
+
+      </div>
   );
 } 
