@@ -142,7 +142,28 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
   const [processedTenancies, setProcessedTenancies] = useState<ProcessedUnit[]>([]);
   const [hudIncomeLimits, setHudIncomeLimits] = useState<HudIncomeLimits | null>(null);
   const [lihtcRentData, setLihtcRentData] = useState<Record<string, unknown> | null>(null);
-  const [complianceOption, setComplianceOption] = useState<string>(property.complianceOption || "20% at 50% AMI, 55% at 80% AMI");
+  // Initialize compliance option and extract custom NC percentage if present
+  const initializeNCCustomOption = () => {
+    const currentOption = property.complianceOption || "20% at 50% AMI, 55% at 80% AMI";
+    
+    // Check if it's a NC custom option (format: "X% at 80% AMI (NC Custom)")
+    const ncCustomMatch = currentOption.match(/^(\d+)% at 80% AMI \(NC Custom\)$/);
+    if (ncCustomMatch) {
+      return {
+        complianceOption: 'NC_CUSTOM_80_AMI',
+        customPercentage: parseInt(ncCustomMatch[1])
+      };
+    }
+    
+    return {
+      complianceOption: currentOption,
+      customPercentage: 80
+    };
+  };
+
+  const { complianceOption: initialComplianceOption, customPercentage: initialCustomPercentage } = initializeNCCustomOption();
+  const [complianceOption, setComplianceOption] = useState<string>(initialComplianceOption);
+  const [customNCPercentage, setCustomNCPercentage] = useState<number>(initialCustomPercentage);
   const [includeRentAnalysis, setIncludeRentAnalysis] = useState<boolean>(property.includeRentAnalysis || false);
   const [includeUtilityAllowances, setIncludeUtilityAllowances] = useState<boolean>(property.includeUtilityAllowances || false);
   const [showUtilityModal, setShowUtilityModal] = useState<boolean>(false);
@@ -1246,8 +1267,44 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                     <option value="20% at 50% AMI, 55% at 80% AMI">20% at 50% AMI, 55% at 80% AMI</option>
                     <option value="40% at 60% AMI, 35% at 80% AMI">40% at 60% AMI, 35% at 80% AMI</option>
                     <option value="100% at 80% AMI">100% at 80% AMI</option>
+                    {property.state === 'NC' && (
+                      <option value="NC_CUSTOM_80_AMI">
+                        North Carolina: {complianceOption === 'NC_CUSTOM_80_AMI' ? `${customNCPercentage}%` : 'Custom %'} at 80% AMI
+                      </option>
+                    )}
                   </select>
                   <p className="text-xs text-gray-500">Select the affordable housing requirements</p>
+                  
+                  {/* North Carolina Custom Percentage Input */}
+                  {property.state === 'NC' && complianceOption === 'NC_CUSTOM_80_AMI' && (
+                    <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                      <label htmlFor="nc-custom-percentage" className="block text-sm font-medium text-gray-700 mb-2">
+                        🎯 Target Percentage at 80% AMI
+                      </label>
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="number"
+                          id="nc-custom-percentage"
+                          min="1"
+                          max="100"
+                          value={customNCPercentage}
+                          onChange={(e) => {
+                            const newPercentage = parseInt(e.target.value) || 80;
+                            setCustomNCPercentage(newPercentage);
+                            // Update the compliance option to include the percentage
+                            const newComplianceOption = `${newPercentage}% at 80% AMI (NC Custom)`;
+                            setComplianceOption(newComplianceOption);
+                            savePropertySettings({ complianceOption: newComplianceOption });
+                          }}
+                          className="w-20 px-3 py-2 text-sm border-gray-300 focus:outline-none focus:ring-brand-blue focus:border-brand-blue rounded-md shadow-sm"
+                        />
+                        <span className="text-sm text-gray-700">% of units at 80% AMI</span>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Enter the percentage of units that must qualify at 80% AMI for North Carolina properties
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2">

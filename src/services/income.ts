@@ -155,6 +155,15 @@ export function getActualAmiBucket(
       return 'Market';
       
     default:
+      // Check if it's a North Carolina custom compliance option (format: "X% at 80% AMI (NC Custom)")
+      const ncCustomMatch = complianceOption.match(/^(\d+)% at 80% AMI \(NC Custom\)$/);
+      if (ncCustomMatch) {
+        const limit80_nc = hudIncomeLimits['80percent']?.[`il80_p${familySize}`];
+        
+        if (limit80_nc && totalIncome <= limit80_nc) return '80% AMI';
+        return 'Market';
+      }
+      
       return 'Market';
   }
 }
