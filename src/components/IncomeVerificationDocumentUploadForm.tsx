@@ -114,12 +114,16 @@ export default function IncomeVerificationDocumentUploadForm({
     // Set success message
     setSuccess(message);
     
-    // Schedule cleanup
-    successTimeoutRef.current = setTimeout(() => {
-      console.log('🧹 [SUCCESS MESSAGE] Clearing success message after', duration, 'ms');
-      setSuccess(null);
-      successTimeoutRef.current = null;
-    }, duration);
+    // Only schedule cleanup if duration > 0 (0 = permanent until dialog closes)
+    if (duration > 0) {
+      successTimeoutRef.current = setTimeout(() => {
+        console.log('🧹 [SUCCESS MESSAGE] Clearing success message after', duration, 'ms');
+        setSuccess(null);
+        successTimeoutRef.current = null;
+      }, duration);
+    } else {
+      console.log('🎯 [SUCCESS MESSAGE] Message set to persist until dialog closes');
+    }
   }, []);
 
   // Cleanup timeout on unmount
@@ -512,6 +516,9 @@ export default function IncomeVerificationDocumentUploadForm({
       return;
     }
 
+    // Clear any previous errors/success when starting new upload
+    setError(null);
+
     // Check if all files have document types selected
     const filesWithoutType = selectedFiles.filter(f => !f.documentType);
     if (filesWithoutType.length > 0) {
@@ -607,8 +614,8 @@ export default function IncomeVerificationDocumentUploadForm({
         }
       }
 
-      // Show success message that persists across re-renders
-      showSuccessMessage(`Successfully uploaded ${selectedFiles.length} document${selectedFiles.length > 1 ? 's' : ''}. Analysis has started.`, 5000);
+      // Show success message that persists until user closes dialog
+      showSuccessMessage(`Successfully uploaded ${selectedFiles.length} document${selectedFiles.length > 1 ? 's' : ''}. Analysis has started.`, 0); // 0 = never auto-clear
       
       // Reset form (keep resident selected if uploading for specific resident)
       setSelectedFiles([]);
@@ -624,6 +631,7 @@ export default function IncomeVerificationDocumentUploadForm({
       const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
       console.log(`🚨 [FRONTEND] Caught error in handleSubmit:`, errorMessage);
       setError(errorMessage);
+      setSuccess(null); // Clear success message when error occurs
       console.log(`🚨 [FRONTEND] Error state set to:`, errorMessage);
     } finally {
       setIsSubmitting(false);
