@@ -26,19 +26,20 @@ interface UnitFutureLeaseData {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   console.log(`[FUTURE LEASE API] ======================== GET REQUEST RECEIVED ========================`);
-  console.log(`[FUTURE LEASE API] Property ID: ${params.id}`);
-  console.log(`[FUTURE LEASE API] Request URL: ${request.url}`);
-  console.log(`[FUTURE LEASE API] ============================================================================`);
+  
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const propertyId = params.id;
+    const { id: propertyId } = await params;
+    console.log(`[FUTURE LEASE API] Property ID: ${propertyId}`);
+    console.log(`[FUTURE LEASE API] Request URL: ${request.url}`);
+    console.log(`[FUTURE LEASE API] ============================================================================`);
 
     // Get property with units and their future leases
     const property = await prisma.property.findUnique({

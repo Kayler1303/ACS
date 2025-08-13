@@ -5,13 +5,13 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { prisma } from '@/lib/prisma';
 import { getHudIncomeLimits } from '@/services/hud';
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
         return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    const propertyId = req.nextUrl.pathname.split('/')[3];
+    const { id: propertyId } = await params;
     if (!propertyId) {
         return NextResponse.json({ error: 'Property ID is required' }, { status: 400 });
     }
