@@ -27,7 +27,7 @@ function getStateAbbreviation(stateIdentifier: string): string | null {
 
 const API_BASE_URL = 'https://www.huduser.gov/hudapi/public';
 
-export async function getHudIncomeLimits(county: string, state: string, year: number = 2025) {
+export async function getHudIncomeLimits(county: string, state: string, year: number = new Date().getFullYear()) {
     const cacheKey = `income-limits-${county}-${state}-${year}`;
     if (cache.has(cacheKey)) {
         console.log(`[Cache] HIT for ${cacheKey}`);
