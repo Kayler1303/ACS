@@ -58,7 +58,7 @@ export default async function DashboardPage() {
                 <p className="text-gray-600">{property.address}</p>
                 {property.isShared && (
                   <p className="text-sm text-gray-500 mt-2">
-                    Shared by {property.owner?.name || property.owner?.email}
+                    Shared by {property.User?.name || property.User?.email}
                   </p>
                 )}
               </div>

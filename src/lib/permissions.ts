@@ -1,5 +1,11 @@
 import { prisma } from '@/lib/prisma';
-import { PermissionLevel } from '@prisma/client';
+
+// Define PermissionLevel locally since it might not be available from @prisma/client yet
+enum PermissionLevel {
+  READ_ONLY = 'READ_ONLY',
+  CONFIGURE = 'CONFIGURE',
+  EDIT = 'EDIT'
+}
 
 export interface PropertyAccess {
   hasAccess: boolean;
@@ -160,7 +166,7 @@ export async function getUserAccessibleProperties(userId: string) {
     prisma.property.findMany({
       where: { ownerId: userId },
       include: {
-        owner: {
+        User: {
           select: { name: true, email: true }
         }
       },
@@ -173,7 +179,7 @@ export async function getUserAccessibleProperties(userId: string) {
       include: {
         property: {
           include: {
-            owner: {
+            User: {
               select: { name: true, email: true }
             }
           }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 // Define PermissionLevel locally since it might not be available from @prisma/client yet
 enum PermissionLevel {
   READ_ONLY = 'READ_ONLY',
@@ -37,16 +37,9 @@ export default function PropertyShareManager({ propertyId, propertyName, isOwner
   const [permission, setPermission] = useState<PermissionLevel>(PermissionLevel.READ_ONLY);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Only owners can manage shares
-  if (!isOwner) {
-    return null;
-  }
-
-  useEffect(() => {
-    fetchShares();
-  }, [propertyId]);
-
-  const fetchShares = async () => {
+  const fetchShares = useCallback(async () => {
+    if (!isOwner) return; // Don't fetch if not owner
+    
     setLoading(true);
     setError(null);
     try {
@@ -63,7 +56,18 @@ export default function PropertyShareManager({ propertyId, propertyName, isOwner
     } finally {
       setLoading(false);
     }
-  };
+  }, [propertyId, isOwner]);
+
+  useEffect(() => {
+    fetchShares();
+  }, [fetchShares]);
+
+  // Only owners can manage shares
+  if (!isOwner) {
+    return null;
+  }
+
+
 
   const handleAddShare = async (e: React.FormEvent) => {
     e.preventDefault();
