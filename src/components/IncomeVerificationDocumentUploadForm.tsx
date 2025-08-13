@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { DocumentType } from '@prisma/client';
 import AddResidentDialog from './AddResidentDialog';
@@ -71,6 +71,7 @@ export default function IncomeVerificationDocumentUploadForm({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const successTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [dateDiscrepancyModal, setDateDiscrepancyModal] = useState<{
     isOpen: boolean;
     data: DateDiscrepancyData | null;
@@ -101,6 +102,34 @@ export default function IncomeVerificationDocumentUploadForm({
   const [newLeaseData, setNewLeaseData] = useState<{ id: string; name: string } | null>(null);
 
   const router = useRouter();
+
+  // Success message handler with cleanup
+  const showSuccessMessage = useCallback((message: string, duration: number = 5000) => {
+    console.log('🎉 [SUCCESS MESSAGE] Showing success message:', message);
+    // Clear any existing timeout
+    if (successTimeoutRef.current) {
+      clearTimeout(successTimeoutRef.current);
+    }
+    
+    // Set success message
+    setSuccess(message);
+    
+    // Schedule cleanup
+    successTimeoutRef.current = setTimeout(() => {
+      console.log('🧹 [SUCCESS MESSAGE] Clearing success message after', duration, 'ms');
+      setSuccess(null);
+      successTimeoutRef.current = null;
+    }, duration);
+  }, []);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (successTimeoutRef.current) {
+        clearTimeout(successTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Pre-populate resident if there's only one (resident-specific upload)
   useEffect(() => {
@@ -578,7 +607,8 @@ export default function IncomeVerificationDocumentUploadForm({
         }
       }
 
-      setSuccess(`Successfully uploaded ${selectedFiles.length} document${selectedFiles.length > 1 ? 's' : ''}. Analysis has started.`);
+      // Show success message that persists across re-renders
+      showSuccessMessage(`Successfully uploaded ${selectedFiles.length} document${selectedFiles.length > 1 ? 's' : ''}. Analysis has started.`, 5000);
       
       // Reset form (keep resident selected if uploading for specific resident)
       setSelectedFiles([]);
@@ -587,10 +617,8 @@ export default function IncomeVerificationDocumentUploadForm({
       }
       (e.target as HTMLFormElement).reset();
 
-      // Delay the parent notification to allow success message to show
-      setTimeout(() => {
-        onUploadComplete();
-      }, 3000); // 3 second delay to show success message properly
+      // Call parent immediately to refresh data
+      onUploadComplete();
       
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';

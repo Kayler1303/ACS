@@ -37,10 +37,8 @@ export default function IncomeVerificationUploadDialog({
   currentLease,
 }: IncomeVerificationUploadDialogProps) {
   const handleUploadComplete = () => {
-    // Add delay to allow success message to be visible before data refresh
-    setTimeout(() => {
-      onUploadComplete();
-    }, 2000); // 2 second delay to show success message
+    // Call parent immediately to refresh data - success message is now handled in the form component
+    onUploadComplete();
     // Keep dialog open so user can upload more documents if needed
   };
 
