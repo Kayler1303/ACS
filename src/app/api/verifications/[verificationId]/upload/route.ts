@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { analyzeIncomeDocument } from '@/services/azureAi';
 import { validatePaystubExtraction, validateW2Extraction, type PaystubValidationResult, type W2ValidationResult } from '@/services/azureValidation';
@@ -547,7 +547,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     // Validate Azure extraction results
     let validationResult: PaystubValidationResult | W2ValidationResult | null = null;
-    let updateData: any = {};
+    const updateData: any = {};
 
     if (documentType === DocumentType.PAYSTUB) {
       validationResult = validatePaystubExtraction(analyzeResult);

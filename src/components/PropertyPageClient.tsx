@@ -165,6 +165,74 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
   const { complianceOption: initialComplianceOption, customPercentage: initialCustomPercentage } = initializeNCCustomOption();
   const [complianceOption, setComplianceOption] = useState<string>(initialComplianceOption);
   const [customNCPercentage, setCustomNCPercentage] = useState<number>(initialCustomPercentage);
+  // LIHTC Program Year ranges (exact historical effective dates)
+  const PROGRAM_YEARS = [
+    { year: 2025, range: "On or after 4/1/2025", heraEligible: false },
+    { year: 2024, range: "On or after 4/1/2024 but prior to 4/1/2025", heraEligible: false },
+    { year: 2023, range: "On or after 5/15/2023 but prior to 4/1/2024", heraEligible: false },
+    { year: 2022, range: "On or after 4/18/2022 but prior to 5/15/2023", heraEligible: false },
+    { year: 2021, range: "On or after 4/1/2021 but prior to 4/18/2022", heraEligible: false },
+    { year: 2020, range: "On or after 4/1/2020 but prior to 4/1/2021", heraEligible: false },
+    { year: 2019, range: "On or after 4/24/2019 but prior to 4/1/2020", heraEligible: false },
+    { year: 2018, range: "On or after 4/1/2018 but prior to 4/24/2019", heraEligible: false },
+    { year: 2017, range: "On or after 4/14/2017 but prior to 4/1/2018", heraEligible: false },
+    { year: 2016, range: "On or after 3/28/2016 but prior to 4/14/2017", heraEligible: false },
+    { year: 2015, range: "On or after 3/6/2015 but prior to 3/28/2016", heraEligible: false },
+    { year: 2014, range: "On or after 12/18/2013 but prior to 3/6/2015", heraEligible: false },
+    { year: 2013, range: "On or after 12/11/2012 but prior to 12/18/2013", heraEligible: false },
+    { year: 2012, range: "On or after 12/1/2011 but prior to 12/11/2012", heraEligible: false },
+    { year: 2011, range: "On or after 6/1/2011 but prior to 12/1/2011", heraEligible: false },
+    { year: 2010, range: "On or after 5/14/2010 but prior to 6/1/2011", heraEligible: false },
+    { year: 2009, range: "On or after 1/1/2009 but prior to 5/14/2010", heraEligible: false },
+    { year: 2008, range: "Prior to 1/1/2009", heraEligible: true }
+  ];
+
+  // Convert stored date back to year for display/editing
+  const getYearFromDate = (dateString: string | null | undefined): string => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    const year = date.getFullYear();
+    // Special case for HERA eligible dates (before 2009)
+    if (year < 2009) return '2008';
+    return year.toString();
+  };
+
+  // Convert program year to date for API submission
+  const convertYearToDate = (year: string): string | null => {
+    if (!year) return null;
+    
+    // For HERA eligible years (2008 and earlier), use a date before 1/1/2009
+    if (parseInt(year) <= 2008) {
+      return '2008-12-31'; // Any date before 1/1/2009
+    }
+    
+    // Extract start date from range text based on historical data
+    const ranges: { [key: string]: string } = {
+      '2025': '2025-04-01',
+      '2024': '2024-04-01', 
+      '2023': '2023-05-15',
+      '2022': '2022-04-18',
+      '2021': '2021-04-01',
+      '2020': '2020-04-01',
+      '2019': '2019-04-24',
+      '2018': '2018-04-01',
+      '2017': '2017-04-14',
+      '2016': '2016-03-28',
+      '2015': '2015-03-06',
+      '2014': '2013-12-18',
+      '2013': '2012-12-11',
+      '2012': '2011-12-01',
+      '2011': '2011-06-01',
+      '2010': '2010-05-14',
+      '2009': '2009-01-01'
+    };
+    
+    return ranges[year] || null;
+  };
+
+  const [placedInServiceYear, setPlacedInServiceYear] = useState<string>(
+    getYearFromDate((property as any).placedInServiceDate)
+  );
   const [includeRentAnalysis, setIncludeRentAnalysis] = useState<boolean>(property.includeRentAnalysis || false);
   const [includeUtilityAllowances, setIncludeUtilityAllowances] = useState<boolean>(property.includeUtilityAllowances || false);
   const [showUtilityModal, setShowUtilityModal] = useState<boolean>(false);
@@ -215,8 +283,13 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     includeRentAnalysis?: boolean;
     includeUtilityAllowances?: boolean;
     utilityAllowances?: {[bedroomCount: number]: number};
+    placedInServiceYear?: string;
   }) => {
     try {
+      // Convert year to date format for API compatibility
+      const yearToUse = settings.placedInServiceYear ?? placedInServiceYear;
+      const placedInServiceDate = yearToUse ? convertYearToDate(yearToUse) : null;
+
       const response = await fetch(`/api/properties/${property.id}/settings`, {
         method: 'PUT',
         headers: {
@@ -228,6 +301,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
           includeRentAnalysis: settings.includeRentAnalysis ?? includeRentAnalysis,
           includeUtilityAllowances: settings.includeUtilityAllowances ?? includeUtilityAllowances,
           utilityAllowances: settings.utilityAllowances ?? utilityAllowances,
+          placedInServiceDate,
         }),
       });
 
@@ -2163,6 +2237,56 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
         </div>
       )}
 
+      {/* Advanced Settings - Placed in Service Date */}
+      <div className="mb-8 bg-gray-50 rounded-lg shadow-sm overflow-hidden border border-gray-200">
+        <div className="bg-gray-100 px-6 py-3 border-b border-gray-200">
+          <h2 className="text-sm font-medium text-gray-700">Advanced Settings</h2>
+        </div>
+        <div className="p-6">
+          <div className="max-w-md">
+            <div className="space-y-2">
+              <label htmlFor="placed-in-service-year-bottom" className="block text-sm font-medium text-gray-700">
+                🏗️ Placed in Service Program Year
+              </label>
+              <select
+                id="placed-in-service-year-bottom"
+                value={placedInServiceYear}
+                onChange={(e) => {
+                  setPlacedInServiceYear(e.target.value);
+                  savePropertySettings({ placedInServiceYear: e.target.value });
+                }}
+                className="w-full pl-3 pr-10 py-2.5 text-sm border-gray-300 focus:outline-none focus:ring-brand-blue focus:border-brand-blue rounded-md shadow-sm bg-white"
+              >
+                <option value="">Select program year (if applicable)</option>
+                {PROGRAM_YEARS.map((programYear) => (
+                  <option key={programYear.year} value={programYear.year.toString()}>
+                    {programYear.year} ({programYear.range})
+                  </option>
+                ))}
+              </select>
+              
+              {placedInServiceYear && (
+                <p className="text-xs text-gray-500">
+                  {PROGRAM_YEARS.find(py => py.year.toString() === placedInServiceYear)?.heraEligible ? (
+                    <span className="text-green-600 font-medium">
+                      ✅ Eligible for HERA Special income limits (higher limits available)
+                    </span>
+                  ) : (
+                    <span className="text-gray-600">
+                      Uses standard income limits
+                    </span>
+                  )}
+                </p>
+              )}
+              
+              <p className="text-xs text-gray-500">
+                Only select if property qualifies for HERA Special limits (placed in service before 2009) or if you need to specify the exact program year for income limit calculations.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* AMI Check Modal - Step 1: Number of Residents */}
       {showAmiCheckModal && (
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50" onClick={() => setShowAmiCheckModal(false)}>
@@ -2258,6 +2382,17 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                        <p className="text-blue-700">
                          📍 Location: {property.county}, {property.state} &nbsp;•&nbsp;
                          📊 Compliance: {complianceOption === 'NC_CUSTOM_80_AMI' ? `${customNCPercentage}% at 80% AMI (NC Custom)` : complianceOption}
+                         {placedInServiceYear && (
+                           <>
+                             &nbsp;•&nbsp;
+                             🏗️ Placed in Service: {(() => {
+                               const programYear = PROGRAM_YEARS.find(py => py.year.toString() === placedInServiceYear);
+                               return programYear ? 
+                                 `${programYear.year} (${programYear.range})${programYear.heraEligible ? ' - HERA Special Eligible' : ''}` :
+                                 placedInServiceYear;
+                             })()}
+                           </>
+                         )}
                        </p>
                      </div>
                    </div>

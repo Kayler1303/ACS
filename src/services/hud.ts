@@ -27,8 +27,16 @@ function getStateAbbreviation(stateIdentifier: string): string | null {
 
 const API_BASE_URL = 'https://www.huduser.gov/hudapi/public';
 
-export async function getHudIncomeLimits(county: string, state: string, year: number = new Date().getFullYear()) {
-    const cacheKey = `income-limits-${county}-${state}-${year}`;
+export async function getHudIncomeLimits(county: string, state: string, year: number = new Date().getFullYear(), placedInServiceDate?: Date) {
+    // Check if property qualifies for HERA Special limits (placed in service before 1/1/2009)
+    const useHeraSpecial = placedInServiceDate && placedInServiceDate < new Date('2009-01-01');
+    
+    // Check if property qualifies for Hold Harmless rule (placed in service after 12/31/2008)
+    const useHoldHarmless = placedInServiceDate && placedInServiceDate > new Date('2008-12-31');
+    
+    const limitType = useHeraSpecial ? 'hera' : (useHoldHarmless ? 'hold-harmless' : 'standard');
+    
+    const cacheKey = `income-limits-${county}-${state}-${year}-${limitType}`;
     if (cache.has(cacheKey)) {
         console.log(`[Cache] HIT for ${cacheKey}`);
         return cache.get(cacheKey);
@@ -54,8 +62,9 @@ export async function getHudIncomeLimits(county: string, state: string, year: nu
         const errorText = await countiesResponse.text();
         throw new Error(`Failed to fetch counties for ${state}: ${countiesResponse.statusText}. Details: ${errorText}`);
     }
-    const countiesData = await countiesResponse.json();
 
+    const countiesData = await countiesResponse.json();
+    
     // The county list might not be wrapped in a 'data' object.
     const countiesList = countiesData.data || countiesData;
 
@@ -63,33 +72,98 @@ export async function getHudIncomeLimits(county: string, state: string, year: nu
         console.error("Unexpected HUD API response structure for counties:", countiesList);
         throw new Error("Unexpected response structure from HUD API for listCounties. Expected an array of counties.");
     }
-    
+
+    // We need to get the FIPS code to use the MTSP endpoint
     const foundCounty = countiesList.find((c: Record<string, unknown>) => {
         if (!c) return false;
-        const countyName = c.county_name || c.cntyname; // Check both properties
+        const countyName = c.county_name || c.cntyname;
         return countyName && typeof countyName === 'string' && countyName.toLowerCase().startsWith(county.toLowerCase());
     });
+    
     if (!foundCounty) {
         throw new Error(`County '${county}' not found in ${state}.`);
     }
-    
-    const fipsCode = foundCounty.fips_code;
 
+    const fipsCode = foundCounty.fips_code;
+    console.log(`[HUD API] Fetching MTSP income limits for ${county}, ${state} (FIPS: ${fipsCode}) for year ${year}`);
+    
+    // For LIHTC properties, we need to use the MTSP (Multifamily Tax Subsidy Project) endpoint
+    // which automatically applies Hold Harmless rules for properties placed in service after 2008
     const incomeLimitsResponse = await fetch(`${API_BASE_URL}/mtspil/data/${fipsCode}?year=${year}`, {
         headers: { 'Authorization': `Bearer ${apiKey}` }
     });
 
     if (!incomeLimitsResponse.ok) {
         const errorText = await incomeLimitsResponse.text();
-        throw new Error(`Failed to fetch income limits for FIPS code ${fipsCode}: ${incomeLimitsResponse.statusText}. Details: ${errorText}`);
+        throw new Error(`Failed to fetch MTSP income limits for FIPS code ${fipsCode}: ${incomeLimitsResponse.statusText}. Details: ${errorText}`);
     }
 
     const incomeLimitsData = await incomeLimitsResponse.json();
     
+    // Process the response to use HERA Special limits if applicable
+    let processedData = incomeLimitsData.data;
+    
+    if (useHeraSpecial && incomeLimitsData.data) {
+        // If HERA Special limits are available and we need them, use those instead
+        if (incomeLimitsData.data.hera_special_50percent) {
+            console.log(`[HERA Special] Using HERA Special limits for property placed in service ${placedInServiceDate?.toDateString()}`);
+            
+            // Replace standard income limits with HERA Special limits
+            const hera50 = incomeLimitsData.data.hera_special_50percent;
+            const hera60 = incomeLimitsData.data.hera_special_60percent;
+            const hera80 = incomeLimitsData.data.hera_special_80percent;
+            
+            const heraLimits = {
+                '50percent': {
+                    il50_p1: hera50?.hera_special_il50_p1,
+                    il50_p2: hera50?.hera_special_il50_p2,
+                    il50_p3: hera50?.hera_special_il50_p3,
+                    il50_p4: hera50?.hera_special_il50_p4,
+                    il50_p5: hera50?.hera_special_il50_p5,
+                    il50_p6: hera50?.hera_special_il50_p6,
+                    il50_p7: hera50?.hera_special_il50_p7,
+                    il50_p8: hera50?.hera_special_il50_p8,
+                },
+                '60percent': {
+                    il60_p1: hera60?.hera_special_il60_p1 || processedData['60percent']?.il60_p1,
+                    il60_p2: hera60?.hera_special_il60_p2 || processedData['60percent']?.il60_p2,
+                    il60_p3: hera60?.hera_special_il60_p3 || processedData['60percent']?.il60_p3,
+                    il60_p4: hera60?.hera_special_il60_p4 || processedData['60percent']?.il60_p4,
+                    il60_p5: hera60?.hera_special_il60_p5 || processedData['60percent']?.il60_p5,
+                    il60_p6: hera60?.hera_special_il60_p6 || processedData['60percent']?.il60_p6,
+                    il60_p7: hera60?.hera_special_il60_p7 || processedData['60percent']?.il60_p7,
+                    il60_p8: hera60?.hera_special_il60_p8 || processedData['60percent']?.il60_p8,
+                },
+                '80percent': {
+                    il80_p1: hera80?.hera_special_il80_p1 || processedData['80percent']?.il80_p1,
+                    il80_p2: hera80?.hera_special_il80_p2 || processedData['80percent']?.il80_p2,
+                    il80_p3: hera80?.hera_special_il80_p3 || processedData['80percent']?.il80_p3,
+                    il80_p4: hera80?.hera_special_il80_p4 || processedData['80percent']?.il80_p4,
+                    il80_p5: hera80?.hera_special_il80_p5 || processedData['80percent']?.il80_p5,
+                    il80_p6: hera80?.hera_special_il80_p6 || processedData['80percent']?.il80_p6,
+                    il80_p7: hera80?.hera_special_il80_p7 || processedData['80percent']?.il80_p7,
+                    il80_p8: hera80?.hera_special_il80_p8 || processedData['80percent']?.il80_p8,
+                }
+            };
+            
+            // Merge HERA limits with existing data, preserving other AMI levels
+            processedData = {
+                ...processedData,
+                ...heraLimits
+            };
+        } else {
+            console.log(`[HERA Special] HERA Special limits not available for this county, using standard limits`);
+        }
+    } else if (useHoldHarmless) {
+        console.log(`[Hold Harmless] Property placed in service ${placedInServiceDate?.toDateString()} - HUD MTSP API automatically applies Hold Harmless rules`);
+    } else {
+        console.log(`[Standard] Using standard income limits - no PIS date specified or pre-2009 property without HERA eligibility`);
+    }
+    
     // Store in cache
-    cache.set(cacheKey, incomeLimitsData.data);
+    cache.set(cacheKey, processedData);
 
-    return incomeLimitsData.data;
+    return processedData;
 }
 
 /**
@@ -210,11 +284,11 @@ export async function getHudFairMarketRents(county: string, state: string, year:
 /**
  * Get comprehensive rent data including income limits, LIHTC max rents, and FMR
  */
-export async function getComprehensiveRentData(county: string, state: string, year: number = 2024) {
+export async function getComprehensiveRentData(county: string, state: string, year: number = 2024, placedInServiceDate?: Date) {
     try {
         // Fetch income limits and FMR data in parallel
         const [incomeLimitsData, fmrData] = await Promise.all([
-            getHudIncomeLimits(county, state, year),
+            getHudIncomeLimits(county, state, year, placedInServiceDate),
             getHudFairMarketRents(county, state, year).catch(() => null), // FMR is optional
         ]);
 
@@ -225,9 +299,11 @@ export async function getComprehensiveRentData(county: string, state: string, ye
             incomeLimits: incomeLimitsData,
             lihtcMaxRents,
             fairMarketRents: fmrData,
-            year,
-            county,
-            state
+                                year,
+                    county,
+                    state,
+                    usedHeraSpecial: placedInServiceDate && placedInServiceDate < new Date('2009-01-01'),
+                    usedHoldHarmless: placedInServiceDate && placedInServiceDate > new Date('2008-12-31')
         };
     } catch (error) {
         console.error('Error fetching comprehensive rent data:', error);

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth';
 
 export async function PUT(
   request: NextRequest,
@@ -18,7 +18,8 @@ export async function PUT(
       complianceOption,
       includeRentAnalysis,
       includeUtilityAllowances,
-      utilityAllowances
+      utilityAllowances,
+      placedInServiceDate
     } = await request.json();
 
     // Verify the user owns this property
@@ -40,7 +41,8 @@ export async function PUT(
         complianceOption,
         includeRentAnalysis,
         includeUtilityAllowances,
-        utilityAllowances: utilityAllowances || null
+        utilityAllowances: utilityAllowances || null,
+        placedInServiceDate: placedInServiceDate ? new Date(placedInServiceDate) : null
       }
     });
 
@@ -50,7 +52,8 @@ export async function PUT(
         complianceOption: updatedProperty.complianceOption,
         includeRentAnalysis: updatedProperty.includeRentAnalysis,
         includeUtilityAllowances: updatedProperty.includeUtilityAllowances,
-        utilityAllowances: updatedProperty.utilityAllowances
+        utilityAllowances: updatedProperty.utilityAllowances,
+        placedInServiceDate: updatedProperty.placedInServiceDate
       }
     });
 

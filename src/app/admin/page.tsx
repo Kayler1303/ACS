@@ -15,6 +15,7 @@ interface OverrideRequest {
   residentId?: string;
   verificationId?: string;
   documentId?: string;
+  propertyId?: string;
   createdAt: string;
   reviewedAt?: string;
   User_OverrideRequest_requesterIdToUser: {
@@ -38,6 +39,7 @@ interface OverrideRequest {
       percentage: number;
     };
     property?: {
+      id?: string;
       name?: string;
       address?: string;
       numberOfUnits?: number;
@@ -54,6 +56,12 @@ interface OverrideStats {
   total: number;
 }
 
+interface Property {
+  id: string;
+  name: string;
+  address?: string;
+}
+
 export default function AdminDashboard() {
   const { data: session, status } = useSession();
   const [overrideRequests, setOverrideRequests] = useState<OverrideRequest[]>([]);
@@ -61,6 +69,8 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('PENDING');
   const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [propertyFilter, setPropertyFilter] = useState<string>('all');
+  const [properties, setProperties] = useState<Property[]>([]);
   
   // Message modal state
   const [showMessageModal, setShowMessageModal] = useState(false);
@@ -79,11 +89,37 @@ export default function AdminDashboard() {
     }
   }, [status, session]);
 
+  // Fetch properties for filter dropdown
+  useEffect(() => {
+    const fetchProperties = async () => {
+      try {
+        const response = await fetch('/api/properties');
+        if (response.ok) {
+          const data = await response.json();
+          setProperties(data);
+        } else {
+          console.error('Failed to fetch properties');
+        }
+      } catch (error) {
+        console.error('Error fetching properties:', error);
+      }
+    };
+
+    if (status === 'authenticated' && session?.user?.role === 'ADMIN') {
+      fetchProperties();
+    }
+  }, [status, session]);
+
   // Fetch override requests
   useEffect(() => {
     const fetchRequests = async () => {
       try {
-        const response = await fetch('/api/admin/override-requests');
+        const url = new URL('/api/admin/override-requests', window.location.origin);
+        if (propertyFilter !== 'all') {
+          url.searchParams.set('propertyId', propertyFilter);
+        }
+        
+        const response = await fetch(url);
         if (response.ok) {
           const data = await response.json();
           setOverrideRequests(data.requests);
@@ -101,11 +137,74 @@ export default function AdminDashboard() {
     if (status === 'authenticated' && session?.user?.role === 'ADMIN') {
       fetchRequests();
     }
-  }, [status, session]);
+  }, [status, session, propertyFilter]);
 
-  const filteredRequests = overrideRequests.filter(request => 
-    statusFilter === 'all' ? true : request.status === statusFilter
-  );
+  const filteredRequests = overrideRequests.filter(request => {
+    // Status filter
+    if (statusFilter !== 'all' && request.status !== statusFilter) {
+      return false;
+    }
+    
+    // Type filter (if we had one in the future)
+    if (typeFilter !== 'all' && request.type !== typeFilter) {
+      return false;
+    }
+    
+    return true;
+  });
+
+  // Helper function to extract property info from a request
+  const getPropertyFromRequest = (request: OverrideRequest): Property | null => {
+    // Check contextual data for property info
+    if (request.contextualData?.property) {
+      return {
+        id: request.contextualData.property.id || '',
+        name: request.contextualData.property.name || 'Unknown Property',
+        address: request.contextualData.property.address
+      };
+    }
+    
+    // Try to get property from unit
+    if (request.contextualData?.unit?.Property) {
+      return {
+        id: request.contextualData.unit.Property.id,
+        name: request.contextualData.unit.Property.name,
+        address: request.contextualData.unit.Property.address
+      };
+    }
+    
+    // Try to get property from resident -> lease -> unit
+    if (request.contextualData?.resident?.Lease?.Unit?.Property) {
+      const prop = request.contextualData.resident.Lease.Unit.Property;
+      return {
+        id: prop.id,
+        name: prop.name,
+        address: prop.address
+      };
+    }
+    
+    // Try to get property from verification -> lease -> unit
+    if (request.contextualData?.verification?.Lease?.Unit?.Property) {
+      const prop = request.contextualData.verification.Lease.Unit.Property;
+      return {
+        id: prop.id,
+        name: prop.name,
+        address: prop.address
+      };
+    }
+    
+    // Try to get property from document -> verification -> lease -> unit
+    if (request.contextualData?.document?.IncomeVerification?.Lease?.Unit?.Property) {
+      const prop = request.contextualData.document.IncomeVerification.Lease.Unit.Property;
+      return {
+        id: prop.id,
+        name: prop.name,
+        address: prop.address
+      };
+    }
+    
+    return null;
+  };
 
   const handleRequestAction = async (requestId: string, action: 'approve' | 'deny', adminNotes: string) => {
     try {
@@ -122,7 +221,12 @@ export default function AdminDashboard() {
 
       if (response.ok) {
         // Refresh the requests
-        const refreshResponse = await fetch('/api/admin/override-requests');
+        const url = new URL('/api/admin/override-requests', window.location.origin);
+        if (propertyFilter !== 'all') {
+          url.searchParams.set('propertyId', propertyFilter);
+        }
+        
+        const refreshResponse = await fetch(url);
         if (refreshResponse.ok) {
           const data = await refreshResponse.json();
           setOverrideRequests(data.requests);
@@ -345,50 +449,88 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="border-b border-gray-200 mb-6">
-          <nav className="-mb-px flex space-x-8">
-            <button
-              onClick={() => setStatusFilter('all')}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                statusFilter === 'all'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
+        {/* Filters */}
+        <div className="mb-6 space-y-4">
+          {/* Status Tabs */}
+          <div className="border-b border-gray-200">
+            <nav className="-mb-px flex space-x-8">
+              <button
+                onClick={() => setStatusFilter('all')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  statusFilter === 'all'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                All Requests ({stats?.total || 0})
+              </button>
+              <button
+                onClick={() => setStatusFilter('PENDING')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  statusFilter === 'PENDING'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Pending Requests ({stats?.pending || 0})
+              </button>
+              <button
+                onClick={() => setStatusFilter('APPROVED')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  statusFilter === 'APPROVED'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Approved ({stats?.approved || 0})
+              </button>
+              <button
+                onClick={() => setStatusFilter('DENIED')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  statusFilter === 'DENIED'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Denied ({stats?.denied || 0})
+              </button>
+            </nav>
+          </div>
+
+          {/* Property Filter */}
+          <div className="flex items-center space-x-4">
+            <label htmlFor="property-filter" className="text-sm font-medium text-gray-700">
+              Filter by Property:
+            </label>
+            <select
+              id="property-filter"
+              value={propertyFilter}
+              onChange={(e) => setPropertyFilter(e.target.value)}
+              className="block w-64 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             >
-              All Requests ({stats?.total || 0})
-            </button>
-            <button
-              onClick={() => setStatusFilter('PENDING')}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                statusFilter === 'PENDING'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              Pending Requests ({stats?.pending || 0})
-            </button>
-            <button
-              onClick={() => setStatusFilter('APPROVED')}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                statusFilter === 'APPROVED'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              Approved ({stats?.approved || 0})
-            </button>
-            <button
-              onClick={() => setStatusFilter('DENIED')}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                statusFilter === 'DENIED'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              Denied ({stats?.denied || 0})
-            </button>
-          </nav>
+              <option value="all">All Properties</option>
+              {properties.map((property) => (
+                <option key={property.id} value={property.id}>
+                  {property.name}
+                  {property.address && ` (${property.address})`}
+                </option>
+              ))}
+            </select>
+            
+            {propertyFilter !== 'all' && (
+              <button
+                onClick={() => setPropertyFilter('all')}
+                className="inline-flex items-center px-2.5 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                Clear Filter
+              </button>
+            )}
+
+            {/* Results count */}
+            <div className="text-sm text-gray-500">
+              Showing {filteredRequests.length} of {overrideRequests.length} requests
+            </div>
+          </div>
         </div>
 
         {/* Override Requests */}

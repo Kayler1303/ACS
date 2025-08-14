@@ -132,6 +132,7 @@ model Property {
   includeRentAnalysis      Boolean           @default(false)
   includeUtilityAllowances Boolean           @default(false)
   utilityAllowances        Json?
+  placedInServiceDate      DateTime?
   OverrideRequest          OverrideRequest[]
   User                     User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   RentRoll                 RentRoll[]

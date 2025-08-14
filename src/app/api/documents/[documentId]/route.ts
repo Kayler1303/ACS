@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { unlink } from 'fs/promises';
 
@@ -17,7 +17,7 @@ async function deleteFileLocally(filePath: string): Promise<void> {
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { documentId: string } }
+  { params }: { params: Promise<{ documentId: string }> }
 ) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {

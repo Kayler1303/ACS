@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
 export async function GET(request: NextRequest) {
@@ -20,7 +20,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
+    // Get query parameters
+    const { searchParams } = new URL(request.url);
+    const propertyId = searchParams.get('propertyId');
+
     // Fetch all override requests with comprehensive related data
+    // Note: We'll filter by property relationship in the enhancement step
+    // since override requests can be related to properties through multiple paths
     const requests = await (prisma as any).overrideRequest.findMany({
       include: {
         User_OverrideRequest_requesterIdToUser: {
@@ -188,16 +194,54 @@ export async function GET(request: NextRequest) {
       };
     }));
 
-    // Calculate statistics
+    // Filter by property if specified
+    let filteredRequests = enhancedRequests;
+    if (propertyId) {
+      filteredRequests = enhancedRequests.filter((request: any) => {
+        // Check direct property relationship (for PROPERTY_DELETION requests)
+        if (request.propertyId === propertyId) {
+          return true;
+        }
+        
+        // Check contextual data property
+        if (request.contextualData?.property?.id === propertyId) {
+          return true;
+        }
+        
+        // Check unit -> property relationship
+        if (request.contextualData?.unit?.Property?.id === propertyId) {
+          return true;
+        }
+        
+        // Check resident -> lease -> unit -> property relationship
+        if (request.contextualData?.resident?.Lease?.Unit?.Property?.id === propertyId) {
+          return true;
+        }
+        
+        // Check verification -> lease -> unit -> property relationship
+        if (request.contextualData?.verification?.Lease?.Unit?.Property?.id === propertyId) {
+          return true;
+        }
+        
+        // Check document -> verification -> lease -> unit -> property relationship
+        if (request.contextualData?.document?.IncomeVerification?.Lease?.Unit?.Property?.id === propertyId) {
+          return true;
+        }
+        
+        return false;
+      });
+    }
+
+    // Calculate statistics based on filtered results
     const stats = {
-      total: requests.length,
-      pending: requests.filter((r: any) => r.status === 'PENDING').length,
-      approved: requests.filter((r: any) => r.status === 'APPROVED').length,
-      denied: requests.filter((r: any) => r.status === 'DENIED').length,
+      total: filteredRequests.length,
+      pending: filteredRequests.filter((r: any) => r.status === 'PENDING').length,
+      approved: filteredRequests.filter((r: any) => r.status === 'APPROVED').length,
+      denied: filteredRequests.filter((r: any) => r.status === 'DENIED').length,
     };
 
     return NextResponse.json({
-      requests: enhancedRequests,
+      requests: filteredRequests,
       stats
     });
 

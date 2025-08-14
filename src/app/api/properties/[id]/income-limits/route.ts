@@ -1,7 +1,7 @@
 // src/app/api/properties/[id]/income-limits/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { getHudIncomeLimits } from '@/services/hud';
 
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
             return NextResponse.json({ error: 'Property not found' }, { status: 404 });
         }
 
-        const { county, state } = property;
+        const { county, state, placedInServiceDate } = property as any;
         if (!county || !state) {
             return NextResponse.json({ error: 'Property is missing county or state information.' }, { status: 400 });
         }
@@ -38,14 +38,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         
         try {
             // Try to get limits for the requested year
-            incomeLimits = await getHudIncomeLimits(county, state, requestedYear);
+            incomeLimits = await getHudIncomeLimits(county, state, requestedYear, placedInServiceDate);
         } catch (error) {
             // If requested year fails, try previous year (HUD limits usually published in April)
             const fallbackYear = requestedYear - 1;
             console.log(`Failed to fetch ${requestedYear} limits, falling back to ${fallbackYear}:`, error);
             
             try {
-                incomeLimits = await getHudIncomeLimits(county, state, fallbackYear);
+                incomeLimits = await getHudIncomeLimits(county, state, fallbackYear, placedInServiceDate);
                 actualYear = fallbackYear;
                 console.log(`Successfully fetched ${fallbackYear} limits as fallback`);
             } catch (fallbackError) {
@@ -55,12 +55,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         }
 
         // Include metadata about which year was actually used
+        const usedHeraSpecial = placedInServiceDate && new Date(placedInServiceDate) < new Date('2009-01-01');
+        const usedHoldHarmless = placedInServiceDate && new Date(placedInServiceDate) > new Date('2008-12-31');
         return NextResponse.json({
             ...incomeLimits,
             _metadata: {
                 requestedYear,
                 actualYear,
-                usedFallback: actualYear !== requestedYear
+                usedFallback: actualYear !== requestedYear,
+                usedHeraSpecial: usedHeraSpecial,
+                usedHoldHarmless: usedHoldHarmless,
+                placedInServiceDate: placedInServiceDate || null
             }
         });
 
