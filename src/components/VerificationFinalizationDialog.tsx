@@ -356,7 +356,11 @@ export default function VerificationFinalizationDialog({
                         let displayText = doc.documentType;
                         
                         if (doc.documentType === 'W2') {
-                          verifiedAmount = doc.box1_wages || 0;
+                          // Use the highest of Box 1, 3, or 5 (same logic as calculation)
+                          const box1 = Number(doc.box1_wages || 0);
+                          const box3 = Number(doc.box3_ss_wages || 0);
+                          const box5 = Number(doc.box5_med_wages || 0);
+                          verifiedAmount = Math.max(box1, box3, box5);
                           displayText = `${doc.documentType} ${doc.taxYear ? `(${doc.taxYear})` : ''}`;
                         } else if (doc.documentType === 'PAYSTUB') {
                           verifiedAmount = doc.calculatedAnnualizedIncome || 0;

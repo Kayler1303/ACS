@@ -1012,7 +1012,13 @@ function OverrideRequestItem({
                       {formatCurrency(
                         lease.incomeVerifications[0].incomeDocuments
                           .filter((doc: any) => doc.documentType === 'W2')
-                          .reduce((sum: number, doc: any) => sum + (doc.box1_wages || 0), 0)
+                          .reduce((sum: number, doc: any) => {
+                            // Use the highest of Box 1, 3, or 5 (same logic as calculation)
+                            const box1 = Number(doc.box1_wages || 0);
+                            const box3 = Number(doc.box3_ss_wages || 0);
+                            const box5 = Number(doc.box5_med_wages || 0);
+                            return sum + Math.max(box1, box3, box5);
+                          }, 0)
                       )}
                     </span>
                   </div>

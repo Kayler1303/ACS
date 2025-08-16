@@ -5,14 +5,14 @@ import { authOptions } from '@/lib/auth';
 
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const propertyId = params.id;
+  const { id: propertyId } = await params;
 
   try {
     const latestRentRoll = await prisma.rentRoll.findFirst({

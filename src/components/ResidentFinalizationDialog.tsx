@@ -211,9 +211,9 @@ export default function ResidentFinalizationDialog({
     return totalIncome;
   };
   
-  // Calculate available income for finalization - prioritize stored value, then real-time calculation, then manual entry
+  // Calculate available income for finalization - prioritize real-time calculation when documents exist
   const calculatedIncomeFromDocs = calculateIncomeFromDocuments();
-  const availableIncomeForFinalization = resident.calculatedAnnualizedIncome || calculatedIncomeFromDocs || manualW2Value || 0;
+  const availableIncomeForFinalization = calculatedIncomeFromDocs || resident.calculatedAnnualizedIncome || manualW2Value || 0;
   
   // Calculate verified income display - show calculated income from stored value or real-time calculation
   const residentVerifiedIncome = resident.incomeFinalized 
@@ -645,7 +645,11 @@ export default function ResidentFinalizationDialog({
                   let displayText = doc.documentType;
                   
                   if (doc.documentType === 'W2') {
-                    verifiedAmount = doc.box1_wages || 0;
+                    // Use the highest of Box 1, 3, or 5 (same logic as calculation)
+                    const box1 = Number(doc.box1_wages || 0);
+                    const box3 = Number(doc.box3_ss_wages || 0);
+                    const box5 = Number(doc.box5_med_wages || 0);
+                    verifiedAmount = Math.max(box1, box3, box5);
                     displayText = `${doc.documentType} ${doc.taxYear ? `(${doc.taxYear})` : ''}`;
                   } else if (doc.documentType === 'PAYSTUB') {
                     verifiedAmount = doc.grossPayAmount || 0; // Show actual paystub amount, not annualized
@@ -696,8 +700,8 @@ export default function ResidentFinalizationDialog({
                 <div className="border-t pt-3 flex justify-between items-center font-semibold text-lg">
                   <span>Total Annualized Verified Income:</span>
                   <span className={resident.incomeFinalized ? "text-green-600" : "text-blue-600"}>
-                    {(resident.calculatedAnnualizedIncome && resident.calculatedAnnualizedIncome > 0) || availableIncomeForFinalization > 0
-                      ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(resident.calculatedAnnualizedIncome || availableIncomeForFinalization)
+                    {availableIncomeForFinalization > 0
+                      ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(availableIncomeForFinalization)
                       : <span className="text-gray-400">No income calculated</span>
                     }
                   </span>

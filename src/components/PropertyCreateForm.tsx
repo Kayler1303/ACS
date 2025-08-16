@@ -107,7 +107,7 @@ export default function PropertyCreateForm() {
 
       if (response.ok) {
         const { property } = await response.json();
-        router.push(`/property/${property.id}`);
+        router.push(`/property/${property.id}/upload-units`);
       } else {
         const errorData = await response.json();
         setError(errorData.error || 'Failed to create property');
@@ -165,7 +165,7 @@ export default function PropertyCreateForm() {
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-brand-blue focus:border-brand-blue"
-                placeholder="Enter property address"
+                placeholder="Enter property address (Optional)"
               />
             </div>
 

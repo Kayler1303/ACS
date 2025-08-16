@@ -4,6 +4,49 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { randomUUID } from 'crypto';
 
+export async function GET(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+
+  if (!session || !session.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  try {
+    // Check if user is admin
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { role: true }
+    });
+
+    if (user?.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
+
+    // Get all properties for admin users
+    const properties = await prisma.property.findMany({
+      select: {
+        id: true,
+        name: true,
+        address: true,
+        county: true,
+        state: true,
+        numberOfUnits: true
+      },
+      orderBy: {
+        name: 'asc'
+      }
+    });
+
+    return NextResponse.json(properties);
+  } catch (error: any) {
+    console.error('Error fetching properties:', error);
+    return NextResponse.json(
+      { error: 'An unexpected error occurred.' },
+      { status: 500 }
+    );
+  }
+}
+
 export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions);
 

@@ -1824,10 +1824,10 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                         className="text-sm text-gray-500 text-center"
                       />
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <Link 
+                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
+                      <Link
                         href={`/property/${property.id}/rent-roll/${selectedRentRollId}/unit/${unit.id}`}
-                        className="text-sm text-brand-blue hover:text-brand-accent underline cursor-pointer"
+                        className="text-brand-blue hover:text-brand-blue-dark underline cursor-pointer font-medium"
                       >
                         {unit.residentCount}
                       </Link>
@@ -1954,338 +1954,56 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       {processedTenancies.length === 0 && hudIncomeLimits && (
         <div className="mb-8 bg-white rounded-lg shadow-md overflow-hidden">
           <div className="p-8 text-center">
-            <p className="text-red-600 font-medium mb-4">No compliance data available. Please upload a rent roll to see the analysis.</p>
-            <a
-              href={`/property/${property.id}/update-compliance`}
-              className="inline-flex items-center px-4 py-2 text-base font-bold text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-blue transition-colors"
-            >
-              📁 Update Compliance Data
-            </a>
-          </div>
-          
-          {/* Floor Plan Summary */}
-          {property.Unit && property.Unit.length > 0 && (
-            <div className="border-t border-gray-200 bg-blue-50">
-              <div className="px-6 py-4">
-                <h3 className="text-lg font-medium text-gray-900 mb-3">Floor Plan Summary</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                  {Object.entries(
-                    property.Unit.reduce((acc: { [key: string]: number }, unit: Unit) => {
-                      const sqft = unit.squareFootage || 0;
-                      const key = sqft > 0 ? sqft.toString() : 'Unknown';
-                      acc[key] = (acc[key] || 0) + 1;
-                      return acc;
-                    }, {})
-                  )
-                    .sort(([a], [b]) => {
-                      if (a === 'Unknown') return 1;
-                      if (b === 'Unknown') return -1;
-                      return parseInt(a) - parseInt(b);
-                    })
-                    .map(([sqft, count]) => (
-                      <div key={sqft} className="bg-white rounded-lg p-3 text-center shadow-sm border">
-                        <div className="text-lg font-semibold text-gray-900">
-                          {sqft === 'Unknown' ? 'Unknown' : `${parseInt(sqft).toLocaleString()}`}
-                        </div>
-                        <div className="text-xs text-gray-500 mb-1">
-                          {sqft === 'Unknown' ? 'sq ft' : 'sq ft'}
-                        </div>
-                        <div className="text-sm font-medium text-blue-600">
-                          {count} unit{count === 1 ? '' : 's'}
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {/* Show unit data even without compliance data */}
-          {property.Unit && property.Unit.length > 0 && (
-            <div className="border-t border-gray-200">
-              <div className="bg-gray-50 px-6 py-4">
-                <h3 className="text-lg font-medium text-gray-900">Unit Information</h3>
-                <p className="text-sm text-gray-600 mt-1">
-                  {property.Unit.length} units configured for this property
-                </p>
-              </div>
-              
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Unit Number
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Bedrooms
-                      </th>
-                      <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Square Footage
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {property.Unit
-                      .sort((a: Unit, b: Unit) => {
-                        // Sort by unit number (handle both numeric and alphanumeric)
-                        const aNum = parseInt(a.unitNumber) || 0;
-                        const bNum = parseInt(b.unitNumber) || 0;
-                        if (aNum !== bNum) return aNum - bNum;
-                        return a.unitNumber.localeCompare(b.unitNumber);
-                      })
-                      .map((unit: Unit) => (
-                        <tr key={unit.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <span className="text-sm font-medium text-gray-900">
-                              {formatUnitNumber(unit.unitNumber)}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <EditableCell
-                              value={unit.bedroomCount}
-                              onSave={(value) => handleUpdateUnit(unit.id, 'bedroomCount', value)}
-                              className="text-sm text-gray-900 text-center"
-                            />
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <EditableCell
-                              value={unit.squareFootage ?? null}
-                              onSave={(value) => handleUpdateUnit(unit.id, 'squareFootage', value)}
-                              className="text-sm text-gray-900 text-center"
-                            />
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Property Sharing Section */}
-      {userPermissions?.isOwner && (
-        <div className="mt-12">
-          <PropertyShareManager 
-            propertyId={property.id}
-            propertyName={property.name}
-            isOwner={userPermissions.isOwner}
-          />
-        </div>
-      )}
-
-      {/* Delete Property Section */}
-      <div className="mt-12 pt-8 border-t border-gray-200">
-        {property.pendingDeletionRequest ? (
-          // Show status when deletion request is pending
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
-            <div className="flex items-start">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.293l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3 flex-1">
-                <h3 className="text-sm font-medium text-yellow-800">Property Deletion Request Has Been Submitted & Is Under Review</h3>
-                <div className="mt-2 text-sm text-yellow-700">
-                  <p>Your request to delete this property has been submitted and is currently being reviewed by an administrator.</p>
-                  <p className="mt-2">
-                    <strong>Submitted:</strong> {new Date(property.pendingDeletionRequest.createdAt).toLocaleDateString()} at {new Date(property.pendingDeletionRequest.createdAt).toLocaleTimeString()}
-                  </p>
-                  <p className="mt-1">
-                    <strong>Reason:</strong> {property.pendingDeletionRequest.userExplanation}
-                  </p>
-                </div>
-                <div className="mt-4">
-                  <div className="inline-flex items-center px-3 py-2 border border-yellow-300 shadow-sm text-sm leading-4 font-medium rounded-md text-yellow-700 bg-yellow-100 cursor-not-allowed">
-                    <svg className="h-4 w-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                    </svg>
-                    Pending Admin Review
+            <p className="text-red-600 font-medium mb-6">No compliance data available. Choose how you'd like to set up your property:</p>
+            
+            {/* Show different options based on whether units exist */}
+            {(!property.Unit || property.Unit.length === 0) ? (
+              // No units configured - show both options
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-blue-50 p-6 rounded-lg border border-blue-200">
+                    <h3 className="text-lg font-semibold text-blue-900 mb-2">📋 Option 1: Upload Unit List First</h3>
+                    <p className="text-sm text-blue-700 mb-4">Upload your master unit list with unit numbers, square footages, and bedroom counts. Then upload rent roll data later.</p>
+                    <a
+                      href={`/property/${property.id}/upload-units`}
+                      className="inline-flex items-center px-4 py-2 text-base font-bold text-blue-700 bg-blue-100 border border-blue-300 rounded-md hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                    >
+                      📋 Upload Master Unit List
+                    </a>
+                  </div>
+                  
+                  <div className="bg-green-50 p-6 rounded-lg border border-green-200">
+                    <h3 className="text-lg font-semibold text-green-900 mb-2">📁 Option 2: Upload Everything at Once</h3>
+                    <p className="text-sm text-green-700 mb-4">Upload both resident data and rent roll data together. The system will automatically create units and configure bedroom counts.</p>
+                    <a
+                      href={`/property/${property.id}/update-compliance`}
+                      className="inline-flex items-center px-4 py-2 text-base font-bold text-green-700 bg-green-100 border border-green-300 rounded-md hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
+                    >
+                      📁 Update Compliance Data
+                    </a>
                   </div>
                 </div>
-              </div>
-            </div>
-          </div>
-        ) : (
-          // Show normal deletion request interface
-          <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-            <div className="flex items-start">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />                                                              </svg>
-              </div>
-              <div className="ml-3 flex-1">
-                <h3 className="text-sm font-medium text-red-800">Request Property Deletion</h3>
-                <div className="mt-2 text-sm text-red-700">
-                  <p>Submit a request to delete this property. An administrator will review your request before any action is taken.</p>
-                </div>
-                <div className="mt-4">
-                  <button
-                    onClick={handleRequestDeletion}
-                    disabled={isRequestingDeletion}
-                    className="bg-red-600 border border-transparent rounded-md py-2 px-4 inline-flex justify-center text-sm font-medium text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
-                  >
-                    {isRequestingDeletion ? 'Submitting...' : 'Request Property Deletion'}
-                  </button>
+                
+                <div className="text-sm text-gray-600 mt-4">
+                  <p><strong>Recommended:</strong> Use Option 1 if you want to set up your unit structure first, or Option 2 if you have both resident and rent data ready.</p>
                 </div>
               </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Utility Allowances Modal */}
-      {showUtilityModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Configure Utility Allowances</h3>
-              <p className="text-sm text-gray-600 mb-4">
-                Enter the monthly utility allowances for each bedroom count.
-              </p>
-
-              <div className="space-y-3">
-                {[...new Set(property.Unit.map((unit: Unit) => unit.bedroomCount))]
-                  .filter((count): count is number => count !== null && count !== undefined && typeof count === 'number')
-                                              .sort((a: number, b: number) => a - b)
-                  .map((bedroomCount: number) => (
-                    <div key={bedroomCount} className="flex items-center justify-between">
-                      <label className="text-sm font-medium text-gray-700">
-                        {bedroomCount === 0 ? 'Studio' : `${bedroomCount} Bedroom`}
-                      </label>
-                      <div className="flex items-center">
-                        <span className="text-sm text-gray-500 mr-2">$</span>
-                        <input
-                          type="number"
-                          value={utilityAllowances[bedroomCount] || ''}
-                          onChange={(e) => setUtilityAllowances(prev => ({
-                            ...prev,
-                            [bedroomCount]: parseFloat(e.target.value) || 0
-                          }))}
-                          className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-brand-blue focus:border-brand-blue"
-                                                      placeholder="0"
-                          min="0"
-                          step="1"
-                        />
-                        <span className="text-sm text-gray-500 ml-1">/month</span>
-                      </div>
-                    </div>
-                  ))}
-              </div>
-
-              <div className="mt-6 flex justify-end space-x-3">
-                <button
-                  onClick={() => setShowUtilityModal(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200"
-                                            >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    setShowUtilityModal(false);
-                    // Save utility allowances to database
-                    savePropertySettings({ utilityAllowances });
-                  }}
-                  className="px-4 py-2 text-sm font-medium text-white bg-brand-blue border border-transparent rounded-md hover:bg-blue-600"
-                                            >
-                  Save
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Deletion Confirmation Modal */}
-      {showDeletionModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-                             <h3 className="text-lg font-medium text-gray-900 mb-4">Request Property Deletion</h3>
-               <p className="text-sm text-gray-600 mb-4">
-                 Please provide a reason for requesting property deletion. An administrator will review your request.
-               </p>
-
-              <textarea
-                value={deletionReason}
-                onChange={(e) => setDeletionReason(e.target.value)}
-                placeholder="Enter your reason here..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-brand-blue focus:border-brand-blue"
-                                 rows={4}
-              ></textarea>
-
-              <div className="mt-6 flex justify-end space-x-3">
-                <button
-                  onClick={handleCloseDeletionModal}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200"
-                                            >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSubmitDeletionRequest}
-                  disabled={isRequestingDeletion}
-                  className="bg-red-600 border border-transparent rounded-md py-2 px-4 inline-flex justify-center text-sm font-medium text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
-                                                                        >
-                  {isRequestingDeletion ? 'Submitting...' : 'Submit Deletion Request'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Advanced Settings - Placed in Service Date */}
-      <div className="mb-8 bg-gray-50 rounded-lg shadow-sm overflow-hidden border border-gray-200">
-        <div className="bg-gray-100 px-6 py-3 border-b border-gray-200">
-          <h2 className="text-sm font-medium text-gray-700">Advanced Settings</h2>
-        </div>
-        <div className="p-6">
-          <div className="max-w-md">
-            <div className="space-y-2">
-              <label htmlFor="placed-in-service-year-bottom" className="block text-sm font-medium text-gray-700">
-                🏗️ Placed in Service Program Year
-              </label>
-              <select
-                id="placed-in-service-year-bottom"
-                value={placedInServiceYear}
-                onChange={(e) => {
-                  setPlacedInServiceYear(e.target.value);
-                  savePropertySettings({ placedInServiceYear: e.target.value });
-                }}
-                className="w-full pl-3 pr-10 py-2.5 text-sm border-gray-300 focus:outline-none focus:ring-brand-blue focus:border-brand-blue rounded-md shadow-sm bg-white"
+            ) : (
+              // Units exist but no compliance data - show single option
+              <a
+                href={`/property/${property.id}/update-compliance`}
+                className="inline-flex items-center px-4 py-2 text-base font-bold text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-blue transition-colors"
               >
-                <option value="">Select program year (if applicable)</option>
-                {PROGRAM_YEARS.map((programYear) => (
-                  <option key={programYear.year} value={programYear.year.toString()}>
-                    {programYear.year} ({programYear.range})
-                  </option>
-                ))}
-              </select>
-              
-              {placedInServiceYear && (
-                <p className="text-xs text-gray-500">
-                  {PROGRAM_YEARS.find(py => py.year.toString() === placedInServiceYear)?.heraEligible ? (
-                    <span className="text-green-600 font-medium">
-                      ✅ Eligible for HERA Special income limits (higher limits available)
-                    </span>
-                  ) : (
-                    <span className="text-gray-600">
-                      Uses standard income limits
-                    </span>
-                  )}
-                </p>
-              )}
-              
-              <p className="text-xs text-gray-500">
-                Only select if property qualifies for HERA Special limits (placed in service before 2009) or if you need to specify the exact program year for income limit calculations.
-              </p>
-            </div>
+                📁 Update Compliance Data
+              </a>
+            )}
           </div>
         </div>
-      </div>
+      )}
+
+
+
+
 
       {/* AMI Check Modal - Step 1: Number of Residents */}
       {showAmiCheckModal && (
@@ -2519,6 +2237,328 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
            </div>
          </div>
        )}
+
+      {/* Floor Plan Summary - Show when units exist */}
+      {property.Unit && property.Unit.length > 0 && processedTenancies.length === 0 && hudIncomeLimits && (
+        <div className="mb-8 bg-white rounded-lg shadow-md overflow-hidden">
+          <div className="border-t border-gray-200 bg-blue-50">
+            <div className="px-6 py-4">
+              <h3 className="text-lg font-medium text-gray-900 mb-3">Floor Plan Summary</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                {Object.entries(
+                  property.Unit.reduce((acc: { [key: string]: number }, unit: Unit) => {
+                    const sqft = unit.squareFootage || 0;
+                    const key = sqft > 0 ? sqft.toString() : 'Unknown';
+                    acc[key] = (acc[key] || 0) + 1;
+                    return acc;
+                  }, {})
+                )
+                  .sort(([a], [b]) => {
+                    if (a === 'Unknown') return 1;
+                    if (b === 'Unknown') return -1;
+                    return parseInt(a) - parseInt(b);
+                  })
+                  .map(([sqft, count]) => (
+                    <div key={sqft} className="bg-white rounded-lg p-3 text-center shadow-sm border">
+                      <div className="text-lg font-semibold text-gray-900">
+                        {sqft === 'Unknown' ? 'Unknown' : `${parseInt(sqft).toLocaleString()}`}
+                      </div>
+                      <div className="text-xs text-gray-500 mb-1">
+                        {sqft === 'Unknown' ? 'sq ft' : 'sq ft'}
+                      </div>
+                      <div className="text-sm font-medium text-blue-600">
+                        {count} unit{count === 1 ? '' : 's'}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          </div>
+          
+          {/* Show unit data even without compliance data */}
+          <div className="border-t border-gray-200">
+            <div className="bg-gray-50 px-6 py-4">
+              <h3 className="text-lg font-medium text-gray-900">Unit Information</h3>
+              <p className="text-sm text-gray-600 mt-1">
+                {property.Unit.length} units configured for this property
+              </p>
+            </div>
+            
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Unit Number
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Bedrooms
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Square Footage
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {property.Unit
+                    .sort((a: Unit, b: Unit) => {
+                      // Sort by unit number (handle both numeric and alphanumeric)
+                      const aNum = parseInt(a.unitNumber) || 0;
+                      const bNum = parseInt(b.unitNumber) || 0;
+                      if (aNum !== bNum) return aNum - bNum;
+                      return a.unitNumber.localeCompare(b.unitNumber);
+                    })
+                    .map((unit: Unit) => (
+                      <tr key={unit.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <span className="text-sm font-medium text-gray-900">
+                            {formatUnitNumber(unit.unitNumber)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <EditableCell
+                            value={unit.bedroomCount}
+                            onSave={(value) => handleUpdateUnit(unit.id, 'bedroomCount', value)}
+                            className="text-sm text-gray-900 text-center"
+                          />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <EditableCell
+                            value={unit.squareFootage ?? null}
+                            onSave={(value) => handleUpdateUnit(unit.id, 'squareFootage', value)}
+                            className="text-sm text-gray-900 text-center"
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Property Sharing Section */}
+      {userPermissions?.isOwner && (
+        <div className="mt-12">
+          <PropertyShareManager 
+            propertyId={property.id}
+            propertyName={property.name}
+            isOwner={userPermissions.isOwner}
+          />
+        </div>
+      )}
+
+      {/* Delete Property Section */}
+      <div className="mt-12 pt-8 border-t border-gray-200">
+        {property.pendingDeletionRequest ? (
+          // Show status when deletion request is pending
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.293l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3 flex-1">
+                <h3 className="text-sm font-medium text-yellow-800">Property Deletion Request Has Been Submitted & Is Under Review</h3>
+                <div className="mt-2 text-sm text-yellow-700">
+                  <p>Your request to delete this property has been submitted and is currently being reviewed by an administrator.</p>
+                  <p className="mt-2">
+                    <strong>Submitted:</strong> {new Date(property.pendingDeletionRequest.createdAt).toLocaleDateString()} at {new Date(property.pendingDeletionRequest.createdAt).toLocaleTimeString()}
+                  </p>
+                  <p className="mt-1">
+                    <strong>Reason:</strong> {property.pendingDeletionRequest.userExplanation}
+                  </p>
+                </div>
+                <div className="mt-4">
+                  <div className="inline-flex items-center px-3 py-2 border border-yellow-300 shadow-sm text-sm leading-4 font-medium rounded-md text-yellow-700 bg-yellow-100 cursor-not-allowed">
+                    <svg className="h-4 w-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                    </svg>
+                    Pending Admin Review
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          // Show normal deletion request interface
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />                                                              </svg>
+              </div>
+              <div className="ml-3 flex-1">
+                <h3 className="text-sm font-medium text-red-800">Request Property Deletion</h3>
+                <div className="mt-2 text-sm text-red-700">
+                  <p>Submit a request to delete this property. An administrator will review your request before any action is taken.</p>
+                </div>
+                <div className="mt-4">
+                  <button
+                    onClick={handleRequestDeletion}
+                    disabled={isRequestingDeletion}
+                    className="bg-red-600 border border-transparent rounded-md py-2 px-4 inline-flex justify-center text-sm font-medium text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
+                  >
+                    {isRequestingDeletion ? 'Submitting...' : 'Request Property Deletion'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Advanced Settings - Placed in Service Date */}
+      <div className="mb-8 bg-gray-50 rounded-lg shadow-sm overflow-hidden border border-gray-200">
+        <div className="bg-gray-100 px-6 py-3 border-b border-gray-200">
+          <h2 className="text-sm font-medium text-gray-700">Advanced Settings</h2>
+        </div>
+        <div className="p-6">
+          <div className="max-w-md">
+            <div className="space-y-2">
+              <label htmlFor="placed-in-service-year-bottom" className="block text-sm font-medium text-gray-700">
+                🏗️ Placed in Service Program Year
+              </label>
+              <select
+                id="placed-in-service-year-bottom"
+                value={placedInServiceYear}
+                onChange={(e) => {
+                  setPlacedInServiceYear(e.target.value);
+                  savePropertySettings({ placedInServiceYear: e.target.value });
+                }}
+                className="w-full pl-3 pr-10 py-2.5 text-sm border-gray-300 focus:outline-none focus:ring-brand-blue focus:border-brand-blue rounded-md shadow-sm bg-white"
+              >
+                <option value="">Select program year (if applicable)</option>
+                {PROGRAM_YEARS.map((programYear) => (
+                  <option key={programYear.year} value={programYear.year.toString()}>
+                    {programYear.year} ({programYear.range})
+                  </option>
+                ))}
+              </select>
+              
+              {placedInServiceYear && (
+                <p className="text-xs text-gray-500">
+                  {PROGRAM_YEARS.find(py => py.year.toString() === placedInServiceYear)?.heraEligible ? (
+                    <span className="text-green-600 font-medium">
+                      ✅ Eligible for HERA Special income limits (higher limits available)
+                    </span>
+                  ) : (
+                    <span className="text-gray-600">
+                      Uses standard income limits
+                    </span>
+                  )}
+                </p>
+              )}
+              
+              <p className="text-xs text-gray-500">
+                Only select if property qualifies for HERA Special limits (placed in service before 2009) or if you need to specify the exact program year for income limit calculations.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Utility Allowances Modal */}
+      {showUtilityModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Configure Utility Allowances</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Enter the monthly utility allowances for each bedroom count.
+              </p>
+
+              <div className="space-y-3">
+                {[...new Set(property.Unit.map((unit: Unit) => unit.bedroomCount))]
+                  .filter((count): count is number => count !== null && count !== undefined && typeof count === 'number')
+                  .sort((a: number, b: number) => a - b)
+                  .map((bedroomCount: number) => (
+                    <div key={bedroomCount} className="flex items-center justify-between">
+                      <label className="text-sm font-medium text-gray-700">
+                        {bedroomCount === 0 ? 'Studio' : `${bedroomCount} Bedroom`}
+                      </label>
+                      <div className="flex items-center">
+                        <span className="text-sm text-gray-500 mr-2">$</span>
+                        <input
+                          type="number"
+                          value={utilityAllowances[bedroomCount] || ''}
+                          onChange={(e) => setUtilityAllowances(prev => ({
+                            ...prev,
+                            [bedroomCount]: parseFloat(e.target.value) || 0
+                          }))}
+                          className="w-20 px-2 py-1 border border-gray-300 rounded text-sm focus:ring-brand-blue focus:border-brand-blue"
+                          placeholder="0"
+                          min="0"
+                          step="1"
+                        />
+                        <span className="text-sm text-gray-500 ml-1">/month</span>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowUtilityModal(false)}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setShowUtilityModal(false);
+                    // Save utility allowances to database
+                    savePropertySettings({ utilityAllowances });
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-white bg-brand-blue border border-transparent rounded-md hover:bg-blue-600"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Deletion Confirmation Modal */}
+      {showDeletionModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Request Property Deletion</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Please provide a reason for requesting property deletion. An administrator will review your request.
+              </p>
+
+              <textarea
+                value={deletionReason}
+                onChange={(e) => setDeletionReason(e.target.value)}
+                placeholder="Enter your reason here..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-brand-blue focus:border-brand-blue"
+                rows={4}
+              ></textarea>
+
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={handleCloseDeletionModal}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSubmitDeletionRequest}
+                  disabled={isRequestingDeletion}
+                  className="bg-red-600 border border-transparent rounded-md py-2 px-4 inline-flex justify-center text-sm font-medium text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
+                >
+                  {isRequestingDeletion ? 'Submitting...' : 'Submit Deletion Request'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       </div>
   );

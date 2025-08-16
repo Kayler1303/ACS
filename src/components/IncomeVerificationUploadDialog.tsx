@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import IncomeVerificationDocumentUploadForm from './IncomeVerificationDocumentUploadForm';
 
 interface IncomeVerificationUploadDialogProps {
@@ -36,10 +37,22 @@ export default function IncomeVerificationUploadDialog({
   rentRollId,
   currentLease,
 }: IncomeVerificationUploadDialogProps) {
-  const handleUploadComplete = () => {
-    // Call parent immediately to refresh data - success message is now handled in the form component
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const handleUploadComplete = (message?: string) => {
+    // Set success message if provided
+    if (message) {
+      setSuccessMessage(message);
+    }
+    // Call parent immediately to refresh data - success message is now handled in the dialog component
     onUploadComplete();
     // Keep dialog open so user can upload more documents if needed
+  };
+
+  const handleClose = () => {
+    // Clear success message when dialog closes
+    setSuccessMessage(null);
+    onClose();
   };
 
   if (!isOpen) return null;
@@ -59,7 +72,7 @@ export default function IncomeVerificationUploadDialog({
           <button
             type="button"
             className="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-blue focus:ring-offset-2 p-1"
-            onClick={onClose}
+            onClick={handleClose}
           >
             <span className="sr-only">Close</span>
             <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -67,6 +80,24 @@ export default function IncomeVerificationUploadDialog({
             </svg>
           </button>
         </div>
+
+        {/* Success Message Display */}
+        {successMessage && (
+          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-md">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm font-medium text-green-800">
+                  {successMessage}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
           <div className="flex">
@@ -107,14 +138,14 @@ export default function IncomeVerificationUploadDialog({
           <button
             type="button"
             className="rounded-md bg-white px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-brand-blue focus:ring-offset-2"
-            onClick={onClose}
+            onClick={handleClose}
           >
             Continue Later
           </button>
           <button
             type="button"
             className="rounded-md bg-brand-blue px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-brand-blue focus:ring-offset-2"
-            onClick={onClose}
+            onClick={handleClose}
           >
             Done for Now
           </button>

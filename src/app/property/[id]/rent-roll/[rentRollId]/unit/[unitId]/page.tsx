@@ -2532,7 +2532,13 @@ export default function ResidentDetailPage() {
           isOpen={isUploadDialogOpen}
           onClose={() => setUploadDialogOpen(false)}
           verificationId={uploadDialogData.verificationId}
-          onUploadComplete={() => fetchTenancyData(false)}
+          onUploadComplete={() => {
+            // Delay refresh to allow success message to be seen - success message handled by upload form
+            setTimeout(() => {
+              fetchTenancyData(false);
+            }, 1000); // 1 second delay to allow success message to be displayed
+            // Keep dialog open for additional uploads
+          }}
           residents={uploadDialogData.residents}
           allCurrentLeaseResidents={
             tenancyData?.unit.Lease.find(l => l.Tenancy && l.leaseStartDate)

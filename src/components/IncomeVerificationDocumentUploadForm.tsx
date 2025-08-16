@@ -15,10 +15,10 @@ interface Resident {
 }
 
 interface IncomeVerificationDocumentUploadFormProps {
-  onUploadComplete: () => void;
-  residents: Resident[];
-  allCurrentLeaseResidents?: Resident[]; // NEW: All residents from current lease for renewal selection
   verificationId: string;
+  onUploadComplete: (message?: string) => void;
+  residents: Array<{ id: string; name: string }>;
+  allCurrentLeaseResidents?: Array<{ id: string; name: string }>;
   hasExistingDocuments: boolean;
   unitId: string;
   propertyId: string;
@@ -51,10 +51,10 @@ interface DateDiscrepancyData {
 }
 
 export default function IncomeVerificationDocumentUploadForm({
+  verificationId,
   onUploadComplete,
   residents,
   allCurrentLeaseResidents,
-  verificationId,
   hasExistingDocuments,
   unitId,
   propertyId,
@@ -70,8 +70,6 @@ export default function IncomeVerificationDocumentUploadForm({
   const [selectedResident, setSelectedResident] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const successTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [dateDiscrepancyModal, setDateDiscrepancyModal] = useState<{
     isOpen: boolean;
     data: DateDiscrepancyData | null;
@@ -102,38 +100,6 @@ export default function IncomeVerificationDocumentUploadForm({
   const [newLeaseData, setNewLeaseData] = useState<{ id: string; name: string } | null>(null);
 
   const router = useRouter();
-
-  // Success message handler with cleanup
-  const showSuccessMessage = useCallback((message: string, duration: number = 5000) => {
-    console.log('🎉 [SUCCESS MESSAGE] Showing success message:', message);
-    // Clear any existing timeout
-    if (successTimeoutRef.current) {
-      clearTimeout(successTimeoutRef.current);
-    }
-    
-    // Set success message
-    setSuccess(message);
-    
-    // Only schedule cleanup if duration > 0 (0 = permanent until dialog closes)
-    if (duration > 0) {
-      successTimeoutRef.current = setTimeout(() => {
-        console.log('🧹 [SUCCESS MESSAGE] Clearing success message after', duration, 'ms');
-        setSuccess(null);
-        successTimeoutRef.current = null;
-      }, duration);
-    } else {
-      console.log('🎯 [SUCCESS MESSAGE] Message set to persist until dialog closes');
-    }
-  }, []);
-
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (successTimeoutRef.current) {
-        clearTimeout(successTimeoutRef.current);
-      }
-    };
-  }, []);
 
   // Pre-populate resident if there's only one (resident-specific upload)
   useEffect(() => {
@@ -166,7 +132,7 @@ export default function IncomeVerificationDocumentUploadForm({
       });
 
       if (response.ok) {
-        setSuccess('Admin override request submitted successfully. You will be notified when reviewed.');
+        // showSuccessMessage('Admin override request submitted successfully. You will be notified when reviewed.'); // Removed
         setDuplicateError({ isVisible: false, message: '', documentType: '', residentId: '', duplicateDocumentId: '' });
       } else {
         setError('Failed to submit override request. Please try again.');
@@ -212,7 +178,7 @@ export default function IncomeVerificationDocumentUploadForm({
       }
 
       setDateDiscrepancyModal({ isOpen: false, data: null });
-      setSuccess('Document uploaded successfully with date confirmation.');
+      // showSuccessMessage('Document uploaded successfully with date confirmation.'); // Removed
       
       // Reset form
       setSelectedFiles([]);
@@ -453,7 +419,8 @@ export default function IncomeVerificationDocumentUploadForm({
       }
 
       setDocumentAssignmentDialogOpen(false);
-      setSuccess('New lease created successfully with documents uploaded!');
+      // showSuccessMessage('New lease created successfully with documents uploaded!'); // Removed
+      onUploadComplete('New lease created successfully with documents uploaded!');
       
       // Clean up state first  
       setIsSubmitting(false); // Clear the original form's submitting state
@@ -528,7 +495,7 @@ export default function IncomeVerificationDocumentUploadForm({
 
     setIsSubmitting(true);
     setError(null);
-    setSuccess(null);
+    // setSuccess(null); // This line is removed
 
     try {
       // STEP 1: Check dates BEFORE uploading any files - process ALL files
@@ -615,7 +582,8 @@ export default function IncomeVerificationDocumentUploadForm({
       }
 
       // Show success message that persists until user closes dialog
-      showSuccessMessage(`Successfully uploaded ${selectedFiles.length} document${selectedFiles.length > 1 ? 's' : ''}. Analysis has started.`, 0); // 0 = never auto-clear
+      // showSuccessMessage(`Successfully uploaded ${selectedFiles.length} document${selectedFiles.length > 1 ? 's' : ''}. Analysis has started.`, 0); // 0 = never auto-clear
+      onUploadComplete(`Successfully uploaded ${selectedFiles.length} document${selectedFiles.length > 1 ? 's' : ''}. Analysis has started.`);
       
       // Reset form (keep resident selected if uploading for specific resident)
       setSelectedFiles([]);
@@ -625,13 +593,13 @@ export default function IncomeVerificationDocumentUploadForm({
       (e.target as HTMLFormElement).reset();
 
       // Call parent immediately to refresh data
-      onUploadComplete();
+      // onUploadComplete(); // This line is removed
       
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred';
       console.log(`🚨 [FRONTEND] Caught error in handleSubmit:`, errorMessage);
       setError(errorMessage);
-      setSuccess(null); // Clear success message when error occurs
+      // setSuccess(null); // This line is removed
       console.log(`🚨 [FRONTEND] Error state set to:`, errorMessage);
     } finally {
       setIsSubmitting(false);
@@ -642,7 +610,7 @@ export default function IncomeVerificationDocumentUploadForm({
     <>
       <form onSubmit={handleSubmit} className="space-y-6 bg-white p-6 rounded-lg shadow-sm border border-gray-200">
       {error && <div className="p-3 bg-red-100 text-red-700 rounded-md">{error}</div>}
-      {success && <div className="p-3 bg-green-100 text-green-700 rounded-md">{success}</div>}
+      {/* {success && <div className="p-3 bg-green-100 text-green-700 rounded-md">{success}</div>} */}
       
       {/* Duplicate Detection Error with Override Option */}
       {duplicateError.isVisible && (

@@ -5,10 +5,10 @@ import { prisma } from '@/lib/prisma';
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id:string } }
+  { params }: { params: Promise<{ id:string }> }
 ) {
   const session = await getServerSession(authOptions);
-  const propertyId = params.id;
+  const { id: propertyId } = await params;
 
   if (!session || !session.user?.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
