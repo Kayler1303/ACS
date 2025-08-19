@@ -35,6 +35,22 @@ interface Tenancy {
   } | null;
 }
 
+interface FutureToCurrentTransition {
+  unitId: string;
+  unitNumber: string;
+  futureLeaseId: string;
+  futureLeaseName: string;
+  currentLeaseId: string;
+  currentLeaseName: string;
+  hasVerifiedDocuments: boolean;
+  documentCount: number;
+  residentMatches: Array<{
+    futureName: string;
+    currentName: string;
+    isMatch: boolean;
+  }>;
+}
+
 export default function ReconciliationPage() {
   const params = useParams();
   const { id: propertyId } = params;
@@ -47,10 +63,13 @@ export default function ReconciliationPage() {
   const [incomeDiscrepancies, setIncomeDiscrepancies] = useState<IncomeDiscrepancy[]>([]);
   const [provisionalLeases, setProvisionalLeases] = useState<ProvisionalLease[]>([]);
   const [newTenancies, setNewTenancies] = useState<Tenancy[]>([]);
+  const [futureToCurrentTransitions, setFutureToCurrentTransitions] = useState<FutureToCurrentTransition[]>([]);
   const [selectedLeaseId, setSelectedLeaseId] = useState<string | null>(null);
   const [selectedTenancyId, setSelectedTenancyId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [notificationAmount, setNotificationAmount] = useState<number>(0);
 
   const isIncomeDiscrepancyMode = reason === 'income-discrepancies';
 
@@ -60,12 +79,23 @@ export default function ReconciliationPage() {
       try {
         if (isIncomeDiscrepancyMode && rentRollId) {
           // Fetch income discrepancies for the specific rent roll
-          const discrepancyRes = await fetch(`/api/properties/${propertyId}/income-discrepancies?rentRollId=${rentRollId}`);
+          const [discrepancyRes, transitionsRes] = await Promise.all([
+            fetch(`/api/properties/${propertyId}/income-discrepancies?rentRollId=${rentRollId}`),
+            fetch(`/api/properties/${propertyId}/future-to-current-transitions?rentRollId=${rentRollId}`)
+          ]);
+          
           if (!discrepancyRes.ok) {
             throw new Error('Failed to fetch income discrepancies');
           }
+          if (!transitionsRes.ok) {
+            throw new Error('Failed to fetch future-to-current transitions');
+          }
+          
           const discrepancyData = await discrepancyRes.json();
+          const transitionsData = await transitionsRes.json();
+          
           setIncomeDiscrepancies(discrepancyData.discrepancies || []);
+          setFutureToCurrentTransitions(transitionsData.transitions || []);
         } else {
           // Fetch lease reconciliation data (original functionality)
           const [provisionalRes, futureRes, tenanciesRes] = await Promise.all([
@@ -107,6 +137,37 @@ export default function ReconciliationPage() {
     fetchData();
   }, [propertyId, isIncomeDiscrepancyMode, rentRollId]);
 
+  const handleFutureToCurrentTransition = async (transition: FutureToCurrentTransition, transferDocuments: boolean) => {
+    try {
+      const response = await fetch(`/api/properties/${propertyId}/future-to-current-transitions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          futureLeaseId: transition.futureLeaseId,
+          currentLeaseId: transition.currentLeaseId,
+          transferDocuments
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to process future-to-current transition');
+      }
+
+      // Remove the processed transition from the list
+      setFutureToCurrentTransitions(prev => 
+        prev.filter(t => t.futureLeaseId !== transition.futureLeaseId || t.currentLeaseId !== transition.currentLeaseId)
+      );
+
+      // If no more transitions or discrepancies, redirect to property page
+      if (futureToCurrentTransitions.length <= 1 && incomeDiscrepancies.length === 0) {
+        router.push(`/property/${propertyId}`);
+      }
+    } catch (error) {
+      console.error('Error processing transition:', error);
+      setError('Failed to process transition. Please try again.');
+    }
+  };
+
   const handleIncomeDiscrepancyResolution = async (discrepancy: IncomeDiscrepancy, resolution: 'accept-verified' | 'accept-rentroll') => {
     try {
       const response = await fetch(`/api/properties/${propertyId}/resolve-income-discrepancy`, {
@@ -121,6 +182,12 @@ export default function ReconciliationPage() {
 
       if (!response.ok) {
         throw new Error('Failed to resolve income discrepancy');
+      }
+
+      // Show notification modal if user chose to keep verified income
+      if (resolution === 'accept-verified') {
+        setNotificationAmount(discrepancy.verifiedIncome);
+        setShowNotificationModal(true);
       }
 
       // Remove the resolved discrepancy from the list
@@ -210,7 +277,7 @@ export default function ReconciliationPage() {
       {/* Income Discrepancy Reconciliation */}
       {isIncomeDiscrepancyMode && (
         <div className="space-y-6">
-          {incomeDiscrepancies.length === 0 ? (
+          {incomeDiscrepancies.length === 0 && futureToCurrentTransitions.length === 0 ? (
             <div className="bg-green-50 border border-green-200 rounded-lg p-6 text-center">
               <h3 className="text-lg font-semibold text-green-800 mb-2">All Discrepancies Resolved!</h3>
               <p className="text-green-600 mb-4">No income discrepancies found. You can proceed to the property dashboard.</p>
@@ -226,9 +293,15 @@ export default function ReconciliationPage() {
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                 <h3 className="text-lg font-semibold text-yellow-800 mb-2">
                   {incomeDiscrepancies.length} Income Discrepanc{incomeDiscrepancies.length === 1 ? 'y' : 'ies'} Detected
+                  {futureToCurrentTransitions.length > 0 && (
+                    <span> & {futureToCurrentTransitions.length} Future Lease Transition{futureToCurrentTransitions.length === 1 ? '' : 's'}</span>
+                  )}
                 </h3>
                 <p className="text-yellow-700">
                   For each discrepancy below, choose whether to keep the verified income from documents or accept the new rent roll income.
+                  {futureToCurrentTransitions.length > 0 && (
+                    <span> Also review any future leases that have become current leases.</span>
+                  )}
                 </p>
               </div>
 
@@ -282,6 +355,113 @@ export default function ReconciliationPage() {
               ))}
             </>
           )}
+        </div>
+      )}
+
+      {/* Future-to-Current Lease Transitions */}
+      {isIncomeDiscrepancyMode && futureToCurrentTransitions.length > 0 && (
+        <div className="space-y-6 mt-8">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h3 className="text-lg font-semibold text-blue-800 mb-2">
+              Future Leases Now Current ({futureToCurrentTransitions.length})
+            </h3>
+            <p className="text-blue-700">
+              We detected units where the current lease changed from your previous rent roll AND there were existing future leases. 
+              Review each case and choose whether to transfer verified income documents from the future lease to the current lease.
+            </p>
+          </div>
+
+          {futureToCurrentTransitions.map((transition, index) => (
+            <div key={`${transition.futureLeaseId}-${transition.currentLeaseId}`} className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900">
+                    Unit {transition.unitNumber}
+                  </h3>
+                  <p className="text-gray-600">Future lease transition detected</p>
+                </div>
+                <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
+                  Transition #{index + 1}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                  <h4 className="font-semibold text-purple-800 mb-2">Previous Future Lease</h4>
+                  <p className="text-lg font-semibold text-purple-900 mb-2">
+                    {transition.futureLeaseName}
+                  </p>
+                  {transition.hasVerifiedDocuments && (
+                    <div className="text-sm text-purple-700">
+                      <p>✅ {transition.documentCount} verified document{transition.documentCount !== 1 ? 's' : ''}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <h4 className="font-semibold text-green-800 mb-2">New Current Lease</h4>
+                  <p className="text-lg font-semibold text-green-900 mb-2">
+                    {transition.currentLeaseName}
+                  </p>
+                </div>
+              </div>
+
+              {/* Resident Matching */}
+              {transition.residentMatches.length > 0 && (
+                <div className="mb-6">
+                  <h4 className="font-semibold text-gray-800 mb-3">Resident Matching</h4>
+                  <div className="space-y-2">
+                    {transition.residentMatches.map((match, matchIndex) => (
+                      <div key={matchIndex} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div className="flex items-center space-x-3">
+                          <span className="text-sm font-medium text-gray-700">
+                            {match.futureName}
+                          </span>
+                          <span className="text-gray-400">→</span>
+                          <span className="text-sm font-medium text-gray-700">
+                            {match.currentName}
+                          </span>
+                        </div>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          match.isMatch 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {match.isMatch ? '✅ Match' : '❌ No Match'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row gap-3">
+                {transition.hasVerifiedDocuments ? (
+                  <>
+                    <button
+                      onClick={() => handleFutureToCurrentTransition(transition, true)}
+                      className="flex-1 bg-green-600 text-white px-6 py-3 rounded-md hover:bg-green-700 font-medium"
+                    >
+                      ✅ Confirm Transition & Transfer Documents
+                    </button>
+                    <button
+                      onClick={() => handleFutureToCurrentTransition(transition, false)}
+                      className="flex-1 bg-gray-600 text-white px-6 py-3 rounded-md hover:bg-gray-700 font-medium"
+                    >
+                      ✅ Confirm Transition (No Transfer)
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => handleFutureToCurrentTransition(transition, false)}
+                    className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 font-medium"
+                  >
+                    ✅ Confirm Transition
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -346,6 +526,59 @@ export default function ReconciliationPage() {
             >
               Link Selected Lease and Tenancy
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Property Management System Update Notification Modal */}
+      {showNotificationModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+          <div className="relative bg-white p-8 rounded-lg shadow-xl max-w-md mx-auto">
+            <div className="text-center">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
+                <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              
+              <h3 className="text-lg font-medium text-gray-900 mb-4">
+                Income Updated Successfully
+              </h3>
+              
+              <div className="mb-6">
+                <p className="text-sm text-gray-600 mb-3">
+                  The resident's income has been updated to:
+                </p>
+                <p className="text-2xl font-bold text-green-600">
+                  ${notificationAmount.toLocaleString('en-US')}
+                </p>
+              </div>
+              
+              <div className="bg-amber-50 border border-amber-200 rounded-md p-4 mb-6">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <h4 className="text-sm font-medium text-amber-800">
+                      Don't Forget!
+                    </h4>
+                    <p className="text-sm text-amber-700 mt-1">
+                      Please update this resident's income to <strong>${notificationAmount.toLocaleString('en-US')}</strong> in your property management system to prevent future discrepancies.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <button
+                onClick={() => setShowNotificationModal(false)}
+                className="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+              >
+                Got it, thanks!
+              </button>
+            </div>
           </div>
         </div>
       )}

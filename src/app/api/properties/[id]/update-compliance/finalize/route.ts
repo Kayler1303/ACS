@@ -216,21 +216,53 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           throw new Error(`Lease start and end dates are required for unit ${rows[0].unit}.`);
         }
         
-        // Create lease data
-        const timestamp = Date.now().toString();
-        const leaseId = `lease_${timestamp}_${unitId}`;
-        const tenancyId = `tenancy_${timestamp}_${unitId}`;
-        
-        leasesData.push({
-          id: leaseId,
-          name: `Lease from ${new Date(leaseStartDate).toLocaleDateString()} to ${new Date(leaseEndDate).toLocaleDateString()}`,
-          unitId: unitId,
-          leaseRent: rentValue,
-          leaseStartDate: new Date(leaseStartDate),
-          leaseEndDate: new Date(leaseEndDate),
-          createdAt: new Date(),
-          updatedAt: new Date(),
+        // Check if a lease with the same dates already exists for this unit
+        const existingLease = await tx.lease.findFirst({
+          where: {
+            unitId: unitId,
+            leaseStartDate: new Date(leaseStartDate),
+            leaseEndDate: new Date(leaseEndDate),
+          }
         });
+        
+        let leaseId: string;
+        let tenancyId: string;
+        
+        if (existingLease) {
+          // Use existing lease if dates match
+          leaseId = existingLease.id;
+          console.log(`[COMPLIANCE UPDATE] Using existing lease ${leaseId} for unit ${unitId} with dates ${leaseStartDate} to ${leaseEndDate}`);
+          
+          // Update rent if it has changed
+          const existingRentValue = existingLease.leaseRent ? Number(existingLease.leaseRent) : 0;
+          if (existingRentValue !== rentValue) {
+            await tx.lease.update({
+              where: { id: existingLease.id },
+              data: { leaseRent: rentValue }
+            });
+            console.log(`[COMPLIANCE UPDATE] Updated rent for lease ${leaseId} from ${existingRentValue} to ${rentValue}`);
+          }
+        } else {
+          // Create new lease only if dates are different
+          const timestamp = Date.now().toString();
+          leaseId = `lease_${timestamp}_${unitId}`;
+          console.log(`[COMPLIANCE UPDATE] Creating new lease ${leaseId} for unit ${unitId} with dates ${leaseStartDate} to ${leaseEndDate}`);
+          
+          leasesData.push({
+            id: leaseId,
+            name: `Lease from ${new Date(leaseStartDate).toLocaleDateString()} to ${new Date(leaseEndDate).toLocaleDateString()}`,
+            unitId: unitId,
+            leaseRent: rentValue,
+            leaseStartDate: new Date(leaseStartDate),
+            leaseEndDate: new Date(leaseEndDate),
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+        }
+        
+        // Generate tenancy ID
+        const timestamp = Date.now().toString();
+        tenancyId = `tenancy_${timestamp}_${unitId}`;
         
         // Create tenancy data (links lease to rent roll)
         // Only create tenancy if lease STARTED on or before rent roll date
@@ -238,15 +270,28 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         const leaseStart = new Date(leaseStartDate);
         
         if (leaseStart <= rentRollDate) {
-          // Lease started on/before rent roll date - create tenancy
-          // This includes active leases AND month-to-month (expired lease but still in rent roll)
-          tenanciesData.push({
-            id: tenancyId,
-            rentRollId: newRentRoll.id,
-            leaseId: leaseId,
-            createdAt: new Date(),
-            updatedAt: new Date(),
+          // Check if tenancy already exists for this lease and rent roll
+          const existingTenancy = await tx.tenancy.findFirst({
+            where: {
+              leaseId: leaseId,
+              rentRollId: newRentRoll.id,
+            }
           });
+          
+          if (!existingTenancy) {
+            // Lease started on/before rent roll date - create tenancy
+            // This includes active leases AND month-to-month (expired lease but still in rent roll)
+            tenanciesData.push({
+              id: tenancyId,
+              rentRollId: newRentRoll.id,
+              leaseId: leaseId,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            });
+            console.log(`[COMPLIANCE UPDATE] Creating new tenancy ${tenancyId} for lease ${leaseId} and rent roll ${newRentRoll.id}`);
+          } else {
+            console.log(`[COMPLIANCE UPDATE] Tenancy already exists for lease ${leaseId} and rent roll ${newRentRoll.id}`);
+          }
         }
         // Note: Only leases with start dates AFTER rent roll date are "future leases"
         

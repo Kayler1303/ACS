@@ -477,6 +477,7 @@ export default function IncomeVerificationDocumentUploadForm({
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    console.log(`🚀 [FRONTEND] handleSubmit called with ${selectedFiles.length} files for resident ${selectedResident}`);
 
     if (selectedFiles.length === 0 || !selectedResident) {
       setError('Please select at least one file and choose a resident.');
@@ -559,9 +560,18 @@ export default function IncomeVerificationDocumentUploadForm({
         });
 
         console.log(`📡 [FRONTEND] Upload response status: ${response.status}`);
+        
+        // Parse response once
+        let data;
+        try {
+          data = await response.json();
+          console.log(`📡 [FRONTEND] Parsed response data:`, data);
+        } catch (parseError) {
+          console.error(`❌ [FRONTEND] Failed to parse response as JSON:`, parseError);
+          throw new Error('Invalid response format from server');
+        }
 
         if (!response.ok) {
-          const data = await response.json();
           console.log(`❌ [FRONTEND] Upload failed with data:`, data);
           
           // Handle duplicate document error specifically
@@ -582,7 +592,7 @@ export default function IncomeVerificationDocumentUploadForm({
       }
 
       // Show success message that persists until user closes dialog
-      // showSuccessMessage(`Successfully uploaded ${selectedFiles.length} document${selectedFiles.length > 1 ? 's' : ''}. Analysis has started.`, 0); // 0 = never auto-clear
+      console.log(`🎉 [FRONTEND] All uploads completed successfully! Processing success callback...`);
       const successMsg = `Successfully uploaded ${selectedFiles.length} document${selectedFiles.length > 1 ? 's' : ''}. Analysis has started.`;
       console.log(`✅ [FRONTEND] Calling onUploadComplete with message: "${successMsg}"`);
       onUploadComplete(successMsg);

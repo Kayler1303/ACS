@@ -102,6 +102,8 @@ export default function ResidentFinalizationDialog({
     calculatedIncome: number;
     difference: number;
   } | null>(null);
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [notificationAmount, setNotificationAmount] = useState<number>(0);
 
   if (!isOpen) return null;
 
@@ -456,10 +458,13 @@ export default function ResidentFinalizationDialog({
 
       console.log(`[ACCEPT VERIFIED] Successfully updated and finalized ${resident.name}`);
       
-      // Close all modals and refresh data
+      // Show notification modal with the verified income amount
+      setNotificationAmount(discrepancyData.calculatedIncome);
+      setShowNotificationModal(true);
+      
+      // Close discrepancy modal but keep main dialog open for notification
       setShowDiscrepancyModal(false);
       setDiscrepancyData(null);
-      onClose();
       
       if (onDataRefresh) {
         onDataRefresh();
@@ -843,6 +848,62 @@ export default function ResidentFinalizationDialog({
           onRequestException={handleRequestIncomeException}
           isProcessing={isSubmitting}
         />
+      )}
+
+      {/* Property Management System Update Notification Modal */}
+      {showNotificationModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+          <div className="relative bg-white p-8 rounded-lg shadow-xl max-w-md mx-auto">
+            <div className="text-center">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
+                <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              
+              <h3 className="text-lg font-medium text-gray-900 mb-4">
+                Income Updated Successfully
+              </h3>
+              
+              <div className="mb-6">
+                <p className="text-sm text-gray-600 mb-3">
+                  {resident.name}'s income has been updated to:
+                </p>
+                <p className="text-2xl font-bold text-green-600">
+                  ${notificationAmount.toLocaleString('en-US')}
+                </p>
+              </div>
+              
+              <div className="bg-amber-50 border border-amber-200 rounded-md p-4 mb-6">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <h4 className="text-sm font-medium text-amber-800">
+                      Don't Forget!
+                    </h4>
+                    <p className="text-sm text-amber-700 mt-1">
+                      Please update {resident.name}'s income to <strong>${notificationAmount.toLocaleString('en-US')}</strong> in your property management system to prevent future discrepancies.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <button
+                onClick={() => {
+                  setShowNotificationModal(false);
+                  onClose(); // Close the main dialog after notification
+                }}
+                className="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+              >
+                Got it, thanks!
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

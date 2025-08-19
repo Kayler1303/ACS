@@ -45,13 +45,18 @@ export default function IncomeVerificationUploadDialog({
     if (message) {
       console.log(`✅ [UPLOAD DIALOG] Setting success message: "${message}"`);
       setSuccessMessage(message);
+      console.log(`🔍 [UPLOAD DIALOG] Success message state after setting: "${message}"`);
+      // Don't call parent callback immediately - let user see the success message
+      // Parent will be called when user closes the dialog
+      return;
     }
-    // Call parent immediately to refresh data - success message is now handled in the dialog component
+    // Only call parent callback if there's no success message (i.e., for other events)
     onUploadComplete();
-    // Keep dialog open so user can upload more documents if needed
   };
 
   const handleClose = () => {
+    // Call parent callback to refresh data before closing
+    onUploadComplete();
     // Clear success message when dialog closes
     setSuccessMessage(null);
     onClose();
@@ -84,7 +89,10 @@ export default function IncomeVerificationUploadDialog({
         </div>
 
         {/* Success Message Display */}
-        {successMessage && (
+        {successMessage && (() => {
+          console.log(`🎨 [UPLOAD DIALOG] Rendering success message: "${successMessage}"`);
+          return true;
+        })() && (
           <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-md">
             <div className="flex">
               <div className="flex-shrink-0">
