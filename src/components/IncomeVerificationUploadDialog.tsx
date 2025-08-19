@@ -41,7 +41,9 @@ export default function IncomeVerificationUploadDialog({
 
   const handleUploadComplete = (message?: string) => {
     // Set success message if provided
+    console.log(`📨 [UPLOAD DIALOG] Received message: "${message}"`);
     if (message) {
+      console.log(`✅ [UPLOAD DIALOG] Setting success message: "${message}"`);
       setSuccessMessage(message);
     }
     // Call parent immediately to refresh data - success message is now handled in the dialog component

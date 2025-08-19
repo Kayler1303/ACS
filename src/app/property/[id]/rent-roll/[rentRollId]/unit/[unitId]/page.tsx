@@ -1337,8 +1337,7 @@ export default function ResidentDetailPage() {
         
         // For current leases, check for legitimate discrepancies
         // IMPORTANT: Skip this check if residents were finalized through individual discrepancy resolution
-        // If a resident's calculatedAnnualizedIncome equals their verifiedIncome, they went through
-        // the discrepancy resolution process during individual finalization
+        // When "Accept Verified Income" is used, it updates annualizedIncome to match calculatedAnnualizedIncome
         const residentsWithDiscrepancies = allResidents.filter(resident => {
           const rentRollIncome = resident.annualizedIncome || 0;
           const verifiedIncome = resident.calculatedAnnualizedIncome || 0;
@@ -1346,23 +1345,28 @@ export default function ResidentDetailPage() {
           const hasDiscrepancy = discrepancy > 1.00;
           
           // If there's a discrepancy AND the resident has been finalized, check if they already
-          // resolved it through the individual resident discrepancy modal
-          // This happens when verifiedIncome matches what was set during finalization
-          const wasResolvedDuringFinalization = resident.incomeFinalized && 
-                                               resident.verifiedIncome && 
-                                               Math.abs(verifiedIncome - resident.verifiedIncome) < 1.00;
+          // resolved it through "Accept Verified Income" which updates annualizedIncome to match calculatedAnnualizedIncome
+          const wasResolvedByAcceptingVerifiedIncome = resident.incomeFinalized && 
+                                                      Math.abs(rentRollIncome - verifiedIncome) < 1.00;
+          
+          // Additional check: If resident was finalized very recently (within last 30 seconds), 
+          // assume it was through the accept verified income process
+          const recentlyFinalized = resident.finalizedAt && 
+                                   (new Date().getTime() - new Date(resident.finalizedAt).getTime()) < 30000;
           
           console.log(`[AUTO DISCREPANCY CHECK] Resident ${resident.name}:`, {
             rentRollIncome,
             verifiedIncome,
             discrepancy,
             hasDiscrepancy,
-            wasResolvedDuringFinalization,
-            residentVerifiedIncome: resident.verifiedIncome
+            wasResolvedByAcceptingVerifiedIncome,
+            recentlyFinalized,
+            finalizedAt: resident.finalizedAt,
+            incomeFinalized: resident.incomeFinalized
           });
           
           // Only count as having a discrepancy if there's a real discrepancy AND it wasn't already resolved
-          return hasDiscrepancy && !wasResolvedDuringFinalization;
+          return hasDiscrepancy && !wasResolvedByAcceptingVerifiedIncome && !recentlyFinalized;
         });
 
         console.log(`[AUTO DISCREPANCY CHECK] Residents with discrepancies: ${residentsWithDiscrepancies.length}`);
@@ -1397,7 +1401,12 @@ export default function ResidentDetailPage() {
 
   // Run discrepancy check when tenancy data changes
   useEffect(() => {
-    checkForIncomeDiscrepancy();
+    // Add a small delay to ensure fresh data after database updates
+    const timer = setTimeout(() => {
+      checkForIncomeDiscrepancy();
+    }, 500); // 500ms delay to allow database updates to complete
+    
+    return () => clearTimeout(timer);
   }, [checkForIncomeDiscrepancy]);
 
   // Handler functions for discrepancy resolution modal - REMOVED (replaced with new individual resident modal handlers)
@@ -1728,8 +1737,12 @@ export default function ResidentDetailPage() {
                               }
                               
                               // Calculate verified income only when all residents are finalized
+                              // Use the approved amounts that users have already accepted
                               const leaseVerifiedIncome = finalizedResidents.reduce((total, resident) => {
-                                return total + (resident.calculatedAnnualizedIncome ? Number(resident.calculatedAnnualizedIncome) : 0);
+                                // For finalized residents, use their approved income amount
+                                // Prioritize calculatedAnnualizedIncome (the approved amount) over annualizedIncome (rent roll)
+                                const approvedIncome = resident.calculatedAnnualizedIncome || resident.annualizedIncome || 0;
+                                return total + Number(approvedIncome);
                               }, 0);
                               
                               return leaseVerifiedIncome > 0 
@@ -1845,47 +1858,15 @@ export default function ResidentDetailPage() {
                           doc => doc.status === 'COMPLETED'
                         );
                         
-                        // Calculate resident verified income from their actual completed documents
+                        // Calculate resident verified income from their approved amount (not real-time calculation)
+                        // For finalized residents, use the approved income that was accepted by the user
                         let residentVerifiedIncome = 0;
-                        if (completedResidentDocuments.length > 0) {
-                          // Calculate total annualized income from completed documents
-                          residentVerifiedIncome = completedResidentDocuments.reduce((total, doc) => {
-                            if (doc.documentType === 'W2') {
-                              // For W2, use the highest of boxes 1, 3, 5
-                              const amounts = [doc.box1_wages, doc.box3_ss_wages, doc.box5_med_wages]
-                                .filter((amount): amount is number => amount !== null && amount !== undefined);
-                              return total + (amounts.length > 0 ? Math.max(...amounts) : 0);
-                            }
-                            return total;
-                          }, 0);
-                          
-                          // Handle paystubs separately - average then annualize
-                          const paystubDocuments = completedResidentDocuments.filter(doc => doc.documentType === 'PAYSTUB');
-                          if (paystubDocuments.length > 0) {
-                            const totalGrossPay = paystubDocuments.reduce((sum, doc) => sum + (Number(doc.grossPayAmount) || 0), 0);
-                            const averageGrossPay = totalGrossPay / paystubDocuments.length;
-                            
-                            // For paystubs, annualize based on pay frequency (use database format with hyphens)
-                            const payFrequency = paystubDocuments[0]?.payFrequency || 'BI-WEEKLY';
-                            const multiplier = payFrequency === 'WEEKLY' ? 52 : 
-                                             payFrequency === 'BI-WEEKLY' ? 26 : 
-                                             payFrequency === 'SEMI-MONTHLY' ? 24 : 
-                                             payFrequency === 'MONTHLY' ? 12 : 26; // Default to bi-weekly
-                            residentVerifiedIncome += (averageGrossPay * multiplier);
-                          }
-                          
-                          // Handle Social Security documents
-                          const socialSecurityDocuments = completedResidentDocuments.filter(doc => doc.documentType === 'SOCIAL_SECURITY');
-                          if (socialSecurityDocuments.length > 0) {
-                            const totalSocialSecurityIncome = socialSecurityDocuments.reduce((sum, doc) => {
-                              // For Social Security, use calculatedAnnualizedIncome if available, otherwise annualize grossPayAmount
-                              const annualIncome = doc.calculatedAnnualizedIncome || (doc.grossPayAmount ? doc.grossPayAmount * 12 : 0);
-                              return sum + annualIncome;
-                            }, 0);
-                            residentVerifiedIncome += totalSocialSecurityIncome;
-                          }
+                        if (resident.incomeFinalized) {
+                          // For finalized residents, show the calculatedAnnualizedIncome (the approved amount)
+                          // This is what they actually finalized with, not the original rent roll amount
+                          residentVerifiedIncome = resident.calculatedAnnualizedIncome || resident.annualizedIncome || 0;
                         } else {
-                          // Fallback to resident-level calculated income or 0
+                          // For non-finalized residents, show real-time calculation as preview
                           residentVerifiedIncome = resident.calculatedAnnualizedIncome ? Number(resident.calculatedAnnualizedIncome) : 0;
                         }
 
@@ -1961,11 +1942,11 @@ export default function ResidentDetailPage() {
                                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                                         ❌ Document Denied
                                       </span>
-                                    ) : hasCompletedDocuments && residentVerifiedIncome > 0 ? (
+                                    ) : hasCompletedDocuments && !isResidentFinalized ? (
                                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                                         📋 Ready to Finalize
                                       </span>
-                                    ) : hasCompletedDocuments && residentVerifiedIncome === 0 ? (
+                                    ) : hasCompletedDocuments && isResidentFinalized && residentVerifiedIncome === 0 ? (
                                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
                                         ⚠️ Income Calculation Error
                                       </span>

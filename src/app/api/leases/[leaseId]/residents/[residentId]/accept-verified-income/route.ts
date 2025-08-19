@@ -41,11 +41,13 @@ export async function PATCH(
 
     // Update the specific resident's annualizedIncome to match the verified income AND finalize them
     // This ensures that future rent roll uploads will match and the resident is finalized
+    // IMPORTANT: Also update calculatedAnnualizedIncome to prevent discrepancy modal from reappearing
     await prisma.resident.update({
       where: { id: residentId },
       data: {
         annualizedIncome: verifiedIncome,
         verifiedIncome: verifiedIncome,
+        calculatedAnnualizedIncome: verifiedIncome,
         incomeFinalized: true,
         finalizedAt: new Date()
       }

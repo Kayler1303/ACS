@@ -419,10 +419,64 @@ export default function LeaseDetailPage() {
                       incomeFinalized: r.incomeFinalized
                     })));
                     
+                    // Use the same calculation logic as individual residents for consistency
                     const leaseVerifiedIncome = finalizedResidents.reduce((total, resident) => {
-                      const income = resident.calculatedAnnualizedIncome ? Number(resident.calculatedAnnualizedIncome) : 0;
-                      console.log(`[LEASE DETAIL AMI DEBUG] ${resident.name}: $${income}`);
-                      return total + income;
+                      // Get documents for this resident from this verification
+                      const residentDocuments = (verification?.IncomeDocument as any[])?.filter(
+                        (doc: any) => doc.residentId === resident.id
+                      ) || [];
+                      
+                      // Calculate completed documents (status COMPLETED, regardless of calculated income)
+                      const completedResidentDocuments = residentDocuments.filter(
+                        (doc: any) => doc.status === 'COMPLETED'
+                      );
+                      
+                      // Calculate resident verified income from their actual completed documents
+                      let residentVerifiedIncome = 0;
+                      if (completedResidentDocuments.length > 0) {
+                        // Calculate total annualized income from completed documents
+                        residentVerifiedIncome = completedResidentDocuments.reduce((docTotal: number, doc: any) => {
+                          if (doc.documentType === 'W2') {
+                            // For W2, use the highest of boxes 1, 3, 5
+                            const amounts = [doc.box1_wages, doc.box3_ss_wages, doc.box5_med_wages]
+                              .filter((amount): amount is number => amount !== null && amount !== undefined);
+                            return docTotal + (amounts.length > 0 ? Math.max(...amounts) : 0);
+                          }
+                          return docTotal;
+                        }, 0);
+                        
+                        // Handle paystubs separately - average then annualize
+                        const paystubDocuments = completedResidentDocuments.filter((doc: any) => doc.documentType === 'PAYSTUB');
+                        if (paystubDocuments.length > 0) {
+                          const totalGrossPay = paystubDocuments.reduce((sum: number, doc: any) => sum + (Number(doc.grossPayAmount) || 0), 0);
+                          const averageGrossPay = totalGrossPay / paystubDocuments.length;
+                          
+                          // For paystubs, annualize based on pay frequency (use database format with hyphens)
+                          const payFrequency = paystubDocuments[0]?.payFrequency || 'BI-WEEKLY';
+                          const multiplier = payFrequency === 'WEEKLY' ? 52 : 
+                                           payFrequency === 'BI-WEEKLY' ? 26 : 
+                                           payFrequency === 'SEMI-MONTHLY' ? 24 : 
+                                           payFrequency === 'MONTHLY' ? 12 : 26; // Default to bi-weekly
+                          residentVerifiedIncome += (averageGrossPay * multiplier);
+                        }
+                        
+                        // Handle Social Security documents
+                        const socialSecurityDocuments = completedResidentDocuments.filter((doc: any) => doc.documentType === 'SOCIAL_SECURITY');
+                        if (socialSecurityDocuments.length > 0) {
+                          const totalSocialSecurityIncome = socialSecurityDocuments.reduce((sum: number, doc: any) => {
+                            // For Social Security, use calculatedAnnualizedIncome if available, otherwise annualize grossPayAmount
+                            const annualIncome = doc.calculatedAnnualizedIncome || (doc.grossPayAmount ? doc.grossPayAmount * 12 : 0);
+                            return sum + annualIncome;
+                          }, 0);
+                          residentVerifiedIncome += totalSocialSecurityIncome;
+                        }
+                      } else {
+                        // Fallback to resident-level calculated income or 0
+                        residentVerifiedIncome = resident.calculatedAnnualizedIncome ? Number(resident.calculatedAnnualizedIncome) : 0;
+                      }
+                      
+                      console.log(`[LEASE DETAIL AMI DEBUG] ${resident.name}: $${residentVerifiedIncome}`);
+                      return total + residentVerifiedIncome;
                     }, 0);
                     
                     console.log(`[LEASE DETAIL AMI DEBUG] Total lease verified income: $${leaseVerifiedIncome}`);

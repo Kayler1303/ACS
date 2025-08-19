@@ -147,6 +147,31 @@ export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Da
     }
   }
   
+  // Handle FINALIZED verifications where some residents still need individual finalization
+  if (latestVerification && latestVerification.status === 'FINALIZED') {
+    // Check if any documents are waiting for admin review
+    const hasDocumentsNeedingReview = allDocuments.some(doc => doc && doc.status === 'NEEDS_REVIEW');
+    
+    if (hasDocumentsNeedingReview) {
+      console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: FINALIZED verification but has NEEDS_REVIEW documents - returning Waiting for Admin Review`);
+      return "Waiting for Admin Review";
+    }
+    
+    // Check if there are unfinalized residents with completed documents ready to finalize
+    const unfinalizedResidents = allResidents.filter(r => !r.incomeFinalized);
+    if (unfinalizedResidents.length > 0) {
+      const hasCompletedDocumentsReadyToFinalize = unfinalizedResidents.some(resident => {
+        const residentDocs = (resident.IncomeDocument || []).filter(doc => doc.status === 'COMPLETED');
+        return residentDocs.length > 0;
+      });
+      
+      if (hasCompletedDocumentsReadyToFinalize) {
+        console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: FINALIZED verification but has unfinalized residents with completed documents - returning In Progress - Finalize to Process`);
+        return "In Progress - Finalize to Process";
+      }
+    }
+  }
+  
   // Check if income has been verified for all residents
   // A resident is considered verified if they have incomeFinalized = true
   // This can happen through either:
@@ -202,10 +227,22 @@ export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Da
     return "Out of Date Income Documents";
   }
   
-  // If not all residents have verified income, return out of date  
+  // If not all residents have verified income, check if there are completed documents ready for finalization
   if (totalResidentsWithVerifiedIncome < allResidents.length) {
-    console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: Not all residents have verified income (${totalResidentsWithVerifiedIncome}/${allResidents.length}) - returning Out of Date Income Documents`);
-    return "Out of Date Income Documents";
+    // Check if unfinalized residents have completed documents that are ready to finalize
+    const unfinalizedResidents = allResidents.filter(r => !r.incomeFinalized);
+    const hasCompletedDocumentsReadyToFinalize = unfinalizedResidents.some(resident => {
+      const residentDocs = (resident.IncomeDocument || []).filter(doc => doc.status === 'COMPLETED');
+      return residentDocs.length > 0;
+    });
+    
+    if (hasCompletedDocumentsReadyToFinalize) {
+      console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: Not all residents finalized (${totalResidentsWithVerifiedIncome}/${allResidents.length}) but has completed documents ready to finalize - returning In Progress - Finalize to Process`);
+      return "In Progress - Finalize to Process";
+    } else {
+      console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: Not all residents have verified income (${totalResidentsWithVerifiedIncome}/${allResidents.length}) and no completed documents ready - returning Out of Date Income Documents`);
+      return "Out of Date Income Documents";
+    }
   }
 
   // NOTE: Timeliness and name validation now happens during document upload

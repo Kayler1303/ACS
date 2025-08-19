@@ -9,14 +9,28 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  console.log(`🚨🚨🚨 VERIFICATION STATUS API FUNCTION CALLED 🚨🚨🚨`);
+  console.log(`[VERIFICATION STATUS API] ============== FUNCTION ENTRY ==============`);
+  console.log(`[VERIFICATION STATUS API] Request URL: ${req.url}`);
+  
   const session = await getServerSession(authOptions);
+  console.log(`[VERIFICATION STATUS API] Session check complete, user ID: ${session?.user?.id || 'NONE'}`);
+  
   if (!session?.user?.id) {
+    console.log(`[VERIFICATION STATUS API] Authentication failed - returning 401`);
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
   const { id: propertyId } = await params;
+  
+  console.log(`[VERIFICATION STATUS API] ============== STARTING API CALL ==============`);
+  console.log(`[VERIFICATION STATUS API] Property ID: ${propertyId}`);
+  console.log(`[VERIFICATION STATUS API] Request URL: ${req.url}`);
 
   try {
+    console.log(`[VERIFICATION STATUS API] About to query property: ${propertyId}`);
+    console.log(`[VERIFICATION STATUS API] User ID: ${session.user.id}`);
+    
     // Get the property with units, leases, residents, income documents, and rent rolls
     const property = await prisma.property.findFirst({
       where: {
@@ -64,10 +78,14 @@ export async function GET(
     });
 
     if (!property) {
+      console.log(`[VERIFICATION STATUS API] Property ${propertyId} not found - returning 404`);
       return NextResponse.json({ error: 'Property not found or access denied' }, { status: 404 });
     }
+    
+    console.log(`[VERIFICATION STATUS API] Property found: ${property.name} with ${property.Unit.length} units`);
 
     if (property.RentRoll.length === 0) {
+      console.log(`[VERIFICATION STATUS API] No rent rolls found for property ${propertyId} - returning 404`);
       return NextResponse.json({ error: 'No rent rolls found for this property' }, { status: 404 });
     }
 
@@ -82,15 +100,29 @@ export async function GET(
     };
 
     // Process each unit
+    console.log(`[VERIFICATION STATUS DEBUG] Total units in property: ${property.Unit.length}`);
+    console.log(`[VERIFICATION STATUS DEBUG] All unit numbers:`, property.Unit.map(u => u.unitNumber));
+    
     for (const unit of property.Unit) {
+      console.log(`[VERIFICATION STATUS DEBUG] Processing unit ${unit.unitNumber} (ID: ${unit.id})`);
       // SIMPLIFIED: Only handle current leases (with tenancy)
-      const currentLease = unit.Lease
-        .filter((l: any) => l.tenancy !== null)
+      console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: Found ${unit.Lease.length} total leases`);
+      const leasesWithTenancy = unit.Lease.filter((l: any) => l.tenancy !== null);
+      console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: ${leasesWithTenancy.length} leases with tenancy`);
+      
+      const currentLease = leasesWithTenancy
         .sort((a: any, b: any) => {
           const aDate = a.tenancy?.createdAt ? new Date(a.tenancy.createdAt).getTime() : 0;
           const bDate = b.tenancy?.createdAt ? new Date(b.tenancy.createdAt).getTime() : 0;
           return bDate - aDate;
         })[0];
+        
+      if (!currentLease) {
+        console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: No current lease found, skipping`);
+        continue;
+      }
+      
+      console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: Processing with lease ${currentLease.id}`);
 
       // Calculate total uploaded income (from compliance uploads) - only use active lease
       const totalUploadedIncome = currentLease 
@@ -128,29 +160,26 @@ export async function GET(
             ...resident,
             incomeFinalized: residentIncomeData?.incomeFinalized || false,
             hasNoIncome: residentIncomeData?.hasNoIncome || false,
-            calculatedAnnualizedIncome: residentIncomeData?.calculatedAnnualizedIncome ? Number(residentIncomeData.calculatedAnnualizedIncome) : null
+            calculatedAnnualizedIncome: residentIncomeData?.calculatedAnnualizedIncome ? Number(residentIncomeData.calculatedAnnualizedIncome) : null,
+            // Preserve the IncomeDocument array from the original resident
+            IncomeDocument: resident.IncomeDocument || []
           };
           enhancedResidents.push(enhancedResident);
           
-          // Use calculatedAnnualizedIncome if available and income is finalized, otherwise fall back to annualizedIncome
+          // Calculate verified income using approved amounts that users have already accepted
           if (residentIncomeData?.incomeFinalized) {
-            const verifiedAmount = residentIncomeData.calculatedAnnualizedIncome || residentIncomeData.annualizedIncome;
-            console.log(`[DEBUG ${unit.unitNumber}] Resident ${resident.id}:`, {
+            // For finalized residents, use their approved income amount
+            // Prioritize calculatedAnnualizedIncome (the approved amount) over annualizedIncome (rent roll)
+            const approvedIncome = residentIncomeData.calculatedAnnualizedIncome || residentIncomeData.annualizedIncome || 0;
+            
+            console.log(`[DEBUG ${unit.unitNumber}] Resident ${resident.id} - USING APPROVED AMOUNT:`, {
               incomeFinalized: residentIncomeData.incomeFinalized,
               calculatedAnnualizedIncome: residentIncomeData.calculatedAnnualizedIncome,
               annualizedIncome: residentIncomeData.annualizedIncome,
-              verifiedAmount: verifiedAmount,
-              addingToTotal: Number(verifiedAmount) || 0
+              approvedIncome: approvedIncome
             });
-            if (verifiedAmount) {
-              totalVerifiedIncome += Number(verifiedAmount) || 0;
-            }
-          } else {
-            console.log(`[DEBUG ${unit.unitNumber}] Resident ${resident.id} - NOT FINALIZED:`, {
-              incomeFinalized: residentIncomeData?.incomeFinalized,
-              calculatedAnnualizedIncome: residentIncomeData?.calculatedAnnualizedIncome,
-              annualizedIncome: residentIncomeData?.annualizedIncome
-            });
+            
+            totalVerifiedIncome += Number(approvedIncome);
           }
         }
         
@@ -168,6 +197,15 @@ export async function GET(
             lease.id === currentLease.id ? enhancedLease : lease
           )
         };
+        
+        // DEBUG: Check if IncomeDocument arrays are preserved
+        console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber} enhanced residents:`, 
+          enhancedResidents.map((r: any) => ({
+            name: r.name,
+            documentsCount: r.IncomeDocument?.length || 0,
+            documents: r.IncomeDocument?.map((d: any) => ({ type: d.documentType, status: d.status })) || []
+          }))
+        );
       }
 
       // NOW calculate verification status with enhanced unit data

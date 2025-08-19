@@ -583,7 +583,9 @@ export default function IncomeVerificationDocumentUploadForm({
 
       // Show success message that persists until user closes dialog
       // showSuccessMessage(`Successfully uploaded ${selectedFiles.length} document${selectedFiles.length > 1 ? 's' : ''}. Analysis has started.`, 0); // 0 = never auto-clear
-      onUploadComplete(`Successfully uploaded ${selectedFiles.length} document${selectedFiles.length > 1 ? 's' : ''}. Analysis has started.`);
+      const successMsg = `Successfully uploaded ${selectedFiles.length} document${selectedFiles.length > 1 ? 's' : ''}. Analysis has started.`;
+      console.log(`✅ [FRONTEND] Calling onUploadComplete with message: "${successMsg}"`);
+      onUploadComplete(successMsg);
       
       // Reset form (keep resident selected if uploading for specific resident)
       setSelectedFiles([]);
