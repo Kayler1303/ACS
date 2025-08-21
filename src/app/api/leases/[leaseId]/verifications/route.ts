@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { add, endOfDay, startOfDay, sub } from 'date-fns';
 import { randomUUID } from 'crypto';
+import { setMasterVerification } from '@/services/verificationContinuity';
 
 export async function POST(
   req: Request,
@@ -77,6 +78,30 @@ export async function POST(
         updatedAt: now,
       },
     });
+
+    // Check if this verification should be set as a master verification
+    // This happens when a user manually creates a verification (not inherited)
+    const verificationSnapshot = await prisma.verificationSnapshot.findFirst({
+      where: {
+        leaseId: leaseId
+      },
+      include: {
+        verificationContinuity: true
+      }
+    });
+
+    if (verificationSnapshot && !verificationSnapshot.verificationContinuity.masterVerificationId) {
+      // Set this as the master verification for continuity
+      await setMasterVerification(newVerification.id, verificationSnapshot.verificationContinuityId);
+      
+      // Update the verification to link to continuity
+      await prisma.incomeVerification.update({
+        where: { id: newVerification.id },
+        data: { verificationContinuityId: verificationSnapshot.verificationContinuityId }
+      });
+      
+      console.log(`[CONTINUITY] Set verification ${newVerification.id} as master for continuity ${verificationSnapshot.verificationContinuityId}`);
+    }
 
     return NextResponse.json(newVerification, { status: 201 });
   } catch (error) {

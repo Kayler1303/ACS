@@ -238,7 +238,7 @@ export default function UpdateComplianceForm({ propertyId }: UpdateComplianceFor
         <div>
         <h3 className="text-xl font-semibold mb-4 text-gray-800">Step 2: Review Combined Data</h3>
         <p className="text-gray-600 mb-6">
-            Review the combined data below. This is how the information will be saved for the snapshot on <strong>{new Date(rentRollDate).toLocaleDateString()}</strong>. If everything is correct, click "Finalize".
+            Review the combined data below. This is how the information will be saved for the snapshot on <strong>{new Date(rentRollDate + 'T12:00:00.000Z').toLocaleDateString('en-US', { timeZone: 'UTC' })}</strong>. If everything is correct, click "Finalize".
         </p>
 
         <div className="overflow-x-auto border border-gray-200 rounded-lg">

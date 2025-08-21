@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import type { FullProperty, FullRentRoll, FullTenancy, Unit } from '@/types/property';
-import type { Resident } from '@prisma/client';
 import { format } from 'date-fns';
 import { PropertyVerificationSummary, VerificationStatus } from '@/services/verification';
 import { getActualAmiBucket } from '@/services/income';
@@ -137,6 +136,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
   const [selectedRentRollId, setSelectedRentRollId] = useState<string | null>(
     initialProperty.RentRoll[0]?.id || null
   );
+  const [availableSnapshots, setAvailableSnapshots] = useState<{id: string, date: string, createdAt: string}[]>([]);
   
 
 
@@ -1406,7 +1406,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                                               >
                     {property.RentRoll.map((rentRoll: FullRentRoll) => (
                       <option key={rentRoll.id} value={rentRoll.id}>
-                        {new Date(rentRoll.date).toLocaleDateString()}
+                        {new Date(rentRoll.date).toLocaleDateString('en-US', { timeZone: 'UTC' })}
                       </option>
                     ))}
                   </select>

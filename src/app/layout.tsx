@@ -1,4 +1,3 @@
-import { Analytics } from "@vercel/analytics/react"
 import { Playfair_Display, Lora } from 'next/font/google';
 import './globals.css';
 import Layout from '../components/Layout';
@@ -31,7 +30,6 @@ export default function RootLayout({
           <Layout>
             {children}
           </Layout>
-          <Analytics />
         </Providers>
       </body>
     </html>

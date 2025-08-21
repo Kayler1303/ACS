@@ -67,27 +67,32 @@ model IncomeVerification {
   verificationPeriodEnd    DateTime?
   verificationPeriodStart  DateTime?
   leaseId                  String
+  verificationContinuityId String?
   IncomeDocument           IncomeDocument[]
   Lease                    Lease               @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+  VerificationContinuity   VerificationContinuity? @relation(fields: [verificationContinuityId], references: [id])
+  MasterVerificationContinuity VerificationContinuity? @relation("MasterVerification")
   OverrideRequest          OverrideRequest[]
 
   @@index([leaseId])
   @@index([status])
+  @@index([verificationContinuityId])
 }
 
 model Lease {
-  id                 String               @id
-  name               String
-  leaseStartDate     DateTime?
-  leaseEndDate       DateTime?
-  leaseRent          Decimal?
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime
-  unitId             String
-  IncomeVerification IncomeVerification[]
-  Unit               Unit                 @relation(fields: [unitId], references: [id], onDelete: Cascade)
-  Resident           Resident[]
-  Tenancy            Tenancy?
+  id                   String                 @id
+  name                 String
+  leaseStartDate       DateTime?
+  leaseEndDate         DateTime?
+  leaseRent            Decimal?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime
+  unitId               String
+  IncomeVerification   IncomeVerification[]
+  Unit                 Unit                   @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  Resident             Resident[]
+  Tenancy              Tenancy?
+  VerificationSnapshot VerificationSnapshot[]
 
   @@index([unitId])
 }
@@ -119,35 +124,37 @@ model OverrideRequest {
 }
 
 model Property {
-  id                       String            @id
+  id                       String                   @id
   name                     String
   address                  String?
   county                   String
   state                    String
   numberOfUnits            Int?
-  createdAt                DateTime          @default(now())
+  createdAt                DateTime                 @default(now())
   updatedAt                DateTime
   ownerId                  String
-  complianceOption         String?           @default("20% at 50% AMI, 55% at 80% AMI")
-  includeRentAnalysis      Boolean           @default(false)
-  includeUtilityAllowances Boolean           @default(false)
+  complianceOption         String?                  @default("20% at 50% AMI, 55% at 80% AMI")
+  includeRentAnalysis      Boolean                  @default(false)
+  includeUtilityAllowances Boolean                  @default(false)
   utilityAllowances        Json?
   placedInServiceDate      DateTime?
   OverrideRequest          OverrideRequest[]
-  User                     User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  User                     User                     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   RentRoll                 RentRoll[]
   Unit                     Unit[]
   PropertyShare            PropertyShare[]
+  VerificationContinuity   VerificationContinuity[]
 }
 
 model RentRoll {
-  id         String    @id
-  date       DateTime
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime
-  propertyId String
-  Property   Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  Tenancy    Tenancy[]
+  id                   String                 @id
+  date                 DateTime
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime
+  propertyId           String
+  Property             Property               @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  Tenancy              Tenancy[]
+  VerificationSnapshot VerificationSnapshot[]
 
   @@unique([propertyId, date])
 }
@@ -185,16 +192,17 @@ model Tenancy {
 }
 
 model Unit {
-  id              String            @id
-  unitNumber      String
-  squareFootage   Int?
-  bedroomCount    Int?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime
-  propertyId      String
-  Lease           Lease[]
-  OverrideRequest OverrideRequest[]
-  Property        Property          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  id                     String                   @id
+  unitNumber             String
+  squareFootage          Int?
+  bedroomCount           Int?
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime
+  propertyId             String
+  Lease                  Lease[]
+  OverrideRequest        OverrideRequest[]
+  Property               Property                 @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  VerificationContinuity VerificationContinuity[]
 
   @@index([propertyId])
   @@index([unitNumber])
@@ -300,4 +308,42 @@ model PropertyShare {
   sharedBy    User            @relation("PropertyShare_sharedById", fields: [sharedById], references: [id], onDelete: Cascade)
 
   @@unique([propertyId, userId])
+}
+
+model VerificationContinuity {
+  id                    String                  @id
+  propertyId            String
+  unitId                String
+  leaseSignature        String
+  masterVerificationId  String?                 @unique
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  
+  property              Property                @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  unit                  Unit                    @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  masterVerification    IncomeVerification?     @relation("MasterVerification", fields: [masterVerificationId], references: [id])
+  incomeVerifications   IncomeVerification[]
+  verificationSnapshots VerificationSnapshot[]
+  
+  @@unique([propertyId, unitId, leaseSignature])
+  @@index([propertyId])
+  @@index([unitId])
+  @@index([leaseSignature])
+}
+
+model VerificationSnapshot {
+  id                       String                 @id
+  verificationContinuityId String
+  rentRollId               String
+  leaseId                  String
+  isActive                 Boolean                @default(true)
+  createdAt                DateTime               @default(now())
+  
+  verificationContinuity   VerificationContinuity @relation(fields: [verificationContinuityId], references: [id], onDelete: Cascade)
+  rentRoll                 RentRoll               @relation(fields: [rentRollId], references: [id], onDelete: Cascade)
+  lease                    Lease                  @relation(fields: [leaseId], references: [id], onDelete: Cascade)
+  
+  @@unique([verificationContinuityId, rentRollId])
+  @@index([rentRollId])
+  @@index([leaseId])
 }

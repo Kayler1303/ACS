@@ -22,9 +22,12 @@ export async function GET(
   }
 
   const { id: propertyId } = await params;
+  const { searchParams } = new URL(req.url);
+  const rentRollId = searchParams.get('rentRollId');
   
   console.log(`[VERIFICATION STATUS API] ============== STARTING API CALL ==============`);
   console.log(`[VERIFICATION STATUS API] Property ID: ${propertyId}`);
+  console.log(`[VERIFICATION STATUS API] Rent Roll ID: ${rentRollId || 'latest'}`);
   console.log(`[VERIFICATION STATUS API] Request URL: ${req.url}`);
 
   try {
@@ -68,7 +71,11 @@ export async function GET(
             },
           },
         },
-        RentRoll: {
+        RentRoll: rentRollId ? {
+          where: {
+            id: rentRollId
+          }
+        } : {
           orderBy: {
             date: 'desc',
           },
@@ -101,7 +108,7 @@ export async function GET(
 
     // Process each unit
     console.log(`[VERIFICATION STATUS DEBUG] Total units in property: ${property.Unit.length}`);
-    console.log(`[VERIFICATION STATUS DEBUG] All unit numbers:`, property.Unit.map(u => u.unitNumber));
+    console.log(`[VERIFICATION STATUS DEBUG] All unit numbers:`, property.Unit.map((u: any) => u.unitNumber));
     
     for (const unit of property.Unit) {
       console.log(`[VERIFICATION STATUS DEBUG] Processing unit ${unit.unitNumber} (ID: ${unit.id})`);

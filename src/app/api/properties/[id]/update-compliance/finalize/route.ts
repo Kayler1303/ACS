@@ -4,6 +4,12 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
+import { 
+  handleVerificationContinuity, 
+  inheritVerification,
+  LeaseData 
+} from '@/services/verificationContinuity';
+
 
 // Income discrepancy detection function
 interface IncomeDiscrepancy {
@@ -76,7 +82,7 @@ async function checkForIncomeDiscrepancies(propertyId: string, rentRollId: strin
       for (const existingResident of existingLease.Resident) {
         // Find matching resident by name in new lease
         const matchingNewResident = newResidents.find(
-          newRes => newRes.name.toLowerCase().trim() === existingResident.name.toLowerCase().trim()
+          (newRes: any) => newRes.name.toLowerCase().trim() === existingResident.name.toLowerCase().trim()
         );
 
                  if (matchingNewResident) {
@@ -171,7 +177,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         data: {
           id: randomUUID(),
           propertyId: propertyId,
-          date: new Date(rentRollDate),
+          date: new Date(rentRollDate + 'T12:00:00.000Z'), // Force noon UTC to avoid timezone issues
           createdAt: new Date(),
           updatedAt: new Date(),
         },
@@ -190,10 +196,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           continue;
         }
 
-        if (!unitGroups.has(unitId)) {
-          unitGroups.set(unitId, []);
+        // TypeScript assertion: unitId is definitely defined here
+        const definedUnitId = unitId as string;
+        if (!unitGroups.has(definedUnitId)) {
+          unitGroups.set(definedUnitId, []);
         }
-        unitGroups.get(unitId)!.push(row);
+        unitGroups.get(definedUnitId)!.push(row);
       }
       
       if (notFoundUnits.length > 0) {
@@ -216,6 +224,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           throw new Error(`Lease start and end dates are required for unit ${rows[0].unit}.`);
         }
         
+        // Process each lease normally
+
+        let leaseId: string;
+        const tenancyId: string = `tenancy_${Date.now().toString()}_${unitId}`;
+        
         // Check if a lease with the same dates already exists for this unit
         const existingLease = await tx.lease.findFirst({
           where: {
@@ -224,9 +237,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
             leaseEndDate: new Date(leaseEndDate),
           }
         });
-        
-        let leaseId: string;
-        let tenancyId: string;
         
         if (existingLease) {
           // Use existing lease if dates match
@@ -260,9 +270,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           });
         }
         
-        // Generate tenancy ID
-        const timestamp = Date.now().toString();
-        tenancyId = `tenancy_${timestamp}_${unitId}`;
+        // Tenancy ID already generated above
         
         // Create tenancy data (links lease to rent roll)
         // Only create tenancy if lease STARTED on or before rent roll date
@@ -295,6 +303,20 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         }
         // Note: Only leases with start dates AFTER rent roll date are "future leases"
         
+        // Delete existing residents that were created for this rent roll upload session
+        // We identify them by creation time - delete residents created in the last 5 minutes
+        // This preserves historical residents from previous rent roll uploads
+        const sessionStartTime = new Date(Date.now() - 5 * 60 * 1000); // 5 minutes ago
+        const deletedResidents = await tx.resident.deleteMany({
+          where: {
+            leaseId: leaseId,
+            createdAt: {
+              gte: sessionStartTime
+            }
+          }
+        });
+        console.log(`[COMPLIANCE UPDATE] Deleted ${deletedResidents.count} recent residents from lease ${leaseId} for unit ${unitId}`);
+
         // Create residents data for this lease
         for (const row of rows) {
           const timestamp = Date.now().toString();
@@ -334,20 +356,118 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         });
       }
       
-      return { rentRollId: newRentRoll.id };
+      // Process verification continuity for each lease
+      console.log('[CONTINUITY] Processing verification continuity for all leases...');
+      const continuityResults = [];
+      
+      for (const [unitId, rows] of unitGroups.entries()) {
+        const rentValue = parseFloat(String(rows[0].rent || '0').replace(/[^0-9.-]+/g,""));
+        const { leaseStartDate, leaseEndDate } = rows[0];
+        
+        // Find the lease ID for this unit (either existing or newly created)
+        let leaseId: string;
+        
+        if (!leaseStartDate || !leaseEndDate) {
+          console.log(`[CONTINUITY] Missing lease dates for unit ${unitId}, skipping continuity processing`);
+          continue;
+        }
+        
+        const existingLease = await tx.lease.findFirst({
+          where: {
+            unitId: unitId,
+            leaseStartDate: new Date(leaseStartDate),
+            leaseEndDate: new Date(leaseEndDate),
+          }
+        });
+        
+        if (existingLease) {
+          leaseId = existingLease.id;
+        } else {
+          // Find in the newly created leases
+          const newLease = leasesData.find(l => l.unitId === unitId);
+          leaseId = newLease?.id;
+        }
+        
+        if (!leaseId) {
+          console.log(`[CONTINUITY] Could not find lease for unit ${unitId}, skipping continuity processing`);
+          continue;
+        }
+        
+        // Get residents for this lease
+        const leaseResidents = residentsData.filter(r => r.leaseId === leaseId);
+        
+        // Prepare lease data for continuity processing
+        const leaseData: LeaseData = {
+          id: leaseId,
+          leaseStartDate: new Date(leaseStartDate),
+          leaseEndDate: new Date(leaseEndDate),
+          leaseRent: rentValue,
+          residents: leaseResidents.map(r => ({
+            name: r.name,
+            annualizedIncome: r.annualizedIncome
+          }))
+        };
+        
+        // Handle verification continuity
+        const continuityResult = await handleVerificationContinuity(
+          propertyId,
+          unitId,
+          leaseData,
+          newRentRoll.id
+        );
+        
+        // Handle verification inheritance or flag discrepancies
+        if (continuityResult.shouldInheritVerification && continuityResult.masterVerificationId) {
+          console.log(`[CONTINUITY] Inheriting verification for lease ${leaseId} from master ${continuityResult.masterVerificationId}`);
+          await inheritVerification(
+            continuityResult.masterVerificationId,
+            leaseId,
+            continuityResult.continuityId
+          );
+        } else if (continuityResult.hasIncomeDiscrepancies) {
+          console.log(`[CONTINUITY] Income discrepancies detected for lease ${leaseId} - will require user reconciliation`);
+          continuityResults.push({
+            unitId,
+            leaseId,
+            hasDiscrepancies: true,
+            discrepancies: continuityResult.incomeDiscrepancies,
+            futureLeaseMatch: continuityResult.futureLeaseMatch
+          });
+        } else if (continuityResult.requiresManualReview) {
+          console.log(`[CONTINUITY] Future lease match requires manual review for lease ${leaseId}`);
+          continuityResults.push({
+            unitId,
+            leaseId,
+            requiresManualReview: true,
+            futureLeaseMatch: continuityResult.futureLeaseMatch
+          });
+        } else {
+          console.log(`[CONTINUITY] No verification to inherit for lease ${leaseId}`);
+        }
+      }
+      
+      return { 
+        rentRollId: newRentRoll.id,
+        continuityResults
+      };
     }, {
-      timeout: 30000, // Increase timeout to 30 seconds
+      timeout: 60000, // Increase timeout to 60 seconds
     });
 
     // After creating the rent roll, check for income discrepancies
-    const discrepancies = await checkForIncomeDiscrepancies(propertyId, result.rentRollId);
+    const regularDiscrepancies = await checkForIncomeDiscrepancies(propertyId, result.rentRollId);
+    
+    const hasIncomeDiscrepancies = result.continuityResults.some((r: any) => r.hasDiscrepancies);
     
     return NextResponse.json({
         message: 'Compliance data updated successfully.',
         rentRollId: result.rentRollId,
-        hasDiscrepancies: discrepancies.length > 0,
-        discrepancies: discrepancies.length > 0 ? discrepancies : undefined,
-        requiresReconciliation: discrepancies.length > 0
+        hasDiscrepancies: regularDiscrepancies.length > 0,
+        discrepancies: regularDiscrepancies.length > 0 ? regularDiscrepancies : undefined,
+        requiresReconciliation: regularDiscrepancies.length > 0,
+        hasIncomeDiscrepancies,
+        incomeDiscrepancies: hasIncomeDiscrepancies ? result.continuityResults.filter((r: any) => r.hasDiscrepancies) : undefined,
+        requiresIncomeReconciliation: hasIncomeDiscrepancies
     });
 
   } catch (error: unknown) {
