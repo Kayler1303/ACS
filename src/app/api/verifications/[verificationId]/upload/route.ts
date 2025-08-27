@@ -753,7 +753,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             return NextResponse.json(document, { status: 201 });
           } else {
             // Fall back to admin review for all document types that use the generic layout model
-            const documentTypeLabel = documentType === DocumentType.OTHER ? 'Other' : documentType;
+            const documentTypeLabel = documentType || 'Other';
             console.log(`${documentTypeLabel} document analyzed with layout model - marking for admin review`);
             
             document = await prisma.incomeDocument.update({
