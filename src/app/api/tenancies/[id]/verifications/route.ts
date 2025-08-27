@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
+import crypto from 'crypto';
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -38,7 +39,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       // 1. Find the current in-progress verification for the tenancy
       const currentVerification = await tx.incomeVerification.findFirst({
         where: {
-          tenancyId,
+          leaseId: tenancy.leaseId,
           status: 'IN_PROGRESS',
         },
       });
@@ -84,7 +85,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       // 4. Create a new in-progress verification
       const newVerification = await tx.incomeVerification.create({
         data: {
-          tenancyId,
+          id: crypto.randomUUID(),
+          leaseId: tenancy.leaseId,
           status: 'IN_PROGRESS',
           reason: 'ANNUAL_RECERTIFICATION',
           verificationPeriodStart,
@@ -148,11 +150,11 @@ export async function PATCH(
       const verification = await tx.incomeVerification.findFirst({
         where: {
           id: verificationId,
-          tenancyId: tenancyId,
+          leaseId: tenancy.leaseId,
           status: 'IN_PROGRESS'
         },
         include: {
-          incomeDocuments: true
+          IncomeDocument: true
         }
       });
 
@@ -164,7 +166,7 @@ export async function PATCH(
       let finalVerifiedIncome = calculatedVerifiedIncome;
       if (!finalVerifiedIncome) {
         // Sum up all completed W2 wages from this verification
-        finalVerifiedIncome = verification.incomeDocuments
+        finalVerifiedIncome = verification.IncomeDocument
           .filter((doc: any) => doc.status === 'COMPLETED' && doc.box1_wages)
           .reduce((sum: number, doc: any) => sum + (doc.box1_wages || 0), 0);
       }
@@ -196,7 +198,7 @@ export async function PATCH(
       // Group documents by resident and sum their income
       const residentIncomeMap = new Map<string, number>();
       
-      verification.incomeDocuments
+      verification.IncomeDocument
         .filter((doc: any) => doc.status === 'COMPLETED' && doc.box1_wages && doc.residentId)
         .forEach((doc: any) => {
           const currentSum = residentIncomeMap.get(doc.residentId!) || 0;
