@@ -32,7 +32,7 @@ export async function POST(
       where: {
         id: targetLeaseId,
         Unit: { Property: { ownerId: session.user.id } },
-        tenancy: null, // Must be provisional
+        Tenancy: null, // Must be provisional
       },
     });
 
