@@ -15,20 +15,22 @@ type IncomeDocumentForPage = {
 }
 
 type ResidentPageProps = {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 };
 
 export default async function ResidentPage({ params }: ResidentPageProps) {
   const session = await getServerSession(authOptions);
 
   if (!session) {
-    redirect(`/api/auth/signin?callbackUrl=/resident/${params.id}`);
+    const { id } = await params;
+    redirect(`/api/auth/signin?callbackUrl=/resident/${id}`);
   }
 
+  const { id: residentId } = await params;
   const resident = await prisma.resident.findUnique({
-    where: { id: params.id },
+    where: { id: residentId },
     include: {
       tenancy: {
         include: {
