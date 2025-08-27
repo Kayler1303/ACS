@@ -31,7 +31,7 @@ export async function POST(
     const targetLease = await prisma.lease.findFirst({
       where: {
         id: targetLeaseId,
-        unit: { property: { ownerId: session.user.id } },
+        Unit: { Property: { ownerId: session.user.id } },
         tenancy: null, // Must be provisional
       },
     });
