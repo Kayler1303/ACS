@@ -39,7 +39,7 @@ export async function POST(
     const overrideRequest = await prisma.overrideRequest.findUnique({
       where: { id: requestId },
       include: {
-        requester: {
+        User_OverrideRequest_requesterIdToUser: {
           select: { id: true, email: true, name: true }
         },
         unit: {
@@ -68,12 +68,12 @@ export async function POST(
     });
 
     // Send email notification
-    const userFirstName = overrideRequest.requester.name?.split(' ')[0] || 'there';
+    const userFirstName = overrideRequest.User_OverrideRequest_requesterIdToUser.name?.split(' ')[0] || 'there';
     
     try {
       await resend.emails.send({
         from: 'Apartment Compliance Services <noreply@apartmentcompliance.com>',
-        to: [overrideRequest.requester.email],
+        to: [overrideRequest.User_OverrideRequest_requesterIdToUser.email],
         subject: `Admin Message: ${subject}`,
         react: AdminMessageEmail({
           adminName: admin.name || 'Admin',
