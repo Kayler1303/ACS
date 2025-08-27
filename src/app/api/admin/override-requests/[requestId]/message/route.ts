@@ -44,7 +44,7 @@ export async function POST(
         },
         Unit: {
           include: {
-            property: {
+            Property: {
               select: { name: true }
             }
           }
@@ -81,7 +81,7 @@ export async function POST(
           subject,
           message,
           overrideRequestType: overrideRequest.type,
-          propertyName: overrideRequest.Unit?.property?.name,
+          propertyName: overrideRequest.Unit?.Property?.name,
           unitNumber: overrideRequest.Unit?.unitNumber
         })
       });
