@@ -32,7 +32,7 @@ export default async function ResidentPage({ params }: ResidentPageProps) {
   const resident = await prisma.resident.findUnique({
     where: { id: residentId },
     include: {
-      Tenancy: {
+      Lease: {
         include: {
           Unit: {
             include: {
@@ -50,7 +50,7 @@ export default async function ResidentPage({ params }: ResidentPageProps) {
   });
 
   // Security check: Ensure the logged-in user owns the property this resident belongs to
-  if (!resident || resident.Tenancy.Unit.Property.ownerId !== session.user.id) {
+  if (!resident || resident.Lease.Unit.Property.ownerId !== session.user.id) {
     return (
       <div className="container mx-auto px-4 py-8 text-center">
         <h1 className="text-4xl font-bold mb-4">Resident Not Found</h1>
@@ -69,7 +69,7 @@ export default async function ResidentPage({ params }: ResidentPageProps) {
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-4xl font-bold mb-2">{resident.name}</h1>
       <p className="text-lg text-gray-600 mb-8">
-        Unit {resident.Tenancy.Unit.unitNumber} at {resident.Tenancy.Unit.Property.name}
+        Unit {resident.Lease.Unit.unitNumber} at {resident.Lease.Unit.Property.name}
       </p>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
