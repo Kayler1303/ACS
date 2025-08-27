@@ -18,7 +18,7 @@ export async function GET(
     // Verify property ownership
     const property = await prisma.property.findUnique({
       where: { id: propertyId },
-      include: { owner: true }
+      include: { User: true }
     });
 
     if (!property || property.ownerId !== session.user.id) {
