@@ -1033,10 +1033,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // Collect validation issues (declare outside if block so it's accessible later)
     const issues = [];
     if (!timelinessCheck.isValid) {
-      issues.push(timelinessCheck.message);
+      issues.push(timelinessCheck.reason || 'Timeliness check failed');
     }
     if (!nameCheck.isValid) {
-      issues.push(nameCheck.message);
+      issues.push(nameCheck.reason || 'Name check failed');
     }
 
     if (!timelinessCheck.isValid || !nameCheck.isValid) {
