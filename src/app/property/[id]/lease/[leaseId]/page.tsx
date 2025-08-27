@@ -78,6 +78,7 @@ export default function LeaseDetailPage() {
     resident: Resident | null;
     leaseName: string;
   }>({ isOpen: false, verification: null, resident: null, leaseName: '' });
+  const [createLeaseDialogOpen, setCreateLeaseDialogOpen] = useState(false);
 
   // Define handleRefresh first (before any conditional returns)
   const handleRefresh = useCallback(async () => {
