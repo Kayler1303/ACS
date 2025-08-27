@@ -120,8 +120,8 @@ export async function POST(
         let residentNames: string[] = [];
 
         for (const lease of existingLeases) {
-          if (lease.residents.length > 0 && lease.incomeVerifications.length > 0) {
-            const totalVerified = lease.residents.reduce((sum, resident) => {
+          if (lease.Resident.length > 0 && lease.IncomeVerification.length > 0) {
+            const totalVerified = lease.Resident.reduce((sum, resident) => {
               return sum + (Number(resident.calculatedAnnualizedIncome) || Number(resident.annualizedIncome) || 0);
             }, 0);
             
