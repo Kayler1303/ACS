@@ -175,7 +175,7 @@ export async function GET(
             rent: lease.rent,
             hasTenancy: !!lease.Tenancy,
             tenancyRentRollId: lease.Tenancy?.rentRollId,
-            residents: lease.Resident?.map(r => ({
+            residents: lease.Resident?.map((r: any) => ({
               name: r.name,
               incomeFinalized: r.incomeFinalized,
               calculatedAnnualizedIncome: r.calculatedAnnualizedIncome,
