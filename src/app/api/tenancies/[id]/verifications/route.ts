@@ -20,9 +20,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const tenancy = await prisma.tenancy.findFirst({
       where: {
         id: tenancyId,
-        unit: {
-          property: {
-            ownerId: session.user.id
+        Lease: {
+          Unit: {
+            Property: {
+              ownerId: session.user.id
+            }
           }
         }
       }
