@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import * as fs from 'fs';
 
 export async function GET(
   request: NextRequest,
@@ -11,7 +12,6 @@ export async function GET(
   console.error(`🚨 [VERIFICATION STATUS API] ===== THIS SHOULD APPEAR IN CONSOLE =====`);
   
   // Write logs to a file for easier debugging
-  import * as fs from 'fs';
   const logFile = '/tmp/verification-debug.log';
   const timestamp = new Date().toISOString();
   fs.writeFileSync(logFile, `\n=== VERIFICATION STATUS DEBUG - ${timestamp} ===\n`, { flag: 'a' });
