@@ -1060,8 +1060,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             payPeriodEndDate: (validationResult as PaystubValidationResult).extractedData.payPeriodEndDate,
             grossPayAmount: (validationResult as PaystubValidationResult).extractedData.grossPayAmount,
             employeeName: (validationResult as PaystubValidationResult).extractedData.employeeName,
-            employerName: (validationResult as PaystubValidationResult).extractedData.employerName,
-            payFrequency: (validationResult as PaystubValidationResult).extractedData.payFrequency
+            employerName: (validationResult as PaystubValidationResult).extractedData.employerName
           })
         }
       });
