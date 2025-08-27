@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Resend } from 'resend';
 import AdminMessageEmail from '@/emails/AdminMessageEmail';
+import crypto from 'crypto';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -59,6 +60,7 @@ export async function POST(
     // Create the admin message record
     const adminMessage = await prisma.adminMessage.create({
       data: {
+        id: crypto.randomUUID(),
         subject,
         message,
         overrideRequestId: requestId,
