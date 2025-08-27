@@ -31,12 +31,12 @@ export async function GET(
     const newTenancies = await prisma.tenancy.findMany({
       where: {
         rentRollId: latestRentRoll.id,
-        lease: null,
+        Lease: null,
       },
       include: {
-        lease: {
+        Lease: {
           include: {
-            unit: true,
+            Unit: true,
           },
         },
       },
