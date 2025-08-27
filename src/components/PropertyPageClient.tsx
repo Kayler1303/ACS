@@ -858,7 +858,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     const residents = tenancy.Lease.Resident;
     if (residents.length > 0) {
       // Calculate what their bucket would have been at that time using current HUD limits
-      const totalIncomeAtTime = residents.reduce((acc: number, res: Resident) => acc + Number(res.annualizedIncome || 0), 0);
+      const totalIncomeAtTime = residents.reduce((acc: number, res: any) => acc + Number(res.annualizedIncome || 0), 0);
       const residentCountAtTime = residents.length;
       
       originalBucket = includeRentAnalysis ? 
