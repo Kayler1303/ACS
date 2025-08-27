@@ -1054,7 +1054,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             employeeName: (validationResult as W2ValidationResult).extractedData.employeeName,
             employerName: (validationResult as W2ValidationResult).extractedData.employerName,
             taxYear: (validationResult as W2ValidationResult).extractedData.taxYear ? 
-              parseInt((validationResult as W2ValidationResult).extractedData.taxYear, 10) : null
+              parseInt((validationResult as W2ValidationResult).extractedData.taxYear!, 10) : null
           } : {
             payPeriodStartDate: (validationResult as PaystubValidationResult).extractedData.payPeriodStartDate,
             payPeriodEndDate: (validationResult as PaystubValidationResult).extractedData.payPeriodEndDate,
