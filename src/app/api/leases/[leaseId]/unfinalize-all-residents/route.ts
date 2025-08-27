@@ -52,7 +52,7 @@ export async function PATCH(
     console.log(`[UNFINALIZE ALL] Lease ${leaseId}: Unfinalized ${unfinalizedResidents.count} residents`);
 
     // Update the income verification status for the lease
-    const currentVerification = lease.incomeVerifications[0];
+    const currentVerification = lease.IncomeVerification[0];
     if (currentVerification) {
       await prisma.incomeVerification.update({
         where: { id: currentVerification.id },
