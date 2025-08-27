@@ -42,7 +42,7 @@ export async function POST(
         User_OverrideRequest_requesterIdToUser: {
           select: { id: true, email: true, name: true }
         },
-        unit: {
+        Unit: {
           include: {
             property: {
               select: { name: true }
@@ -81,8 +81,8 @@ export async function POST(
           subject,
           message,
           overrideRequestType: overrideRequest.type,
-          propertyName: overrideRequest.unit?.property?.name,
-          unitNumber: overrideRequest.unit?.unitNumber
+          propertyName: overrideRequest.Unit?.property?.name,
+          unitNumber: overrideRequest.Unit?.unitNumber
         })
       });
     } catch (emailError) {
