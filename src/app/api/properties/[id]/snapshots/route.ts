@@ -26,7 +26,7 @@ export async function GET(
     }
 
     // Get all rent roll snapshots for this property
-    const snapshots = await prisma.rentRoll.findMany({
+    const snapshots = await prisma.rentRollSnapshot.findMany({
       where: { propertyId },
       orderBy: { uploadDate: 'desc' },
       select: {
