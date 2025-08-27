@@ -298,8 +298,8 @@ function validateDocumentName(doc: any, residentName: string): { isValid: boolea
   const employeeNameLower = doc.employeeName.toLowerCase();
 
   // Check for reasonable name match (same logic as in verification service)
-  const residentParts = residentNameLower.split(/[\s,]+/).filter(part => part.length > 1);
-  const employeeParts = employeeNameLower.split(/[\s,]+/).filter(part => part.length > 1);
+  const residentParts = residentNameLower.split(/[\s,]+/).filter((part: string) => part.length > 1);
+  const employeeParts = employeeNameLower.split(/[\s,]+/).filter((part: string) => part.length > 1);
 
   let namesMatch = false;
 
