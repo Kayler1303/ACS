@@ -50,35 +50,14 @@ export async function POST(
     },
   });
 
-  const bedroomMappingsPromise = prisma.bedroomMapping.findMany();
-  
-  // We'll need the county/state from the property to fetch these
-  const propertyForLocation = await prisma.property.findUnique({ where: { id: propertyId }});
-  if (!propertyForLocation) {
-    return NextResponse.json({ error: 'Property not found' }, { status: 404 });
-  }
-
-  const amiDataPromise = prisma.amiData.findFirst({
-    where: { county: propertyForLocation.county, state: propertyForLocation.state, year: new Date().getFullYear() },
-  });
-
-  const maxRentDataPromise = prisma.maxRentData.findMany({
-    where: { county: propertyForLocation.county, state: propertyForLocation.state, year: new Date().getFullYear() },
-  });
-
-  const [property, bedroomMappings, amiData, maxRentData] = await Promise.all([
+  const [property] = await Promise.all([
     propertyPromise,
-    bedroomMappingsPromise,
-    amiDataPromise,
-    maxRentDataPromise,
   ]);
 
   if (!property) {
     return NextResponse.json({ error: 'Property not found or access denied' }, { status: 404 });
   }
-  if (!amiData || !maxRentData || maxRentData.length === 0) {
-    return NextResponse.json({ error: 'AMI or Max Rent data not found for this property\'s county. Please upload it first.' }, { status: 400 });
-  }
+  // TODO: Add AMI and Max Rent data validation when models are implemented
 
   // --- 2. Loop through each unit and perform calculations ---
   for (const unit of property.Unit) {
@@ -89,43 +68,22 @@ export async function POST(
     const totalIncome = allResidents.reduce((acc: number, resident: any) => 
       acc + (resident.annualizedIncome?.toNumber() || 0), 0);
 
-    // b. Calculate AMI Percentage
-    const ami100pct = getAmiForHousehold(amiData, householdSize);
-    const amiPercentage = ami100pct > 0 ? (totalIncome / ami100pct) * 100 : 0;
+    // b. Calculate AMI Percentage (TODO: implement when AMI data model is available)
+    // const ami100pct = getAmiForHousehold(amiData, householdSize);
+    // const amiPercentage = ami100pct > 0 ? (totalIncome / ami100pct) * 100 : 0;
+    const amiPercentage = 0; // Placeholder
     
-    // c. Determine Bedroom Count
-    const mapping = bedroomMappings.find(
-      (m: any) => (unit.squareFootage || 0) >= m.minSqFt && (unit.squareFootage || 0) <= m.maxSqFt
-    );
-    const bedroomCount = mapping?.bedroomCount ?? null;
+    // c. Use unit's bedroom count directly
+    const bedroomCount = unit.bedroomCount || 0;
 
-    // d. Get Max Rents
-    const maxRent50 = bedroomCount !== null ? getMaxRent(maxRentData, 50, bedroomCount) : 0;
-    const maxRent60 = bedroomCount !== null ? getMaxRent(maxRentData, 60, bedroomCount) : 0;
-    const maxRent80 = bedroomCount !== null ? getMaxRent(maxRentData, 80, bedroomCount) : 0;
+    // TODO: Implement rent and AMI qualification logic when data models are available
 
-    // e. Determine Qualifications
-    const qualifiesIncome50 = amiPercentage > 0 && amiPercentage <= 50;
-    const qualifiesIncome60 = amiPercentage > 0 && amiPercentage <= 60;
-    const qualifiesIncome80 = amiPercentage > 0 && amiPercentage <= 80;
-    
-    const leaseRent = unit.leaseRent?.toNumber() || 0;
-    const qualifiesRentAndIncome50 = qualifiesIncome50 && leaseRent > 0 && leaseRent <= maxRent50;
-    const qualifiesRentAndIncome60 = qualifiesIncome60 && leaseRent > 0 && leaseRent <= maxRent60;
-    const qualifiesRentAndIncome80 = qualifiesIncome80 && leaseRent > 0 && leaseRent <= maxRent80;
-
-    // f. Update the unit in the database
+    // f. Update the unit in the database (only update existing fields)
     await prisma.unit.update({
       where: { id: unit.id },
       data: {
         bedroomCount,
-        amiPercentage,
-        qualifiesIncome50,
-        qualifiesIncome60,
-        qualifiesIncome80,
-        qualifiesRentAndIncome50,
-        qualifiesRentAndIncome60,
-        qualifiesRentAndIncome80,
+        updatedAt: new Date(),
       },
     });
   }
