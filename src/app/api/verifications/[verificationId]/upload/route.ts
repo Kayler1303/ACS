@@ -989,7 +989,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         : (validationResult as PaystubValidationResult).extractedData.employeeName,
                   taxYear: documentType === DocumentType.W2
               ? ((validationResult as W2ValidationResult).extractedData.taxYear ? 
-                  parseInt((validationResult as W2ValidationResult).extractedData.taxYear, 10) : null)
+                  parseInt((validationResult as W2ValidationResult).extractedData.taxYear!, 10) : null)
               : null,
       payPeriodEndDate: documentType === DocumentType.PAYSTUB 
         ? (validationResult as PaystubValidationResult).extractedData.payPeriodEndDate
