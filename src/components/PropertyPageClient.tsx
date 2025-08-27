@@ -1274,7 +1274,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
         const incomeOnly60 = activeLeasesArray.filter(unit => {
           const tenancy = currentRentRoll.Tenancy.find((t: FullTenancy) => t.Lease.unitId === unit.id);
           const residents = tenancy?.Lease?.Resident || [];
-          const totalIncome = residents.reduce((acc: number, res: Resident) => acc + Number(res.annualizedIncome || 0), 0);
+          const totalIncome = residents.reduce((acc: number, res: any) => acc + Number(res.annualizedIncome || 0), 0);
           return hudIncomeLimits && getActualBucket(totalIncome, residents.length, hudIncomeLimits, complianceOption) === '60% AMI';
         }).length;
         
