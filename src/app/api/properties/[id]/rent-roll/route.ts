@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import Papa from 'papaparse';
 import { format } from 'date-fns';
+import crypto from 'crypto';
 
 interface RentRollRow {
   unitNumber?: string;
@@ -83,6 +84,7 @@ export async function POST(
     await prisma.$transaction(async (tx) => {
       const rentRoll = await tx.rentRoll.create({
         data: {
+          id: crypto.randomUUID(),
           propertyId,
           uploadDate: new Date(date),
         },
