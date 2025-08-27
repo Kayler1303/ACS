@@ -55,7 +55,7 @@ export async function checkPropertyAccess(
     });
 
     if (share) {
-      return { hasAccess: true, permission: share.permission, isOwner: false };
+      return { hasAccess: true, permission: share.permission as any, isOwner: false };
     }
 
     return { hasAccess: false, permission: null, isOwner: false };
