@@ -146,11 +146,13 @@ export async function POST(
           // Create a lease for this rent roll period
           lease = await tx.lease.create({
             data: {
+              id: crypto.randomUUID(),
               name: `Rent Roll ${format(new Date(date), 'MM/yyyy')} - Unit ${unitNumber}`,
               unitId: unit.id,
               leaseRent: row.leaseRent ? parseFloat(row.leaseRent) : null,
               leaseStartDate: new Date(date),
               leaseEndDate: null, // Rent roll leases are point-in-time snapshots
+              updatedAt: new Date(),
             }
           });
         }
@@ -158,8 +160,10 @@ export async function POST(
         // Create the tenancy (links RentRoll to Lease)
         await tx.tenancy.create({
           data: {
+            id: crypto.randomUUID(),
             rentRollId: rentRoll.id,
             leaseId: lease.id,
+            updatedAt: new Date(),
           },
         });
 
@@ -169,9 +173,11 @@ export async function POST(
           
           await tx.resident.create({
             data: {
+              id: crypto.randomUUID(),
               name: row.residentName.trim(),
               leaseId: lease.id,
               annualizedIncome: residentIncome,
+              updatedAt: new Date(),
             }
           });
 
