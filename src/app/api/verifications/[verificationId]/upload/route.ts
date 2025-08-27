@@ -722,7 +722,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           if (documentType === DocumentType.SOCIAL_SECURITY) {
             // Extract Social Security benefit information
             autoExtractedData = extractSocialSecurityData(analyzeResult);
-            shouldAutoVerify = autoExtractedData && autoExtractedData.monthlyBenefit > 0;
+            shouldAutoVerify = !!(autoExtractedData && autoExtractedData.monthlyBenefit > 0);
             
             console.log(`Social Security auto-extraction result:`, {
               extracted: !!autoExtractedData,
