@@ -947,7 +947,7 @@ export default function LeaseDetailPage() {
               alert('Error finalizing verification');
             }
           }}
-          verification={finalizationDialog.verification}
+          verification={finalizationDialog.verification as any}
           residents={lease.Resident.map(r => ({
             id: r.id,
             name: r.name,
