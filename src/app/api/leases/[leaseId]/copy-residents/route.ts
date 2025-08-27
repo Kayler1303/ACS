@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { Decimal } from '@prisma/client/runtime/library';
+import crypto from 'crypto';
 
 type Resident = {
   id: string;
@@ -57,9 +58,11 @@ export async function POST(
 
     // 3. Prepare the data for the new resident records
     const newResidentsData = sourceResidents.map((resident: any) => ({
+      id: crypto.randomUUID(),
       name: resident.name,
       annualizedIncome: resident.annualizedIncome ? resident.annualizedIncome.toNumber() : 0,
       leaseId: targetLeaseId,
+      updatedAt: new Date(),
     }));
 
     // 4. Create the new residents in a single transaction
