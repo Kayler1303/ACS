@@ -6,7 +6,7 @@ import { Prisma } from '@prisma/client';
 
 // Define a type for our unit with residents for easier handling
 type UnitWithResidents = Prisma.UnitGetPayload<{
-  include: { residents: true };
+  include: { Resident: true };
 }>;
 
 // Helper to get the 100% AMI income limit for a given household size
@@ -44,8 +44,8 @@ export async function POST(
   const propertyPromise = prisma.property.findFirst({
     where: { id: propertyId, ownerId: session.user.id },
     include: {
-      units: {
-        include: { residents: true },
+      Unit: {
+        include: { Resident: true },
       },
     },
   });
@@ -81,10 +81,10 @@ export async function POST(
   }
 
   // --- 2. Loop through each unit and perform calculations ---
-  for (const unit of property.units) {
+  for (const unit of property.Unit) {
     // a. Calculate total household income and size
-    const householdSize = unit.residents.length;
-    const totalIncome = unit.residents.reduce((acc: number, resident: any) => 
+    const householdSize = unit.Resident.length;
+    const totalIncome = unit.Resident.reduce((acc: number, resident: any) => 
       acc + (resident.annualizedIncome?.toNumber() || 0), 0);
 
     // b. Calculate AMI Percentage
