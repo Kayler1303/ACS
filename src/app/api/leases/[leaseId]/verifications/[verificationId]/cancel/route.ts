@@ -35,7 +35,7 @@ export async function DELETE(
     const verification = await prisma.incomeVerification.findUnique({
       where: { id: verificationId },
       include: {
-        incomeDocuments: true
+        IncomeDocument: true
       }
     });
 
@@ -50,7 +50,7 @@ export async function DELETE(
       }, { status: 400 });
     }
 
-    if (verification.incomeDocuments && verification.incomeDocuments.length > 0) {
+    if (verification.IncomeDocument && verification.IncomeDocument.length > 0) {
       return NextResponse.json({ 
         error: 'Cannot cancel verification that already has uploaded documents. Please finalize or delete documents first.' 
       }, { status: 400 });
