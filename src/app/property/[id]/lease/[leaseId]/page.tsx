@@ -416,7 +416,7 @@ export default function LeaseDetailPage() {
                     console.log(`[LEASE DETAIL AMI DEBUG] Calculating lease verified income for lease ${lease.id}:`);
                     console.log(`[LEASE DETAIL AMI DEBUG] Finalized residents:`, finalizedResidents.map(r => ({
                       name: r.name,
-                      calculatedAnnualizedIncome: r.calculatedAnnualizedIncome,
+                      calculatedAnnualizedIncome: r.calculatedAnnualizedIncome || undefined,
                       incomeFinalized: r.incomeFinalized
                     })));
                     
@@ -953,7 +953,7 @@ export default function LeaseDetailPage() {
             name: r.name,
             verifiedIncome: r.calculatedAnnualizedIncome || r.annualizedIncome || 0,
             annualizedIncome: r.annualizedIncome || 0,
-            calculatedAnnualizedIncome: r.calculatedAnnualizedIncome || null,
+            calculatedAnnualizedIncome: r.calculatedAnnualizedIncome || undefined,
             incomeFinalized: r.incomeFinalized,
             finalizedAt: r.finalizedAt,
             hasNoIncome: r.hasNoIncome
