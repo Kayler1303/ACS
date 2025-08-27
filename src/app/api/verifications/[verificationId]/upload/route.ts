@@ -764,9 +764,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             });
 
             // Create override request for manual review
-            const userExplanation = documentType === DocumentType.OTHER 
-              ? `Other document type has been processed by Azure's layout analyzer. Please manually review and enter the income information.`
-              : `${documentType} document has been processed by Azure's layout analyzer. Please manually review and enter the income information.`;
+                        const userExplanation = `${documentType || 'Other'} document has been processed by Azure's layout analyzer. Please manually review and enter the income information.`;
 
             await prisma.overrideRequest.create({
               data: {
