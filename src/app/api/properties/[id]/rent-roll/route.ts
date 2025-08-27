@@ -103,10 +103,10 @@ export async function POST(
             unitId: unit.id,
           },
           include: {
-            residents: {
+            Resident: {
               where: { incomeFinalized: true }
             },
-            incomeVerifications: {
+            IncomeVerification: {
               where: { status: 'FINALIZED' },
               orderBy: { createdAt: 'desc' },
               take: 1
