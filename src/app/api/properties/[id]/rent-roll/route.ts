@@ -33,7 +33,7 @@ export async function POST(
     return NextResponse.json({ error: 'Property not found or access denied' }, { status: 404 });
   }
 
-  if (property.units.length === 0) {
+  if (property.Unit.length === 0) {
     return NextResponse.json({ error: 'No units found for this property. Please upload a master unit list first.' }, { status: 400 });
   }
 
@@ -92,7 +92,7 @@ export async function POST(
         const unitNumber = row.unitNumber?.trim();
         if (!unitNumber) continue;
 
-        const unit = property.units.find(u => u.unitNumber === unitNumber);
+        const unit = property.Unit.find(u => u.unitNumber === unitNumber);
         if (!unit) continue;
 
         // Check for existing verified income in this unit's leases
