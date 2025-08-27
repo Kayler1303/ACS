@@ -84,7 +84,7 @@ export async function POST(
       const rentRoll = await tx.rentRoll.create({
         data: {
           propertyId,
-          date: new Date(date),
+          uploadDate: new Date(date),
         },
       });
 
