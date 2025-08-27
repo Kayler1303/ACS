@@ -29,14 +29,14 @@ export async function PATCH(
     // Verify the user owns the property associated with the unit
     const unit = await prisma.unit.findUnique({
       where: { id: unitId },
-      select: { property: { select: { ownerId: true } } },
+      select: { Property: { select: { ownerId: true } } },
     });
 
     if (!unit) {
       return NextResponse.json({ error: 'Unit not found' }, { status: 404 });
     }
 
-    if (unit.property.ownerId !== session.user.id) {
+    if (unit.Property.ownerId !== session.user.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
