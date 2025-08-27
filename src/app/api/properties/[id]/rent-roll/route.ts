@@ -128,7 +128,7 @@ export async function POST(
             if (totalVerified > 0) {
               verifiedIncome = totalVerified;
               leaseWithVerifiedIncome = lease;
-              residentNames = lease.residents.map(r => r.name);
+              residentNames = lease.Resident.map(r => r.name);
               break;
             }
           }
