@@ -1,113 +1,99 @@
-import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { add, endOfDay, startOfDay, sub } from 'date-fns';
+import { prisma } from '@/lib/prisma';
 import { randomUUID } from 'crypto';
-import { setMasterVerification } from '@/services/verificationContinuity';
 
 export async function POST(
-  req: Request,
+  request: NextRequest,
   { params }: { params: Promise<{ leaseId: string }> }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const { leaseId } = await params;
-
-  if (!leaseId) {
-    return NextResponse.json({ error: 'Lease ID is required' }, { status: 400 });
-  }
-
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { leaseId } = await params;
+    
+    // Debug the request
+    const contentType = request.headers.get('content-type');
+    console.log(`[VERIFICATION] Content-Type: ${contentType}`);
+    
+    let body;
+    try {
+      const rawBody = await request.text();
+      console.log(`[VERIFICATION] Raw body: "${rawBody}"`);
+      
+      if (!rawBody || rawBody.trim() === '') {
+        console.log(`[VERIFICATION] Empty body received, using defaults`);
+        body = {};
+      } else {
+        body = JSON.parse(rawBody);
+      }
+    } catch (parseError) {
+      console.error(`[VERIFICATION] JSON parse error:`, parseError);
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
+    }
+    
+    const { reason, verificationPeriodStart, verificationPeriodEnd, dueDate, leaseYear } = body;
+
+    console.log(`[VERIFICATION] Creating new verification for lease ${leaseId}`);
+
+    // Verify lease exists and user has access
     const lease = await prisma.lease.findFirst({
-      where: {
+      where: { 
         id: leaseId,
         Unit: {
           Property: {
-            ownerId: session.user.id,
-          },
-        },
-      },
-    });
-
-    if (!lease) {
-      return NextResponse.json(
-        { error: 'Lease not found or you do not have permission to access it.' },
-        { status: 404 }
-      );
-    }
-
-    // NEW: Check if another verification is already in progress for this unit
-    const unitId = lease.unitId;
-    const existingInProgressVerification = await prisma.incomeVerification.findFirst({
-      where: {
-        status: 'IN_PROGRESS',
-        Lease: {
-          unitId: unitId,
-        },
-      },
-    });
-
-    if (existingInProgressVerification) {
-      return NextResponse.json(
-        {
-          error:
-            'Another verification is already in progress for this unit. Please finalize it before starting a new one.',
-        },
-        { status: 409 } // 409 Conflict is appropriate here
-      );
-    }
-
-    // Set sensible defaults for a new verification period
-    const now = new Date();
-    const verificationPeriodStart = startOfDay(sub(now, { years: 1 }));
-    const verificationPeriodEnd = endOfDay(now);
-    const dueDate = add(now, { days: 90 });
-
-    const newVerification = await prisma.incomeVerification.create({
-      data: {
-        id: randomUUID(),
-        leaseId: leaseId,
-        status: 'IN_PROGRESS',
-        verificationPeriodStart,
-        verificationPeriodEnd,
-        dueDate,
-        updatedAt: now,
-      },
-    });
-
-    // Check if this verification should be set as a master verification
-    // This happens when a user manually creates a verification (not inherited)
-    const verificationSnapshot = await prisma.verificationSnapshot.findFirst({
-      where: {
-        leaseId: leaseId
+            OR: [
+              { ownerId: session.user.id },
+              { PropertyShare: { some: { userId: session.user.id } } }
+            ]
+          }
+        }
       },
       include: {
-        verificationContinuity: true
+        Unit: {
+          include: {
+            Property: true
+          }
+        }
       }
     });
 
-    if (verificationSnapshot && !verificationSnapshot.verificationContinuity.masterVerificationId) {
-      // Set this as the master verification for continuity
-      await setMasterVerification(newVerification.id, verificationSnapshot.verificationContinuityId);
-      
-      // Update the verification to link to continuity
-      await prisma.incomeVerification.update({
-        where: { id: newVerification.id },
-        data: { verificationContinuityId: verificationSnapshot.verificationContinuityId }
-      });
-      
-      console.log(`[CONTINUITY] Set verification ${newVerification.id} as master for continuity ${verificationSnapshot.verificationContinuityId}`);
+    if (!lease) {
+      return NextResponse.json({ error: 'Lease not found or access denied' }, { status: 404 });
     }
 
-    return NextResponse.json(newVerification, { status: 201 });
+    // Create new income verification
+    const now = new Date();
+    const newVerification = await prisma.incomeVerification.create({
+      data: {
+        id: randomUUID(),
+        leaseId,
+        status: 'IN_PROGRESS',
+        reason: reason || 'ANNUAL_RECERTIFICATION',
+        verificationPeriodStart: verificationPeriodStart ? new Date(verificationPeriodStart) : null,
+        verificationPeriodEnd: verificationPeriodEnd ? new Date(verificationPeriodEnd) : null,
+        dueDate: dueDate ? new Date(dueDate) : null,
+        leaseYear: leaseYear || null,
+        createdAt: now,
+        updatedAt: now,
+      }
+    });
+
+    console.log(`[VERIFICATION] Created new verification ${newVerification.id} for lease ${leaseId}`);
+
+    return NextResponse.json({ 
+      success: true, 
+      verificationId: newVerification.id 
+    });
+
   } catch (error) {
-    console.error('Error creating new verification period:', error);
+    console.error('[VERIFICATION] Error creating verification:', error);
     return NextResponse.json(
-      { error: 'Failed to start new verification period' },
+      { error: 'Failed to create verification' },
       { status: 500 }
     );
   }

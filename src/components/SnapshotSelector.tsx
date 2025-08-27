@@ -1,17 +1,17 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { format } from 'date-fns';
 
 interface Snapshot {
   id: string;
-  date: string;
-  createdAt: string;
+  uploadDate: string;
+  filename?: string;
+  isActive: boolean;
 }
 
 interface SnapshotSelectorProps {
   propertyId: string;
-  selectedSnapshotId: string | null;
+  selectedSnapshotId?: string;
   onSnapshotChange: (snapshotId: string) => void;
 }
 
@@ -22,83 +22,84 @@ export default function SnapshotSelector({
 }: SnapshotSelectorProps) {
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchSnapshots = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch(`/api/properties/${propertyId}/snapshots`);
-        
-        if (!response.ok) {
-          throw new Error('Failed to fetch snapshots');
-        }
-        
-        const data = await response.json();
-        setSnapshots(data);
-        
-        // If no snapshot is selected and we have snapshots, select the most recent one
-        if (!selectedSnapshotId && data.length > 0) {
-          onSnapshotChange(data[0].id);
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load snapshots');
-      } finally {
-        setLoading(false);
-      }
-    };
+    fetchSnapshots();
+  }, [propertyId]);
 
-    if (propertyId) {
-      fetchSnapshots();
+  const fetchSnapshots = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(`/api/properties/${propertyId}/snapshots`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        setSnapshots(data.snapshots || []);
+        
+        // Auto-select the active snapshot if none selected
+        if (!selectedSnapshotId && data.snapshots?.length > 0) {
+          const activeSnapshot = data.snapshots.find((s: Snapshot) => s.isActive) || data.snapshots[0];
+          onSnapshotChange(activeSnapshot.id);
+        }
+      } else {
+        console.error('Failed to fetch snapshots');
+      }
+    } catch (error) {
+      console.error('Error fetching snapshots:', error);
+    } finally {
+      setLoading(false);
     }
-  }, [propertyId, selectedSnapshotId, onSnapshotChange]);
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
 
   if (loading) {
     return (
       <div className="flex items-center space-x-2">
+        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
         <span className="text-sm text-gray-600">Loading snapshots...</span>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="flex items-center space-x-2">
-        <span className="text-sm text-red-600">Error: {error}</span>
       </div>
     );
   }
 
   if (snapshots.length === 0) {
     return (
-      <div className="flex items-center space-x-2">
-        <span className="text-sm text-gray-600">No data snapshots available</span>
+      <div className="text-sm text-gray-500">
+        No data snapshots available
       </div>
     );
   }
 
   return (
     <div className="flex items-center space-x-3">
-      <label htmlFor="snapshot-select" className="text-sm font-medium text-gray-700">
-        Data Snapshot Date:
+      <label htmlFor="snapshot-selector" className="text-sm font-medium text-gray-700">
+        Data Snapshot:
       </label>
       <select
-        id="snapshot-select"
+        id="snapshot-selector"
         value={selectedSnapshotId || ''}
         onChange={(e) => onSnapshotChange(e.target.value)}
-        className="px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+        className="block w-64 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
       >
         {snapshots.map((snapshot) => (
           <option key={snapshot.id} value={snapshot.id}>
-            {format(new Date(snapshot.date), 'MMM dd, yyyy')} 
-            {' '}
-            (uploaded {format(new Date(snapshot.createdAt), 'MMM dd, yyyy')})
+            {formatDate(snapshot.uploadDate)}
+            {snapshot.filename && ` - ${snapshot.filename}`}
+            {snapshot.isActive && ' (Current)'}
           </option>
         ))}
       </select>
-      <span className="text-xs text-gray-500">
+      <div className="text-xs text-gray-500">
         {snapshots.length} snapshot{snapshots.length !== 1 ? 's' : ''} available
-      </span>
+      </div>
     </div>
   );
 } 

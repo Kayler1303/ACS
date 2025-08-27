@@ -1,294 +1,378 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
-import { 
-  handleVerificationContinuity, 
-  inheritVerification,
-  LeaseData 
-} from '@/services/verificationContinuity';
+import { Prisma } from '@prisma/client';
 
-
-// Income discrepancy detection function
-interface IncomeDiscrepancy {
-  unitNumber: string | number;
-  residentName: string;
-  verifiedIncome: number;
-  newRentRollIncome: number;
-  discrepancy: number;
-  existingLeaseId: string;
-  newLeaseId: string;
-  existingResidentId: string;
-  newResidentId: string;
+interface LeaseData {
+  unitId: string;
+  unitNumber: string;
+  leaseStartDate?: string;
+  leaseEndDate?: string;
+  leaseRent?: number;
+  residents: Array<{
+    name: string;
+    annualizedIncome?: string;
+  }>;
 }
 
-async function checkForIncomeDiscrepancies(propertyId: string, rentRollId: string): Promise<IncomeDiscrepancy[]> {
-  const discrepancies: IncomeDiscrepancy[] = [];
-  
-  // Get the new rent roll data
-  const rentRoll = await prisma.rentRoll.findUnique({
-    where: { id: rentRollId },
-    include: {
-      Tenancy: {
+interface UnitGroup {
+  [unitId: string]: LeaseData[];
+}
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { id: propertyId } = await params;
+    const body = await request.json();
+    const { unitGroups, filename, rentRollDate } = body;
+
+    console.error(`🚀 [COMPLIANCE UPDATE] ===== STARTING FINALIZE FOR PROPERTY ${propertyId} =====`);
+    console.error(`🚀 [COMPLIANCE UPDATE] Received rentRollDate:`, rentRollDate);
+    const startTime = Date.now();
+
+    // Calculate report date outside the transaction
+    const reportDate = rentRollDate ? new Date(rentRollDate) : new Date();
+    console.log(`[COMPLIANCE UPDATE] Using report date:`, reportDate.toISOString());
+
+    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      // Get existing finalized residents from the most recent snapshot to preserve their status
+      // We need to get from the most recent snapshot, not just the active one, since we're about to make a new snapshot active
+      const mostRecentSnapshot = await tx.rentRollSnapshot.findFirst({
+        where: {
+          propertyId: propertyId
+        },
+        orderBy: {
+          uploadDate: 'desc'
+        }
+      });
+
+      const existingFinalizedResidents = mostRecentSnapshot ? await tx.resident.findMany({
+        where: {
+          Lease: {
+            Unit: {
+              propertyId: propertyId
+            },
+            Tenancy: {
+              RentRoll: {
+                snapshot: {
+                  id: mostRecentSnapshot.id // Get residents from the most recent snapshot
+                }
+              }
+            }
+          },
+          incomeFinalized: true,
+          calculatedAnnualizedIncome: { not: null }
+        },
         include: {
           Lease: {
             include: {
-              Resident: true,
-              Unit: true
+              Unit: true,
+              Tenancy: {
+                include: {
+                  RentRoll: {
+                    include: {
+                      snapshot: true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          IncomeDocument: true // Include documents to link them to new residents
+        }
+      }) : []; // If no snapshots exist yet (new property), return empty array
+
+      console.log(`[COMPLIANCE UPDATE] Most recent snapshot: ${mostRecentSnapshot?.id} (uploaded: ${mostRecentSnapshot?.uploadDate})`);
+      console.log(`[COMPLIANCE UPDATE] Found ${existingFinalizedResidents.length} existing finalized residents to preserve`);
+
+      console.log(`[COMPLIANCE UPDATE] 🔍 Income discrepancies are calculated on-the-fly, not stored in database`);
+
+      // Get existing future leases (without Tenancy) that might need to be matched
+      const existingFutureLeases = await tx.lease.findMany({
+        where: {
+          Unit: {
+            propertyId: propertyId
+          },
+          Tenancy: null, // Future leases don't have Tenancy records
+          IncomeVerification: {
+            some: {
+              status: 'FINALIZED' // Only consider leases with finalized verifications
+            }
+          }
+        },
+        include: {
+          Unit: true,
+          Resident: {
+            include: {
+              IncomeDocument: true
+            }
+          },
+          IncomeVerification: {
+            where: {
+              status: 'FINALIZED'
             }
           }
         }
-      }
-    }
-  });
+      });
 
-  if (!rentRoll) return discrepancies;
+      console.log(`[COMPLIANCE UPDATE] 🔍 Found ${existingFutureLeases.length} existing future leases with finalized verifications`);
+      existingFutureLeases.forEach(lease => {
+        console.log(`[COMPLIANCE UPDATE] 📋 Future lease: "${lease.name}" in unit ${lease.Unit.unitNumber}, Start: ${lease.leaseStartDate}, End: ${lease.leaseEndDate}, Residents: ${lease.Resident.length}, Verifications: ${lease.IncomeVerification.length}`);
+      });
 
-  // For each new tenancy, check if there are existing leases with verified income
-  for (const tenancy of rentRoll.Tenancy) {
-    const unit = tenancy.Lease.Unit;
-    const newResidents = tenancy.Lease.Resident;
-    
-    // Get existing leases for this unit that have verified income
-    const existingLeases = await prisma.lease.findMany({
-      where: {
-        unitId: unit.id,
-        id: { not: tenancy.Lease.id }, // Exclude the new lease
-        Resident: {
-          some: {
-            AND: [
-              { incomeFinalized: true },
-              { calculatedAnnualizedIncome: { not: null } }
-            ]
-          }
+
+
+      // Create snapshot
+      const snapshot = await tx.rentRollSnapshot.create({
+        data: {
+          id: randomUUID(),
+          propertyId,
+          filename: filename || `Upload ${reportDate.toLocaleDateString()}`,
+          uploadDate: reportDate, // Use the user-specified report date
+          isActive: true
         }
-      },
-      include: {
-        Resident: {
-          where: {
-            AND: [
-              { incomeFinalized: true },
-              { calculatedAnnualizedIncome: { not: null } }
-            ]
-          }
-        }
-      }
-    });
+      });
 
-    // Check for income discrepancies between new and verified residents
-    for (const existingLease of existingLeases) {
-      for (const existingResident of existingLease.Resident) {
-        // Find matching resident by name in new lease
-        const matchingNewResident = newResidents.find(
-          (newRes: any) => newRes.name.toLowerCase().trim() === existingResident.name.toLowerCase().trim()
-        );
+      console.log(`[COMPLIANCE UPDATE] Created snapshot ${snapshot.id}`);
 
-                 if (matchingNewResident) {
-           const verifiedIncome = Number(existingResident.calculatedAnnualizedIncome || 0);
-           const newRentRollIncome = Number(matchingNewResident.annualizedIncome || 0);
-           const discrepancy = Math.abs(verifiedIncome - newRentRollIncome);
-          
-          // If discrepancy is greater than $1, flag it
-          if (discrepancy > 1.00) {
-            discrepancies.push({
-              unitNumber: unit.unitNumber,
-              residentName: existingResident.name,
-              verifiedIncome: verifiedIncome,
-              newRentRollIncome: newRentRollIncome,
-              discrepancy: discrepancy,
-              existingLeaseId: existingLease.id,
-              newLeaseId: tenancy.Lease.id,
-              existingResidentId: existingResident.id,
-              newResidentId: matchingNewResident.id
-            });
+      // Deactivate previous snapshots
+      await tx.rentRollSnapshot.updateMany({
+        where: {
+          propertyId,
+          id: { not: snapshot.id }
+        },
+        data: { isActive: false }
+      });
 
-            console.log(`[COMPLIANCE DISCREPANCY] Unit ${unit.unitNumber}, ${existingResident.name}: Verified $${verifiedIncome} vs New Rent Roll $${newRentRollIncome} (diff: $${discrepancy})`);
-          }
-        }
-      }
-    }
-  }
-
-  return discrepancies;
-}
-
-interface TenancyData {
-  id: string;
-  rentRollId: string;
-  unitId: string;
-  leaseRent: number;
-  leaseStartDate: Date;
-  leaseEndDate: Date;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-interface ResidentData {
-  id: string;
-  tenancyId: string;
-  name: string;
-  annualizedIncome: number;
-  createdAt: Date;
-  updatedAt: Date;
-}
-import { IndividualResidentData } from '@/types/compliance';
-
-
-interface Unit {
-  id: string;
-  unitNumber: string | number;
-}
-
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  // Workaround for Next.js 15 params bug
-  const propertyId = req.nextUrl.pathname.split('/')[3];
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
-  }
-
-  if (!propertyId) {
-    return NextResponse.json({ error: 'Property ID is required' }, { status: 400 });
-  }
-
-  try {
-    const body = await req.json();
-    const { rentRollDate, data } = body;
-
-    if (!rentRollDate || !data || !Array.isArray(data)) {
-      return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
-    }
-    
-    const property = await prisma.property.findFirst({
-        where: { id: propertyId, ownerId: session.user.id },
-        include: { Unit: true }
-    });
-
-    if (!property) {
-        return NextResponse.json({ error: 'Property not found' }, { status: 404 });
-    }
-    
-    const unitMap = new Map(property.Unit.map((u: any) => [parseInt(String(u.unitNumber), 10), u.id]));
-
-    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      // Create rent roll
       const newRentRoll = await tx.rentRoll.create({
         data: {
           id: randomUUID(),
-          propertyId: propertyId,
-          date: new Date(rentRollDate + 'T12:00:00.000Z'), // Force noon UTC to avoid timezone issues
-          createdAt: new Date(),
-          updatedAt: new Date(),
+          propertyId,
+          snapshotId: snapshot.id,
+          filename: filename || `Rent Roll ${reportDate.toLocaleDateString()}`,
+          uploadDate: reportDate, // Use the user-specified report date
         },
       });
 
-      // Group data by unit to optimize database operations
-      const unitGroups = new Map<string, IndividualResidentData[]>();
-      const notFoundUnits: string[] = [];
+      console.log(`[COMPLIANCE UPDATE] Created rent roll ${newRentRoll.id}`);
 
-      for (const row of data as IndividualResidentData[]) {
-        const unitNumber = parseInt(String(row.unit), 10);
-        const unitId = unitMap.get(unitNumber);
-
-        if (!unitId) {
-          notFoundUnits.push(String(row.unit));
-          continue;
-        }
-
-        // TypeScript assertion: unitId is definitely defined here
-        const definedUnitId = unitId as string;
-        if (!unitGroups.has(definedUnitId)) {
-          unitGroups.set(definedUnitId, []);
-        }
-        unitGroups.get(definedUnitId)!.push(row);
-      }
-      
-      if (notFoundUnits.length > 0) {
-        // Use a Set to get unique unit numbers
-        const uniqueNotFound = [...new Set(notFoundUnits)];
-        throw new Error(`The following units could not be found: ${uniqueNotFound.join(', ')}. Please correct the data or update the master unit list.`);
-      }
-
-      // Prepare bulk data for batch inserts
       const leasesData: any[] = [];
       const tenanciesData: any[] = [];
       const residentsData: any[] = [];
+      const incomeDocumentsData: any[] = [];
+      // Note: Income discrepancies are now calculated by the dedicated income-discrepancies API
+      const futureLeaseMatches: any[] = [];
+      const rentRollDate = new Date();
+
+      // Process each unit group
+      if (!unitGroups || typeof unitGroups !== 'object') {
+        throw new Error(`Invalid unitGroups data: ${typeof unitGroups}. Expected object but received: ${JSON.stringify(unitGroups)}`);
+      }
+
+      // First, create or find all Unit records
+      const unitMap = new Map<string, string>(); // unitNumber -> unitId
       
-      for (const [unitId, rows] of unitGroups.entries()) {
-        // Get rent amount from first row (all rows for same unit should have same rent)
-        const rentValue = parseFloat(String(rows[0].rent || '0').replace(/[^0-9.-]+/g,""));
-        const { leaseStartDate, leaseEndDate } = rows[0];
-
-        if (!leaseStartDate || !leaseEndDate) {
-          throw new Error(`Lease start and end dates are required for unit ${rows[0].unit}.`);
-        }
-        
-        // Process each lease normally
-
-        let leaseId: string;
-        const tenancyId: string = `tenancy_${Date.now().toString()}_${unitId}`;
-        
-        // Check if a lease with the same dates already exists for this unit
-        const existingLease = await tx.lease.findFirst({
+      for (const [unitNumber, leases] of Object.entries(unitGroups as UnitGroup)) {
+        // Create or find unit record
+        let unit = await tx.unit.findFirst({
           where: {
-            unitId: unitId,
-            leaseStartDate: new Date(leaseStartDate),
-            leaseEndDate: new Date(leaseEndDate),
+            propertyId,
+            unitNumber: unitNumber
           }
         });
         
-        if (existingLease) {
-          // Use existing lease if dates match
-          leaseId = existingLease.id;
-          console.log(`[COMPLIANCE UPDATE] Using existing lease ${leaseId} for unit ${unitId} with dates ${leaseStartDate} to ${leaseEndDate}`);
-          
-          // Update rent if it has changed
-          const existingRentValue = existingLease.leaseRent ? Number(existingLease.leaseRent) : 0;
-          if (existingRentValue !== rentValue) {
-            await tx.lease.update({
-              where: { id: existingLease.id },
-              data: { leaseRent: rentValue }
-            });
-            console.log(`[COMPLIANCE UPDATE] Updated rent for lease ${leaseId} from ${existingRentValue} to ${rentValue}`);
-          }
-        } else {
-          // Create new lease only if dates are different
-          const timestamp = Date.now().toString();
-          leaseId = `lease_${timestamp}_${unitId}`;
-          console.log(`[COMPLIANCE UPDATE] Creating new lease ${leaseId} for unit ${unitId} with dates ${leaseStartDate} to ${leaseEndDate}`);
-          
-          leasesData.push({
-            id: leaseId,
-            name: `Lease from ${new Date(leaseStartDate).toLocaleDateString()} to ${new Date(leaseEndDate).toLocaleDateString()}`,
-            unitId: unitId,
-            leaseRent: rentValue,
-            leaseStartDate: new Date(leaseStartDate),
-            leaseEndDate: new Date(leaseEndDate),
-            createdAt: new Date(),
-            updatedAt: new Date(),
+        if (!unit) {
+          unit = await tx.unit.create({
+            data: {
+              id: randomUUID(),
+              unitNumber: unitNumber,
+              propertyId,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            }
           });
+          console.log(`[COMPLIANCE UPDATE] Created unit ${unitNumber} with ID ${unit.id}`);
+        } else {
+          console.log(`[COMPLIANCE UPDATE] Found existing unit ${unitNumber} with ID ${unit.id}`);
         }
         
-        // Tenancy ID already generated above
-        
-        // Create tenancy data (links lease to rent roll)
-        // Only create tenancy if lease STARTED on or before rent roll date
-        const rentRollDate = new Date(newRentRoll.date);
-        const leaseStart = new Date(leaseStartDate);
-        
-        if (leaseStart <= rentRollDate) {
-          // Check if tenancy already exists for this lease and rent roll
-          const existingTenancy = await tx.tenancy.findFirst({
+        unitMap.set(unitNumber, unit.id);
+      }
+      
+      for (const [unitNumber, leases] of Object.entries(unitGroups as UnitGroup)) {
+        const unitId = unitMap.get(unitNumber)!;
+        console.log(`[COMPLIANCE UPDATE] Processing unit ${unitNumber} (ID: ${unitId}) with ${leases.length} leases`);
+
+        for (const leaseData of leases) {
+          const leaseId = `lease_${Date.now()}_${unitId}`;
+          const tenancyId = `tenancy_${Date.now()}_${unitId}`;
+
+          // Check if lease should be current (started on or before rent roll date)
+          const leaseStartDate = leaseData.leaseStartDate ? new Date(leaseData.leaseStartDate) : null;
+          const leaseEndDate = leaseData.leaseEndDate ? new Date(leaseData.leaseEndDate) : null;
+
+          console.log(`[COMPLIANCE UPDATE] Creating lease ${leaseId} for unit ${unitNumber} (ID: ${unitId}) with dates ${leaseData.leaseStartDate} to ${leaseData.leaseEndDate}`);
+          console.log(`[COMPLIANCE UPDATE] 🔍 RAW LEASE DATA:`, JSON.stringify(leaseData, null, 2));
+          console.log(`[COMPLIANCE UPDATE] 📅 PARSED DATES: Start=${leaseStartDate?.toISOString()}, End=${leaseEndDate?.toISOString()}`);
+
+          // Check for existing future lease matches 
+          // But first, check if this lease already exists with the same dates (to avoid unnecessary prompts)
+          const isNewLeaseFuture = leaseStartDate && leaseStartDate > rentRollDate;
+          
+          // Check if there's already a lease in this unit with the exact same dates
+          const existingLeaseWithSameDates = await tx.lease.findFirst({
             where: {
-              leaseId: leaseId,
-              rentRollId: newRentRoll.id,
+              Unit: {
+                propertyId: propertyId,
+                unitNumber: unitNumber
+              },
+              leaseStartDate: leaseStartDate,
+              leaseEndDate: leaseEndDate
             }
           });
           
-          if (!existingTenancy) {
-            // Lease started on/before rent roll date - create tenancy
-            // This includes active leases AND month-to-month (expired lease but still in rent roll)
+          console.log(`[COMPLIANCE UPDATE] 🔍 Checking for lease matches in unit ${unitNumber}:`);
+          console.log(`[COMPLIANCE UPDATE] - New lease dates: ${leaseStartDate} to ${leaseEndDate}`);
+          console.log(`[COMPLIANCE UPDATE] - New lease is future: ${isNewLeaseFuture}`);
+          console.log(`[COMPLIANCE UPDATE] - Existing lease with same dates found: ${!!existingLeaseWithSameDates}`);
+          
+          // If there's already a lease with the same dates, automatically inherit verified income
+          if (existingLeaseWithSameDates) {
+            console.log(`[COMPLIANCE UPDATE] ⏭️ Found existing lease with same dates: "${existingLeaseWithSameDates.name}"`);
+            
+            // Check if the existing lease has verified income that should be inherited
+            const existingLeaseWithVerification = await tx.lease.findFirst({
+              where: {
+                id: existingLeaseWithSameDates.id
+              },
+              include: {
+                Resident: {
+                  where: {
+                    incomeFinalized: true,
+                    calculatedAnnualizedIncome: { not: null }
+                  },
+                  include: {
+                    IncomeDocument: true
+                  }
+                },
+                IncomeVerification: {
+                  where: {
+                    status: 'FINALIZED'
+                  }
+                }
+              }
+            });
+            
+            if (existingLeaseWithVerification && existingLeaseWithVerification.Resident.length > 0) {
+              console.log(`[COMPLIANCE UPDATE] 🔄 Automatically inheriting verified income from existing lease with same dates`);
+              // The inheritance will happen in the resident creation loop below using existingFinalizedResidents
+            } else {
+              console.log(`[COMPLIANCE UPDATE] ℹ️ Existing lease with same dates has no verified income to inherit`);
+            }
+          } else {
+            // Only check for future lease matches if no existing lease has the same dates
+            const existingFutureLeaseForUnit = existingFutureLeases.find(futLease => 
+              futLease.Unit.unitNumber === unitNumber
+            );
+            
+            console.log(`[COMPLIANCE UPDATE] - Existing future lease found: ${!!existingFutureLeaseForUnit}`);
+            
+            if (existingFutureLeaseForUnit) {
+            console.log(`[COMPLIANCE UPDATE] ✅ Found existing future lease: "${existingFutureLeaseForUnit.name}" with ${existingFutureLeaseForUnit.Resident.length} residents`);
+            
+            // Always prompt for user confirmation when there's a potential match
+            // The user needs to decide if the manually created lease and the new rent roll lease are the same
+            if (isNewLeaseFuture) {
+              console.log(`[COMPLIANCE UPDATE] 🔮 New lease is future - checking for inheritance opportunity`);
+              
+              // Check if dates match exactly (automatic inheritance)
+              const existingStart = existingFutureLeaseForUnit.leaseStartDate?.getTime();
+              const existingEnd = existingFutureLeaseForUnit.leaseEndDate?.getTime();
+              const newStart = leaseStartDate!.getTime();
+              const newEnd = leaseEndDate?.getTime();
+              
+              console.log(`[COMPLIANCE UPDATE] 📅 Date comparison:`);
+              console.log(`[COMPLIANCE UPDATE] - Existing: ${existingFutureLeaseForUnit.leaseStartDate} to ${existingFutureLeaseForUnit.leaseEndDate}`);
+              console.log(`[COMPLIANCE UPDATE] - New: ${leaseStartDate} to ${leaseEndDate}`);
+              console.log(`[COMPLIANCE UPDATE] - Start match: ${existingStart === newStart}, End match: ${existingEnd === newEnd}`);
+              
+              const exactDateMatch = existingStart === newStart && existingEnd === newEnd;
+              
+              if (!exactDateMatch) {
+                console.log(`[COMPLIANCE UPDATE] 🎯 Dates don't match exactly - will prompt user for inheritance decision`);
+                
+                const residents = existingFutureLeaseForUnit.Resident.map(r => ({
+                  id: r.id,
+                  name: r.name,
+                  verifiedIncome: r.calculatedAnnualizedIncome ? parseFloat(r.calculatedAnnualizedIncome.toString()) : 0
+                }));
+                
+                futureLeaseMatches.push({
+                  unitNumber,
+                  newLeaseStartDate: leaseData.leaseStartDate,
+                  newLeaseEndDate: leaseData.leaseEndDate,
+                  existingFutureLease: {
+                    id: existingFutureLeaseForUnit.id,
+                    name: existingFutureLeaseForUnit.name,
+                    residents: residents
+                  }
+                });
+                
+                console.log(`[COMPLIANCE UPDATE] ✅ Added future lease match for unit ${unitNumber} to prompt user`);
+              } else {
+                console.log(`[COMPLIANCE UPDATE] 🎯 Dates match exactly - automatic inheritance will occur`);
+              }
+            } else {
+              console.log(`[COMPLIANCE UPDATE] ⚠️ New lease is not future, but existing future lease found - this might be a current lease replacing a manually created future lease`);
+              
+              // Even if the new lease is not future, we should still prompt if there's an existing future lease
+              // This handles the case where a manually created future lease becomes current due to rent roll date
+              const residents = existingFutureLeaseForUnit.Resident.map(r => ({
+                id: r.id,
+                name: r.name,
+                verifiedIncome: r.calculatedAnnualizedIncome ? parseFloat(r.calculatedAnnualizedIncome.toString()) : 0
+              }));
+              
+              futureLeaseMatches.push({
+                unitNumber,
+                newLeaseStartDate: leaseData.leaseStartDate,
+                newLeaseEndDate: leaseData.leaseEndDate,
+                existingFutureLease: {
+                  id: existingFutureLeaseForUnit.id,
+                  name: existingFutureLeaseForUnit.name,
+                  residents: residents
+                }
+              });
+              
+              console.log(`[COMPLIANCE UPDATE] ✅ Added current lease vs future lease match for unit ${unitNumber} to prompt user`);
+            }
+          }
+        }
+
+          // Create lease
+          leasesData.push({
+            id: leaseId,
+            name: `${leaseData.unitNumber} - ${leaseData.leaseStartDate || 'No Start Date'} to ${leaseData.leaseEndDate || 'No End Date'}`,
+            leaseStartDate: leaseStartDate,
+            leaseEndDate: leaseEndDate,
+            leaseRent: leaseData.leaseRent ? parseFloat(leaseData.leaseRent.toString()) : null,
+            unitId: unitId,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+
+          // Create tenancy if lease is current
+          if (!leaseStartDate || leaseStartDate <= rentRollDate) {
             tenanciesData.push({
               id: tenancyId,
               rentRollId: newRentRoll.id,
@@ -296,186 +380,146 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
               createdAt: new Date(),
               updatedAt: new Date(),
             });
-            console.log(`[COMPLIANCE UPDATE] Creating new tenancy ${tenancyId} for lease ${leaseId} and rent roll ${newRentRoll.id}`);
+            console.log(`[COMPLIANCE UPDATE] Creating tenancy for current lease ${leaseId}`);
           } else {
-            console.log(`[COMPLIANCE UPDATE] Tenancy already exists for lease ${leaseId} and rent roll ${newRentRoll.id}`);
+            console.log(`[COMPLIANCE UPDATE] Lease ${leaseId} is future lease - no tenancy created`);
           }
-        }
-        // Note: Only leases with start dates AFTER rent roll date are "future leases"
-        
-        // Delete existing residents that were created for this rent roll upload session
-        // We identify them by creation time - delete residents created in the last 5 minutes
-        // This preserves historical residents from previous rent roll uploads
-        const sessionStartTime = new Date(Date.now() - 5 * 60 * 1000); // 5 minutes ago
-        const deletedResidents = await tx.resident.deleteMany({
-          where: {
-            leaseId: leaseId,
-            createdAt: {
-              gte: sessionStartTime
+
+          // Create residents with preserved finalized status
+          leaseData.residents.forEach((resident: any, index: number) => {
+            const residentId = `resident_${Date.now()}_${randomUUID().slice(0, 8)}`;
+            
+            // Check if this resident exists in a previous snapshot with finalized income
+            console.log(`[COMPLIANCE UPDATE] Checking for existing finalized resident: ${resident.name} in unit ${unitNumber}`);
+            
+            const matchingResidents = existingFinalizedResidents.filter(existing => 
+              existing.name.toLowerCase().trim() === resident.name.toLowerCase().trim() &&
+              existing.Lease.Unit.unitNumber === unitNumber
+            );
+            
+            const existingResident = matchingResidents[0]; // Take the first match
+            
+            // Debug: Check for duplicates
+            if (matchingResidents.length > 1) {
+              console.log(`[COMPLIANCE UPDATE] WARNING: Found ${matchingResidents.length} matching residents for ${resident.name} in unit ${unitNumber}:`, 
+                matchingResidents.map(r => ({ id: r.id, leaseId: r.Lease.id, calculatedIncome: r.calculatedAnnualizedIncome }))
+              );
             }
-          }
-        });
-        console.log(`[COMPLIANCE UPDATE] Deleted ${deletedResidents.count} recent residents from lease ${leaseId} for unit ${unitId}`);
+            
+            if (existingResident) {
+              console.log(`[COMPLIANCE UPDATE] ✅ FOUND MATCH: ${existingResident.name} in unit ${existingResident.Lease.Unit.unitNumber}`);
+            } else {
+              console.log(`[COMPLIANCE UPDATE] ❌ NO MATCH FOUND for ${resident.name} in unit ${unitNumber}`);
+              console.log(`[COMPLIANCE UPDATE] Available finalized residents:`, existingFinalizedResidents.map(r => `${r.name} (Unit ${r.Lease.Unit.unitNumber})`));
+            }
 
-        // Create residents data for this lease
-        for (const row of rows) {
-          const timestamp = Date.now().toString();
-          const randomSuffix = Math.random().toString(36).substr(2, 9);
-          
-          // For future leases (start date after rent roll date), don't assign rent roll income
-          // since these leases haven't started yet and the income is prospective
-          const isFutureLease = leaseStart > rentRollDate;
-          
-          residentsData.push({
-            id: `resident_${timestamp}_${randomSuffix}`,
-            leaseId: leaseId, // Updated to reference lease instead of tenancy
-            name: row.resident,
-            annualizedIncome: isFutureLease ? 0 : (Number(row.totalIncome) || 0),
-            createdAt: new Date(),
-            updatedAt: new Date(),
+            let incomeFinalized = false;
+            let calculatedAnnualizedIncome = null;
+            let hasDiscrepancy = false;
+            
+            if (existingResident) {
+              console.log(`[COMPLIANCE UPDATE] Found existing finalized resident: ${resident.name} in unit ${unitNumber}`);
+              console.log(`[COMPLIANCE UPDATE] Existing verified income: ${existingResident.calculatedAnnualizedIncome}, New income: ${resident.annualizedIncome}`);
+              
+              // Preserve finalized status
+              incomeFinalized = true;
+              calculatedAnnualizedIncome = existingResident.calculatedAnnualizedIncome;
+              
+              // Note: Discrepancy detection is now handled by the dedicated income-discrepancies API
+              // This ensures consistent discrepancy calculation and avoids duplicates
+              console.log(`[COMPLIANCE UPDATE] Preserved verified income for ${resident.name}: $${existingResident.calculatedAnnualizedIncome}`);
+            }
+
+            residentsData.push({
+              id: residentId,
+              name: resident.name,
+              annualizedIncome: resident.annualizedIncome ? parseFloat(resident.annualizedIncome) : null,
+              leaseId: leaseId,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+              hasNoIncome: false,
+              incomeFinalized,
+              calculatedAnnualizedIncome,
+            });
+
+            // If this resident has preserved verification status, link their existing documents
+            if (existingResident && existingResident.IncomeDocument.length > 0) {
+              console.log(`[COMPLIANCE UPDATE] Linking ${existingResident.IncomeDocument.length} existing documents to new resident ${residentId}`);
+              
+              existingResident.IncomeDocument.forEach(doc => {
+                incomeDocumentsData.push({
+                  id: randomUUID(),
+                  documentType: doc.documentType,
+                  documentDate: doc.documentDate,
+                  uploadDate: doc.uploadDate,
+                  status: doc.status,
+                  filePath: doc.filePath,
+                  box1_wages: doc.box1_wages,
+                  box3_ss_wages: doc.box3_ss_wages,
+                  box5_med_wages: doc.box5_med_wages,
+                  employeeName: doc.employeeName,
+                  employerName: doc.employerName,
+                  taxYear: doc.taxYear,
+                  verificationId: doc.verificationId,
+                  residentId: residentId, // Link to the new resident
+                  grossPayAmount: doc.grossPayAmount,
+                  payFrequency: doc.payFrequency,
+                  payPeriodEndDate: doc.payPeriodEndDate,
+                  payPeriodStartDate: doc.payPeriodStartDate,
+                  calculatedAnnualizedIncome: doc.calculatedAnnualizedIncome,
+                });
+              });
+            }
           });
         }
       }
 
-      // Perform batch inserts (order is important due to foreign key relationships)
+      // Bulk create all records
+      console.log(`[COMPLIANCE UPDATE] Starting bulk operations: ${leasesData.length} leases, ${tenanciesData.length} tenancies, ${residentsData.length} residents`);
+      
       if (leasesData.length > 0) {
-        await tx.lease.createMany({
-          data: leasesData
-        });
+        console.log(`[COMPLIANCE UPDATE] Creating ${leasesData.length} leases...`);
+        await tx.lease.createMany({ data: leasesData });
+        console.log(`[COMPLIANCE UPDATE] ✓ Created ${leasesData.length} leases`);
       }
-      
+
       if (tenanciesData.length > 0) {
-        await tx.tenancy.createMany({
-          data: tenanciesData
-        });
+        console.log(`[COMPLIANCE UPDATE] Creating ${tenanciesData.length} tenancies...`);
+        await tx.tenancy.createMany({ data: tenanciesData });
+        console.log(`[COMPLIANCE UPDATE] ✓ Created ${tenanciesData.length} tenancies`);
       }
-      
+
       if (residentsData.length > 0) {
-        await tx.resident.createMany({
-          data: residentsData
-        });
+        console.log(`[COMPLIANCE UPDATE] Creating ${residentsData.length} residents...`);
+        await tx.resident.createMany({ data: residentsData });
+        console.log(`[COMPLIANCE UPDATE] ✓ Created ${residentsData.length} residents`);
       }
-      
-      // Process verification continuity for each lease
-      console.log('[CONTINUITY] Processing verification continuity for all leases...');
-      const continuityResults = [];
-      
-      for (const [unitId, rows] of unitGroups.entries()) {
-        const rentValue = parseFloat(String(rows[0].rent || '0').replace(/[^0-9.-]+/g,""));
-        const { leaseStartDate, leaseEndDate } = rows[0];
-        
-        // Find the lease ID for this unit (either existing or newly created)
-        let leaseId: string;
-        
-        if (!leaseStartDate || !leaseEndDate) {
-          console.log(`[CONTINUITY] Missing lease dates for unit ${unitId}, skipping continuity processing`);
-          continue;
-        }
-        
-        const existingLease = await tx.lease.findFirst({
-          where: {
-            unitId: unitId,
-            leaseStartDate: new Date(leaseStartDate),
-            leaseEndDate: new Date(leaseEndDate),
-          }
-        });
-        
-        if (existingLease) {
-          leaseId = existingLease.id;
-        } else {
-          // Find in the newly created leases
-          const newLease = leasesData.find(l => l.unitId === unitId);
-          leaseId = newLease?.id;
-        }
-        
-        if (!leaseId) {
-          console.log(`[CONTINUITY] Could not find lease for unit ${unitId}, skipping continuity processing`);
-          continue;
-        }
-        
-        // Get residents for this lease
-        const leaseResidents = residentsData.filter(r => r.leaseId === leaseId);
-        
-        // Prepare lease data for continuity processing
-        const leaseData: LeaseData = {
-          id: leaseId,
-          leaseStartDate: new Date(leaseStartDate),
-          leaseEndDate: new Date(leaseEndDate),
-          leaseRent: rentValue,
-          residents: leaseResidents.map(r => ({
-            name: r.name,
-            annualizedIncome: r.annualizedIncome
-          }))
-        };
-        
-        // Handle verification continuity
-        const continuityResult = await handleVerificationContinuity(
-          propertyId,
-          unitId,
-          leaseData,
-          newRentRoll.id
-        );
-        
-        // Handle verification inheritance or flag discrepancies
-        if (continuityResult.shouldInheritVerification && continuityResult.masterVerificationId) {
-          console.log(`[CONTINUITY] Inheriting verification for lease ${leaseId} from master ${continuityResult.masterVerificationId}`);
-          await inheritVerification(
-            continuityResult.masterVerificationId,
-            leaseId,
-            continuityResult.continuityId
-          );
-        } else if (continuityResult.hasIncomeDiscrepancies) {
-          console.log(`[CONTINUITY] Income discrepancies detected for lease ${leaseId} - will require user reconciliation`);
-          continuityResults.push({
-            unitId,
-            leaseId,
-            hasDiscrepancies: true,
-            discrepancies: continuityResult.incomeDiscrepancies,
-            futureLeaseMatch: continuityResult.futureLeaseMatch
-          });
-        } else if (continuityResult.requiresManualReview) {
-          console.log(`[CONTINUITY] Future lease match requires manual review for lease ${leaseId}`);
-          continuityResults.push({
-            unitId,
-            leaseId,
-            requiresManualReview: true,
-            futureLeaseMatch: continuityResult.futureLeaseMatch
-          });
-        } else {
-          console.log(`[CONTINUITY] No verification to inherit for lease ${leaseId}`);
-        }
-      }
-      
-      return { 
+
+      return {
+        success: true,
+        snapshotId: snapshot.id,
         rentRollId: newRentRoll.id,
-        continuityResults
+        leasesCreated: leasesData.length,
+        tenanciesCreated: tenanciesData.length,
+        residentsCreated: residentsData.length,
+        // Note: Discrepancy detection is now handled by the dedicated income-discrepancies API
+        // The frontend will call that API separately to get accurate discrepancy information
+        hasFutureLeaseMatches: futureLeaseMatches.length > 0,
+        futureLeaseMatches: futureLeaseMatches,
       };
     }, {
-      timeout: 60000, // Increase timeout to 60 seconds
+      timeout: 30000, // 30 seconds timeout for large compliance uploads
     });
 
-    // After creating the rent roll, check for income discrepancies
-    const regularDiscrepancies = await checkForIncomeDiscrepancies(propertyId, result.rentRollId);
-    
-    const hasIncomeDiscrepancies = result.continuityResults.some((r: any) => r.hasDiscrepancies);
-    
-    return NextResponse.json({
-        message: 'Compliance data updated successfully.',
-        rentRollId: result.rentRollId,
-        hasDiscrepancies: regularDiscrepancies.length > 0,
-        discrepancies: regularDiscrepancies.length > 0 ? regularDiscrepancies : undefined,
-        requiresReconciliation: regularDiscrepancies.length > 0,
-        hasIncomeDiscrepancies,
-        incomeDiscrepancies: hasIncomeDiscrepancies ? result.continuityResults.filter((r: any) => r.hasDiscrepancies) : undefined,
-        requiresIncomeReconciliation: hasIncomeDiscrepancies
-    });
+    const duration = Date.now() - startTime;
+    console.log(`[COMPLIANCE UPDATE] Transaction completed successfully in ${duration}ms`);
+    return NextResponse.json(result);
 
-  } catch (error: unknown) {
+  } catch (error) {
     console.error('Finalize error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    if (errorMessage.includes('The following units could not be found') || errorMessage.includes('Lease start and end dates are required')) {
-      return NextResponse.json({ error: errorMessage }, { status: 400 });
-    }
-    return NextResponse.json({ error: 'An unexpected error occurred.' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to finalize compliance update' },
+      { status: 500 }
+    );
   }
 } 

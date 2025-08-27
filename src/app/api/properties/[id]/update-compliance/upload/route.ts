@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import * as xlsx from 'node-xlsx';
 import { IndividualResidentData } from '@/types/compliance';
+import * as fs from 'fs';
 
 // This function now intelligently finds the header row before parsing.
 async function findAndParse(rows: any[][], unitKeywords: string[]): Promise<any[]> {

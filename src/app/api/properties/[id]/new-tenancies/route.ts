@@ -20,7 +20,7 @@ export async function GET(
         propertyId: propertyId,
       },
       orderBy: {
-        date: 'desc',
+        uploadDate: 'desc',
       },
     });
 

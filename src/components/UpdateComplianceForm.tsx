@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import FutureLeaseMatchingModal from './FutureLeaseMatchingModal';
 
 interface UpdateComplianceFormProps {
   propertyId: string;
@@ -25,8 +26,13 @@ export default function UpdateComplianceForm({ propertyId }: UpdateComplianceFor
   
   const [mergedData, setMergedData] = useState<ParsedRow[]>([]);
   const [step, setStep] = useState(1); // 1: Upload, 2: Review
+  const [futureLeaseMatches, setFutureLeaseMatches] = useState<any[]>([]);
+  const [showFutureLeaseModal, setShowFutureLeaseModal] = useState(false);
+  const [pendingResult, setPendingResult] = useState<any>(null);
 
   const [isLoading, setIsLoading] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processingMessage, setProcessingMessage] = useState('');
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
@@ -92,17 +98,22 @@ export default function UpdateComplianceForm({ propertyId }: UpdateComplianceFor
         return;
     }
 
+
+
+    // Create a map using string unit numbers instead of parsed integers to handle formats like "801-104"
     const rentRollDataMap = new Map(
-        rentRollFileState.data.map(row => [parseInt(String(row.unit), 10), row])
+        rentRollFileState.data.map(row => [String(row.unit), row])
     );
 
     const combinedData = residentFileState.data.map(resRow => {
-        const unitNumber = parseInt(String(resRow.unit), 10);
-        const rentData = rentRollDataMap.get(unitNumber);
+        const unitKey = String(resRow.unit);
+        const rentData = rentRollDataMap.get(unitKey);
         
-        // Combine lease dates, giving precedence to the rent roll file
+        // Always use rent roll dates if available, otherwise fall back to resident data
         const leaseStartDate = rentData?.leaseStartDate || resRow.leaseStartDate;
         const leaseEndDate = rentData?.leaseEndDate || resRow.leaseEndDate;
+        
+
         
         return {
             unit: resRow.unit,
@@ -120,6 +131,8 @@ export default function UpdateComplianceForm({ propertyId }: UpdateComplianceFor
       return unitA.localeCompare(unitB, undefined, { numeric: true });
     });
 
+
+
     setMergedData(sortedData);
     setStep(2);
   };
@@ -129,12 +142,49 @@ export default function UpdateComplianceForm({ propertyId }: UpdateComplianceFor
     setError(null);
 
     try {
+      // Transform mergedData into unitGroups format expected by the API
+      const unitGroups: { [unitId: string]: any[] } = {};
+      
+      // Group by unit and lease (same unit, start date, end date, rent = same lease)
+      const leaseMap = new Map<string, any>();
+      
+      mergedData.forEach(row => {
+        const unitId = String(row.unit);
+        const leaseKey = `${unitId}-${row.leaseStartDate}-${row.leaseEndDate}-${row.rent}`;
+        
+        if (!leaseMap.has(leaseKey)) {
+          leaseMap.set(leaseKey, {
+            unitNumber: row.unit,
+            leaseStartDate: row.leaseStartDate,
+            leaseEndDate: row.leaseEndDate,
+            leaseRent: row.rent,
+            residents: []
+          });
+        }
+        
+        // Add resident to this lease
+        leaseMap.get(leaseKey).residents.push({
+          name: row.resident,
+          annualizedIncome: row.totalIncome
+        });
+      });
+      
+      // Group leases by unit
+      leaseMap.forEach(lease => {
+        const unitId = String(lease.unitNumber);
+        if (!unitGroups[unitId]) {
+          unitGroups[unitId] = [];
+        }
+        unitGroups[unitId].push(lease);
+      });
+
       const res = await fetch(`/api/properties/${propertyId}/update-compliance/finalize`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          rentRollDate,
-          data: mergedData,
+          unitGroups,
+          filename: `Compliance Upload ${new Date(rentRollDate).toLocaleDateString()}`,
+          rentRollDate: rentRollDate, // Pass the user-specified date
         }),
       });
 
@@ -151,21 +201,147 @@ export default function UpdateComplianceForm({ propertyId }: UpdateComplianceFor
 
       const result = await res.json();
 
-      // Check if reconciliation is required due to discrepancies
-      if (result.requiresReconciliation && result.hasDiscrepancies) {
-        console.log(`[COMPLIANCE] Discrepancies detected, redirecting to reconciliation:`, result.discrepancies);
-        router.push(`/property/${propertyId}/reconciliation?rentRollId=${result.rentRollId}&reason=income-discrepancies`);
-      } else {
-        console.log(`[COMPLIANCE] No discrepancies found, proceeding to property page`);
-        router.push(`/property/${propertyId}`);
+      // Check if there are future lease matches that need user confirmation
+      if (result.hasFutureLeaseMatches && result.futureLeaseMatches.length > 0) {
+        console.log(`[COMPLIANCE] Future lease matches detected:`, result.futureLeaseMatches);
+        setFutureLeaseMatches(result.futureLeaseMatches);
+        setPendingResult(result);
+        setShowFutureLeaseModal(true);
+        setIsLoading(false); // Stop loading while waiting for user input
+        return; // Don't proceed with navigation yet
       }
-      router.refresh();
+      
+      // If no future lease matches, proceed with normal navigation
+      proceedWithNavigation(result);
 
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleFutureLeaseInheritance = async (inheritanceChoices: Record<string, boolean>) => {
+    if (!pendingResult) return;
+
+    setIsLoading(true);
+    setProcessingMessage('Processing future lease inheritance...');
+    try {
+      // Call the inheritance API
+      const inheritanceRes = await fetch(`/api/properties/${propertyId}/future-lease-inheritance`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          inheritanceChoices,
+          rentRollId: pendingResult.rentRollId
+        }),
+      });
+
+      if (!inheritanceRes.ok) {
+        const data = await inheritanceRes.json();
+        throw new Error(data.error || 'Failed to process future lease inheritance');
+      }
+
+      const inheritanceResult = await inheritanceRes.json();
+      console.log(`[COMPLIANCE] Future lease inheritance completed:`, inheritanceResult);
+
+      // Close the modal
+      setShowFutureLeaseModal(false);
+      setFutureLeaseMatches([]);
+      setPendingResult(null);
+
+      // After inheritance, we need to recalculate discrepancies since verified income may have changed
+      // Fetch updated discrepancy information
+      console.log(`[COMPLIANCE] Recalculating discrepancies after inheritance...`);
+      
+      try {
+        const discrepancyRes = await fetch(`/api/properties/${propertyId}/income-discrepancies?rentRollId=${pendingResult.rentRollId}`);
+        if (discrepancyRes.ok) {
+          const discrepancyData = await discrepancyRes.json();
+          
+          // Update the result with fresh discrepancy data
+          const updatedResult = {
+            ...pendingResult,
+            hasDiscrepancies: discrepancyData.count > 0,
+            requiresReconciliation: discrepancyData.count > 0,
+            discrepancies: discrepancyData.discrepancies || []
+          };
+          
+          console.log(`[COMPLIANCE] Updated discrepancies after inheritance:`, updatedResult);
+          proceedWithNavigation(updatedResult);
+        } else {
+          console.warn(`[COMPLIANCE] Failed to recalculate discrepancies, using original result`);
+          proceedWithNavigation(pendingResult);
+        }
+      } catch (discrepancyError) {
+        console.warn(`[COMPLIANCE] Error recalculating discrepancies:`, discrepancyError);
+        proceedWithNavigation(pendingResult);
+      }
+
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred during inheritance');
+      setShowFutureLeaseModal(false);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCloseFutureLeaseModal = () => {
+    if (!pendingResult) return;
+    
+    // User cancelled - proceed without inheritance
+    setShowFutureLeaseModal(false);
+    setFutureLeaseMatches([]);
+    setIsProcessing(true);
+    setProcessingMessage('Continuing with compliance upload...');
+    proceedWithNavigation(pendingResult);
+    setPendingResult(null);
+  };
+
+  const proceedWithNavigation = async (result: any) => {
+    // Set processing state for the discrepancy check phase
+    setIsProcessing(true);
+    setProcessingMessage('Analyzing income discrepancies...');
+    
+    // Always check for discrepancies using the dedicated API
+    console.log(`[COMPLIANCE] Checking for discrepancies...`);
+    
+    try {
+      const discrepancyRes = await fetch(`/api/properties/${propertyId}/income-discrepancies?rentRollId=${result.rentRollId}`);
+      if (discrepancyRes.ok) {
+        const discrepancyData = await discrepancyRes.json();
+        
+        if (discrepancyData.count > 0) {
+          console.log(`[COMPLIANCE] ${discrepancyData.count} discrepancies found, redirecting to reconciliation:`, discrepancyData.discrepancies);
+          setProcessingMessage('Income discrepancies detected. Redirecting to reconciliation...');
+          setTimeout(() => {
+            router.push(`/property/${propertyId}/reconciliation?rentRollId=${result.rentRollId}&reason=income-discrepancies`);
+          }, 1000);
+        } else {
+          console.log(`[COMPLIANCE] No discrepancies found, proceeding to property page`);
+          setProcessingMessage('Upload completed successfully. Redirecting...');
+          setTimeout(() => {
+            router.push(`/property/${propertyId}`);
+          }, 1000);
+        }
+      } else {
+        console.warn(`[COMPLIANCE] Failed to check discrepancies, proceeding to property page`);
+        setProcessingMessage('Upload completed. Redirecting...');
+        setTimeout(() => {
+          router.push(`/property/${propertyId}`);
+        }, 1000);
+      }
+    } catch (discrepancyError) {
+      console.warn(`[COMPLIANCE] Error checking discrepancies:`, discrepancyError);
+      setProcessingMessage('Upload completed. Redirecting...');
+      setTimeout(() => {
+        router.push(`/property/${propertyId}`);
+      }, 1000);
+    }
+    
+    router.refresh();
   };
 
   const renderFileUpload = (fileType: 'resident' | 'rentRoll') => {
@@ -285,10 +461,10 @@ export default function UpdateComplianceForm({ propertyId }: UpdateComplianceFor
             </button>
             <button
                 onClick={handleFinalSubmit}
-                disabled={isLoading}
+                disabled={isLoading || isProcessing}
                 className="px-6 py-2 font-medium text-white bg-green-600 border border-transparent rounded-md shadow-sm hover:bg-green-700 disabled:bg-gray-400"
             >
-                {isLoading ? 'Saving...' : 'Finalize and Save Snapshot'}
+                {isLoading ? 'Saving...' : isProcessing ? processingMessage : 'Finalize and Save Snapshot'}
             </button>
         </div>
         </div>
@@ -304,6 +480,13 @@ export default function UpdateComplianceForm({ propertyId }: UpdateComplianceFor
       )}
       {step === 1 && renderStep1()}
       {step === 2 && renderStep2()}
+      
+      <FutureLeaseMatchingModal
+        isOpen={showFutureLeaseModal}
+        matches={futureLeaseMatches}
+        onClose={handleCloseFutureLeaseModal}
+        onConfirm={handleFutureLeaseInheritance}
+      />
     </div>
   );
 } 

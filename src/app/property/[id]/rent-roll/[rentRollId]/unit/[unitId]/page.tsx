@@ -731,7 +731,7 @@ export default function ResidentDetailPage() {
         // Otherwise, refresh data and get current residents from state
         if (overrideResidents) {
           setUploadDialogData({
-            verificationId: newVerification.id,
+            verificationId: newVerification.verificationId,
             leaseName: lease?.name || 'Unknown Lease',
             residents: overrideResidents,
             hasExistingDocuments: false,
@@ -742,7 +742,12 @@ export default function ResidentDetailPage() {
               leaseEndDate: lease.leaseEndDate
             } : undefined
           });
-          setUploadDialogOpen(true);
+          
+          // Add small delay to ensure database transaction is committed
+          setTimeout(() => {
+            setUploadDialogOpen(true);
+          }, 100);
+          
           fetchTenancyData(false); // Refresh data in background
         } else {
           // Refresh data and then open resident selection dialog  
@@ -755,7 +760,7 @@ export default function ResidentDetailPage() {
             
             setResidentSelectionDialog({
               isOpen: true,
-              verificationId: newVerification.id,
+              verificationId: newVerification.verificationId,
               leaseName: currentLease?.name || 'Unknown Lease',
               residents: residents
             });
@@ -1420,7 +1425,31 @@ export default function ResidentDetailPage() {
     // implement a mechanism to match provisional leases with new tenancies from rent roll uploads.
     // This could involve a UI where the user can select a provisional lease to link to a new tenancy.
 
-    return tenancyData.unit.Lease.map(lease => {
+    // Filter out duplicate leases based on key lease information
+    const uniqueLeases = tenancyData.unit.Lease.filter((lease, index, allLeases) => {
+      // Find the first lease with matching key information
+      const firstMatchingIndex = allLeases.findIndex(otherLease => {
+        const sameStartDate = lease.leaseStartDate === otherLease.leaseStartDate;
+        const sameEndDate = lease.leaseEndDate === otherLease.leaseEndDate;
+        const sameRent = lease.leaseRent === otherLease.leaseRent;
+        return sameStartDate && sameEndDate && sameRent;
+      });
+      
+      // Only keep the first occurrence of each unique lease
+      // Prefer leases with verified residents (incomeFinalized = true)
+      if (firstMatchingIndex === index) {
+        return true; // This is the first occurrence
+      } else {
+        // Check if this lease has verified residents while the first one doesn't
+        const thisLeaseHasVerified = lease.Resident?.some(r => r.incomeFinalized) || false;
+        const firstLeaseHasVerified = allLeases[firstMatchingIndex].Resident?.some(r => r.incomeFinalized) || false;
+        
+        // Keep this lease if it has verified residents and the first one doesn't
+        return thisLeaseHasVerified && !firstLeaseHasVerified;
+      }
+    });
+
+    return uniqueLeases.map(lease => {
       const leaseStart = lease.leaseStartDate ? new Date(lease.leaseStartDate) : null;
       const leaseEnd = lease.leaseEndDate ? new Date(lease.leaseEndDate) : null;
       const currentDate = new Date();
@@ -2331,7 +2360,7 @@ export default function ResidentDetailPage() {
                                             throw new Error(data.error || 'Failed to start new verification');
                                           }
                                           const newVerification = await res.json();
-                                          await handleMarkNoIncome(period.id, newVerification.id, resident.id, resident.name);
+                                          await handleMarkNoIncome(period.id, newVerification.verificationId, resident.id, resident.name);
                                         } catch (error) {
                                           console.error('Error creating verification:', error);
                                           alert('Failed to create verification. Please try again.');

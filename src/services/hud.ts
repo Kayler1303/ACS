@@ -38,10 +38,10 @@ export async function getHudIncomeLimits(county: string, state: string, year: nu
     
     const cacheKey = `income-limits-${county}-${state}-${year}-${limitType}`;
     if (cache.has(cacheKey)) {
-        console.log(`[Cache] HIT for ${cacheKey}`);
+        console.log(`🎯 [HUD CACHE HIT] ${cacheKey} - returning cached data instantly`);
         return cache.get(cacheKey);
     }
-    console.log(`[Cache] MISS for ${cacheKey}`);
+    console.log(`🌐 [HUD CACHE MISS] ${cacheKey} - making external API call to HUD`);
 
     const apiKey = process.env.HUD_API_KEY;
     if (!apiKey) {
@@ -54,9 +54,26 @@ export async function getHudIncomeLimits(county: string, state: string, year: nu
     }
 
     // Remove the problematic 'updated' query parameter
-    const countiesResponse = await fetch(`${API_BASE_URL}/fmr/listCounties/${stateAbbr}?year=${year}`, {
-        headers: { 'Authorization': `Bearer ${apiKey}` }
-    });
+    // Add timeout to prevent hanging on HUD API calls
+    const countiesController = new AbortController();
+    const countiesTimeoutId = setTimeout(() => countiesController.abort(), 10000); // 10 second timeout
+    
+    let countiesResponse;
+    try {
+        const countiesStart = Date.now();
+        countiesResponse = await fetch(`${API_BASE_URL}/fmr/listCounties/${stateAbbr}?year=${year}`, {
+            headers: { 'Authorization': `Bearer ${apiKey}` },
+            signal: countiesController.signal
+        });
+        console.log(`🌐 [HUD API] Counties fetch took ${Date.now() - countiesStart}ms`);
+        clearTimeout(countiesTimeoutId);
+    } catch (error: any) {
+        clearTimeout(countiesTimeoutId);
+        if (error.name === 'AbortError') {
+            throw new Error(`HUD API counties request timed out after 10 seconds for ${state}`);
+        }
+        throw error;
+    }
 
     if (!countiesResponse.ok) {
         const errorText = await countiesResponse.text();
@@ -89,9 +106,25 @@ export async function getHudIncomeLimits(county: string, state: string, year: nu
     
     // For LIHTC properties, we need to use the MTSP (Multifamily Tax Subsidy Project) endpoint
     // which automatically applies Hold Harmless rules for properties placed in service after 2008
-    const incomeLimitsResponse = await fetch(`${API_BASE_URL}/mtspil/data/${fipsCode}?year=${year}`, {
-        headers: { 'Authorization': `Bearer ${apiKey}` }
-    });
+    const incomeLimitsController = new AbortController();
+    const incomeLimitsTimeoutId = setTimeout(() => incomeLimitsController.abort(), 10000); // 10 second timeout
+    
+    let incomeLimitsResponse;
+    try {
+        const incomeLimitsStart = Date.now();
+        incomeLimitsResponse = await fetch(`${API_BASE_URL}/mtspil/data/${fipsCode}?year=${year}`, {
+            headers: { 'Authorization': `Bearer ${apiKey}` },
+            signal: incomeLimitsController.signal
+        });
+        console.log(`🌐 [HUD API] Income limits fetch took ${Date.now() - incomeLimitsStart}ms`);
+        clearTimeout(incomeLimitsTimeoutId);
+    } catch (error: any) {
+        clearTimeout(incomeLimitsTimeoutId);
+        if (error.name === 'AbortError') {
+            throw new Error(`HUD API income limits request timed out after 10 seconds for FIPS code ${fipsCode}`);
+        }
+        throw error;
+    }
 
     if (!incomeLimitsResponse.ok) {
         const errorText = await incomeLimitsResponse.text();
@@ -162,6 +195,7 @@ export async function getHudIncomeLimits(county: string, state: string, year: nu
     
     // Store in cache
     cache.set(cacheKey, processedData);
+    console.log(`💾 [HUD CACHE] Stored ${cacheKey} for future requests`);
 
     return processedData;
 }

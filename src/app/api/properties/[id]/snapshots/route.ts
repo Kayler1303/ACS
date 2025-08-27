@@ -1,47 +1,51 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { getPropertySnapshots } from '@/services/verificationContinuity';
+import { prisma } from '@/lib/prisma';
 
 export async function GET(
-  req: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
-  }
-
-  const { id: propertyId } = await params;
-
-  if (!propertyId) {
-    return NextResponse.json({ error: 'Property ID is required' }, { status: 400 });
-  }
-
   try {
-    // Verify user has access to this property
-    const { prisma } = await import('@/lib/prisma');
-    const property = await prisma.property.findFirst({
-      where: { 
-        id: propertyId, 
-        OR: [
-          { ownerId: session.user.id },
-          { PropertyShare: { some: { userId: session.user.id } } }
-        ]
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { id: propertyId } = await params;
+
+    // Verify property ownership
+    const property = await prisma.property.findUnique({
+      where: { id: propertyId },
+      include: { owner: true }
+    });
+
+    if (!property || property.ownerId !== session.user.id) {
+      return NextResponse.json({ error: 'Property not found or access denied' }, { status: 404 });
+    }
+
+    // Get all rent roll snapshots for this property
+    const snapshots = await prisma.rentRoll.findMany({
+      where: { propertyId },
+      orderBy: { uploadDate: 'desc' },
+      select: {
+        id: true,
+        uploadDate: true,
+        filename: true,
+        isActive: true
       }
     });
 
-    if (!property) {
-      return NextResponse.json({ error: 'Property not found' }, { status: 404 });
-    }
+    return NextResponse.json({
+      success: true,
+      snapshots
+    });
 
-    const snapshots = await getPropertySnapshots(propertyId);
-    
-    return NextResponse.json(snapshots);
   } catch (error) {
-    console.error('Error fetching property snapshots:', error);
+    console.error('[SNAPSHOTS API] Error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch property snapshots' },
+      { error: 'Failed to fetch snapshots', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

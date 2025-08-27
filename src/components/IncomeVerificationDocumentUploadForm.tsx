@@ -350,7 +350,7 @@ export default function IncomeVerificationDocumentUploadForm({
       }
 
       const newVerification = await verificationResponse.json();
-      setNewVerificationId(newVerification.id);
+      setNewVerificationId(newVerification.verificationId);
       
       // Store residents and open document assignment dialog instead of uploading immediately
       setNewLeaseResidents(createdResidents.map(r => ({ id: r.id, name: r.name })));
@@ -385,7 +385,17 @@ export default function IncomeVerificationDocumentUploadForm({
   };
 
   const handleAssignDocuments = async (selectedResidentId: string) => {
-    if (!newLeaseId || !newVerificationId || !pendingFileUpload) return;
+    console.log('[ASSIGN DOCUMENTS] Debug values:', {
+      newLeaseId,
+      newVerificationId,
+      pendingFileUpload: !!pendingFileUpload,
+      selectedResidentId
+    });
+    
+    if (!newLeaseId || !newVerificationId || !pendingFileUpload) {
+      console.error('[ASSIGN DOCUMENTS] Missing required data - cannot proceed');
+      return;
+    }
 
     try {
       setIsSubmitting(true);

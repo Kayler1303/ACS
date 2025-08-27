@@ -70,10 +70,17 @@ export default function ReconciliationPage() {
   const [error, setError] = useState<string | null>(null);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [notificationAmount, setNotificationAmount] = useState<number>(0);
+  const [isResolvingDiscrepancy, setIsResolvingDiscrepancy] = useState(false);
 
   const isIncomeDiscrepancyMode = reason === 'income-discrepancies';
 
   useEffect(() => {
+    // Don't refetch data while resolving discrepancies
+    if (isResolvingDiscrepancy) {
+      console.log('[RECONCILIATION] Skipping data fetch - currently resolving discrepancy');
+      return;
+    }
+    
     const fetchData = async () => {
       setIsLoading(true);
       try {
@@ -135,7 +142,7 @@ export default function ReconciliationPage() {
     };
 
     fetchData();
-  }, [propertyId, isIncomeDiscrepancyMode, rentRollId]);
+  }, [propertyId, isIncomeDiscrepancyMode, rentRollId, isResolvingDiscrepancy]);
 
   const handleFutureToCurrentTransition = async (transition: FutureToCurrentTransition, transferDocuments: boolean) => {
     try {
@@ -169,6 +176,7 @@ export default function ReconciliationPage() {
   };
 
   const handleIncomeDiscrepancyResolution = async (discrepancy: IncomeDiscrepancy, resolution: 'accept-verified' | 'accept-rentroll') => {
+    setIsResolvingDiscrepancy(true);
     try {
       const response = await fetch(`/api/properties/${propertyId}/resolve-income-discrepancy`, {
         method: 'POST',
@@ -184,24 +192,33 @@ export default function ReconciliationPage() {
         throw new Error('Failed to resolve income discrepancy');
       }
 
+      // Wait a moment for the database transaction to complete
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Remove the resolved discrepancy from the list
+      const updatedDiscrepancies = incomeDiscrepancies.filter(d => 
+        d.existingResidentId !== discrepancy.existingResidentId || d.newResidentId !== discrepancy.newResidentId
+      );
+      setIncomeDiscrepancies(updatedDiscrepancies);
+      
+      console.log(`[RECONCILIATION] Resolved discrepancy for ${discrepancy.residentName}. Remaining discrepancies:`, updatedDiscrepancies.length);
+
       // Show notification modal if user chose to keep verified income
       if (resolution === 'accept-verified') {
         setNotificationAmount(discrepancy.verifiedIncome);
         setShowNotificationModal(true);
-      }
-
-      // Remove the resolved discrepancy from the list
-      setIncomeDiscrepancies(prev => 
-        prev.filter(d => d.existingResidentId !== discrepancy.existingResidentId || d.newResidentId !== discrepancy.newResidentId)
-      );
-
-      // If no more discrepancies, redirect to property page
-      if (incomeDiscrepancies.length <= 1) {
-        router.push(`/property/${propertyId}`);
-        router.refresh();
+        // Don't redirect immediately - let user dismiss the notification first
+      } else {
+        // If user accepted rent roll income and no more discrepancies, redirect immediately
+        if (updatedDiscrepancies.length === 0) {
+          router.push(`/property/${propertyId}`);
+          router.refresh();
+        }
       }
     } catch (err: unknown) {
       alert(`Error: ${err instanceof Error ? err.message : 'An unexpected error occurred'}`);
+    } finally {
+      setIsResolvingDiscrepancy(false);
     }
   };
 
@@ -344,12 +361,17 @@ export default function ReconciliationPage() {
                     >
                       Keep Verified Income (${discrepancy.verifiedIncome.toLocaleString('en-US')})
                     </button>
-                    <button
-                      onClick={() => handleIncomeDiscrepancyResolution(discrepancy, 'accept-rentroll')}
-                      className="flex-1 bg-orange-600 text-white px-4 py-3 rounded-md hover:bg-orange-700 font-medium"
-                    >
-                      Accept Rent Roll Income (${discrepancy.newRentRollIncome.toLocaleString('en-US')})
-                    </button>
+                    <div className="flex-1">
+                      <button
+                        onClick={() => handleIncomeDiscrepancyResolution(discrepancy, 'accept-rentroll')}
+                        className="w-full bg-orange-600 text-white px-4 py-3 rounded-md hover:bg-orange-700 font-medium"
+                      >
+                        Accept Rent Roll Income (${discrepancy.newRentRollIncome.toLocaleString('en-US')})
+                      </button>
+                      <p className="text-sm text-orange-700 mt-2 text-center">
+                        📄 Note: You'll need to upload new income documents to verify this amount
+                      </p>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -573,7 +595,14 @@ export default function ReconciliationPage() {
               </div>
               
               <button
-                onClick={() => setShowNotificationModal(false)}
+                onClick={() => {
+                  setShowNotificationModal(false);
+                  // If no more discrepancies after dismissing notification, redirect to property page
+                  if (incomeDiscrepancies.length === 0) {
+                    router.push(`/property/${propertyId}`);
+                    router.refresh();
+                  }
+                }}
                 className="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
               >
                 Got it, thanks!

@@ -42,7 +42,7 @@ export async function GET(
     // Get the current rent roll
     const currentRentRoll = await prisma.rentRoll.findUnique({
       where: { id: rentRollId },
-      select: { date: true, propertyId: true }
+      select: { uploadDate: true, propertyId: true }
     });
 
     if (!currentRentRoll || currentRentRoll.propertyId !== propertyId) {
@@ -53,9 +53,9 @@ export async function GET(
     const previousRentRoll = await prisma.rentRoll.findFirst({
       where: {
         propertyId: propertyId,
-        date: { lt: currentRentRoll.date }
+        uploadDate: { lt: currentRentRoll.uploadDate }
       },
-      orderBy: { date: 'desc' },
+      orderBy: { uploadDate: 'desc' },
       include: {
         Tenancy: {
           include: {

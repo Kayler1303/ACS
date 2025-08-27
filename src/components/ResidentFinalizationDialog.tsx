@@ -870,7 +870,7 @@ export default function ResidentFinalizationDialog({
                   {resident.name}'s income has been updated to:
                 </p>
                 <p className="text-2xl font-bold text-green-600">
-                  ${notificationAmount.toLocaleString('en-US')}
+                  {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(notificationAmount)}
                 </p>
               </div>
               
@@ -886,7 +886,7 @@ export default function ResidentFinalizationDialog({
                       Don't Forget!
                     </h4>
                     <p className="text-sm text-amber-700 mt-1">
-                      Please update {resident.name}'s income to <strong>${notificationAmount.toLocaleString('en-US')}</strong> in your property management system to prevent future discrepancies.
+                      Please update {resident.name}'s income to <strong>{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(notificationAmount)}</strong> in your property management system to prevent future discrepancies.
                     </p>
                   </div>
                 </div>

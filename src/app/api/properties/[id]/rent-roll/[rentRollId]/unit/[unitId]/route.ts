@@ -39,6 +39,20 @@ export async function GET(req: NextRequest, { params }: { params: { id: string, 
             },
             include: {
                 Lease: {
+                    where: {
+                        OR: [
+                            // Include leases from the current rent roll (current leases)
+                            {
+                                Tenancy: {
+                                    rentRollId: rentRollId
+                                }
+                            },
+                            // Include future leases (no Tenancy record)
+                            {
+                                Tenancy: null
+                            }
+                        ]
+                    },
                     include: {
                         Resident: {
                             orderBy: {
@@ -124,6 +138,12 @@ export async function GET(req: NextRequest, { params }: { params: { id: string, 
 
         // Add debugging to show unit number for this ID
         console.log(`[UNIT DEBUG] Unit ID ${unitId} corresponds to Unit Number: ${unitWithLeases.unitNumber}`);
+        console.log(`[UNIT DEBUG] Found ${unitWithLeases.Lease.length} leases for unit ${unitWithLeases.unitNumber}:`);
+        unitWithLeases.Lease.forEach(lease => {
+            const hasCurrentTenancy = lease.Tenancy && lease.Tenancy.rentRollId === rentRollId;
+            const isFutureLease = !lease.Tenancy;
+            console.log(`[UNIT DEBUG] - Lease "${lease.name}": ${hasCurrentTenancy ? 'CURRENT' : isFutureLease ? 'FUTURE' : 'OTHER'} (${lease.leaseStartDate} to ${lease.leaseEndDate})`);
+        });
 
         // Enhance residents with income finalization data using batched Prisma query
         for (const lease of unitWithLeases.Lease) {

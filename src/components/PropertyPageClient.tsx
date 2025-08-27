@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import type { FullProperty, FullRentRoll, FullTenancy, Unit } from '@/types/property';
 import { format } from 'date-fns';
@@ -133,15 +133,51 @@ const EditableCell: React.FC<EditableCellProps> = ({ value, onSave, className })
 
 export default function PropertyPageClient({ initialProperty }: PropertyPageClientProps) {
   const [property, setProperty] = useState(initialProperty);
-  const [selectedRentRollId, setSelectedRentRollId] = useState<string | null>(
-    initialProperty.RentRoll[0]?.id || null
-  );
+  
+  // Initialize selectedRentRollId with persistence logic
+  const initializeSelectedRentRollId = () => {
+    // Check if there's a stored selection in sessionStorage
+    const storedSelection = sessionStorage.getItem(`selectedRentRollId_${initialProperty.id}`);
+    
+    // If there's a stored selection and it exists in the current rent rolls, use it
+    if (storedSelection && initialProperty.RentRoll.some(rr => rr.id === storedSelection)) {
+      return storedSelection;
+    }
+    
+    // Otherwise, default to the most recent rent roll (first in the array, as they're sorted by date desc)
+    return initialProperty.RentRoll[0]?.id || null;
+  };
+  
+  const [selectedRentRollId, setSelectedRentRollId] = useState<string | null>(initializeSelectedRentRollId());
   const [availableSnapshots, setAvailableSnapshots] = useState<{id: string, date: string, createdAt: string}[]>([]);
+  
+  // Track rent roll count to detect new uploads
+  const [previousRentRollCount, setPreviousRentRollCount] = useState(initialProperty.RentRoll.length);
+  
+  // Effect to handle new rent roll uploads
+  useEffect(() => {
+    const currentRentRollCount = property.RentRoll.length;
+    
+    // If new rent rolls were added, auto-select the newest one
+    if (currentRentRollCount > previousRentRollCount) {
+      const newestRentRollId = property.RentRoll[0]?.id;
+      if (newestRentRollId) {
+        setSelectedRentRollId(newestRentRollId);
+        sessionStorage.setItem(`selectedRentRollId_${property.id}`, newestRentRollId);
+      }
+    }
+    
+    setPreviousRentRollCount(currentRentRollCount);
+  }, [property.RentRoll, previousRentRollCount, property.id]);
   
 
 
   const [processedTenancies, setProcessedTenancies] = useState<ProcessedUnit[]>([]);
   const [hudIncomeLimits, setHudIncomeLimits] = useState<HudIncomeLimits | null>(null);
+  const [hudIncomeLimitsLoading, setHudIncomeLimitsLoading] = useState(true);
+  const [hudIncomeLimitsError, setHudIncomeLimitsError] = useState<string | null>(null);
+  const hudFetchInProgress = useRef(false);
+  const futureLeaseFetchInProgress = useRef(false);
   const [lihtcRentData, setLihtcRentData] = useState<Record<string, unknown> | null>(null);
   // Initialize compliance option and extract custom NC percentage if present
   const initializeNCCustomOption = () => {
@@ -348,19 +384,44 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
 
   // Fetch HUD income limits
   useEffect(() => {
+    const timestamp = Date.now();
+    console.log(`🔄 [${timestamp}] Income limits useEffect triggered for property:`, property.id);
+    
+    // Prevent duplicate calls by checking if data already exists or currently fetching
+    if (hudIncomeLimits !== null) {
+      console.log(`⏭️ [${timestamp}] Skipping income limits fetch - data already loaded`);
+      return;
+    }
+    
+    if (hudFetchInProgress.current) {
+      console.log(`⏭️ [${timestamp}] Skipping income limits fetch - already in progress`);
+      return;
+    }
+    
     const fetchIncomeLimits = async () => {
       try {
-        console.log('Fetching income limits for property:', property.id, '(auto-detecting current year)');
+        hudFetchInProgress.current = true;
+        setHudIncomeLimitsLoading(true);
+        setHudIncomeLimitsError(null);
+        console.log(`📡 [${timestamp}] Starting income limits fetch for property:`, property.id, '(auto-detecting current year)');
+        console.log(`🏠 Property details:`, { 
+          county: property.county, 
+          state: property.state, 
+          placedInServiceDate: property.placedInServiceDate 
+        });
         
-        // Add timeout to prevent hanging
+        // Add timeout to prevent hanging (shorter than backend timeout)
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
         
+        const fetchStartTime = Date.now();
         const res = await fetch(`/api/properties/${property.id}/income-limits`, {
           signal: controller.signal
         });
         clearTimeout(timeoutId);
+        const fetchEndTime = Date.now();
         
+        console.log(`⏱️ HUD API call took ${fetchEndTime - fetchStartTime}ms`);
         console.log('API response status:', res.status, res.statusText);
         
         if (res.ok) {
@@ -371,22 +432,33 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
           const { _metadata, ...incomeLimits } = data;
           console.log('Parsed income limits:', incomeLimits);
           console.log('📅 Year used for income limits:', _metadata?.actualYear, _metadata?.usedFallback ? '(fallback)' : '(current)');
-          console.log('Setting hudIncomeLimits to:', incomeLimits);
+          console.log('✅ Setting hudIncomeLimits to:', incomeLimits);
+          console.log('🎯 HUD data loaded successfully - AMI buckets should now show real values');
           setHudIncomeLimits(incomeLimits);
+          setHudIncomeLimitsError(null);
         } else {
           const errorText = await res.text();
           console.error('Failed to fetch income limits:', res.status, res.statusText, errorText);
+          setHudIncomeLimitsError(`Failed to load income limits: ${res.status} ${res.statusText}`);
         }
       } catch (error: unknown) {
         if ((error as { name?: string })?.name === 'AbortError') {
-          console.error('Income limits fetch timed out after 30 seconds');
+          console.error(`❌ [${timestamp}] Income limits fetch timed out after 15 seconds`);
+          setHudIncomeLimitsError('Income limits request timed out. HUD API may be slow.');
         } else {
           console.error('Error fetching income limits:', error);
+          setHudIncomeLimitsError('Failed to load income limits due to network error.');
         }
+      } finally {
+        hudFetchInProgress.current = false;
+        setHudIncomeLimitsLoading(false);
       }
     };
 
-    fetchIncomeLimits();
+    // Don't await - let it run in background
+    fetchIncomeLimits().catch(error => {
+      console.error('Background income limits fetch failed:', error);
+    });
   }, [property.id]);
 
   // Debug current state
@@ -442,22 +514,47 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       const isReconciliationPage = window.location.pathname.includes('/reconciliation');
       const isUpdateCompliancePage = window.location.pathname.includes('/update-compliance');
       
+      console.log(`🔍 [PropertyPageClient] Current path: ${window.location.pathname}`);
+      console.log(`🔍 [PropertyPageClient] Page checks: unit=${isUnitDetailPage}, upload=${isUploadPage}, reconciliation=${isReconciliationPage}, updateCompliance=${isUpdateCompliancePage}`);
+      
       if (isUnitDetailPage || isUploadPage || isReconciliationPage || isUpdateCompliancePage) {
-        console.log('[PropertyPageClient] Skipping verification-status API call - on nested page');
+        console.log('❌ [PropertyPageClient] Skipping verification-status API call - on nested page');
         return;
       }
       
+      console.log('✅ [PropertyPageClient] Proceeding with verification-status API call');
+      
       setVerificationLoading(true);
       try {
-        const res = await fetch(`/api/properties/${property.id}/verification-status`);
+        console.log(`🔍 [PropertyPageClient] Making verification-status API call to: /api/properties/${property.id}/verification-status`);
+        const res = await fetch(`/api/properties/${property.id}/verification-status?bust=${Date.now()}`);
+        console.log(`🔍 [PropertyPageClient] Verification-status API response:`, res.status, res.statusText);
         if (res.ok) {
           const data = await res.json();
-          setVerificationData(data);
+          console.log(`🔍 [PropertyPageClient] Verification-status API data:`, data);
+          // Transform the API response to match the expected structure
+          const transformedData = {
+            propertyId: property.id,
+            units: (data.verificationStatus || []).map((unit: any) => ({
+              ...unit,
+              verificationStatus: unit.status // Map 'status' to 'verificationStatus'
+            })),
+            summary: {
+              verified: 0,
+              outOfDate: 0,
+              vacant: 0,
+              verificationInProgress: 0,
+              waitingForAdminReview: 0
+            }
+          };
+          setVerificationData(transformedData);
         } else {
-          console.error('Failed to fetch verification status:', res.status, res.statusText);
+          console.error('❌ [PropertyPageClient] Failed to fetch verification status:', res.status, res.statusText);
+          const errorText = await res.text();
+          console.error('❌ [PropertyPageClient] Error response body:', errorText);
         }
       } catch (error) {
-        console.error('Error fetching verification status:', error);
+        console.error('❌ [PropertyPageClient] Error fetching verification status:', error);
       } finally {
         setVerificationLoading(false);
       }
@@ -495,6 +592,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
   useEffect(() => {
     const fetchFutureLeases = async () => {
       try {
+        futureLeaseFetchInProgress.current = true;
         const url = `/api/properties/${property.id}/future-leases?bust=${Date.now()}`;
         console.log(`[PROPERTY PAGE DEBUG] ====== FRONTEND FETCH STARTING ======`);
         console.log(`[PROPERTY PAGE DEBUG] Fetching URL: ${url}`);
@@ -507,16 +605,41 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
         if (res.ok) {
           const data = await res.json();
           console.log(`[PROPERTY PAGE DEBUG] Future leases response:`, data);
+          console.log(`[PROPERTY PAGE DEBUG] Setting future leases:`, data.units);
+          
+          // Log debug information separately for clarity
+          if (data.debug) {
+            console.log(`[FUTURE LEASE DEBUG] Rent roll date:`, data.debug.rentRollDate);
+            console.log(`[FUTURE LEASE DEBUG] Total units processed:`, data.debug.totalUnitsProcessed);
+            console.log(`[FUTURE LEASE DEBUG] Sample lease dates:`, data.debug.sampleLeases);
+          }
+          
           setFutureLeases(data.units);
+          console.log(`[PROPERTY PAGE DEBUG] Future leases set successfully`);
         } else {
           console.error('Failed to fetch future leases:', res.status, res.statusText);
+          console.error(`[PROPERTY PAGE DEBUG] Response body:`, await res.text());
         }
       } catch (error) {
         console.error('Error fetching future leases:', error);
+      } finally {
+        futureLeaseFetchInProgress.current = false;
       }
     };
 
     console.log(`[PROPERTY PAGE DEBUG] useEffect triggered for future leases`);
+    
+    // Prevent duplicate calls if already loading
+    if (futureLeases.length > 0) {
+      console.log(`⏭️ [PROPERTY PAGE DEBUG] Skipping duplicate future leases fetch - already have ${futureLeases.length} leases`);
+      return;
+    }
+    
+    if (futureLeaseFetchInProgress.current) {
+      console.log(`⏭️ [PROPERTY PAGE DEBUG] Skipping future leases fetch - already in progress`);
+      return;
+    }
+    
     fetchFutureLeases();
   }, [property.id]);
 
@@ -589,13 +712,15 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     leaseRent: number,
     bedroomCount: number | null,
     lihtcRentData: Record<string, unknown> | null,
-    utilityAllowances: {[bedroomCount: number]: number}
+    utilityAllowances: {[bedroomCount: number]: number},
+    unitNumber?: string
   ): string => {
     // First check income qualification
-    const incomeBucket = getActualBucket(totalIncome, residentCount, hudIncomeLimits, complianceOption);
+    const incomeBucket = hudIncomeLimits ? getActualBucket(totalIncome, residentCount, hudIncomeLimits, complianceOption) : 'HUD data loading...';
     
-    // DEBUG: Log the inputs
-    console.log('🔍 Rent Analysis Debug:', {
+    // DEBUG: Log the inputs with actual unit number
+    const debugData = {
+      unitNumber: unitNumber || 'Unknown',
       totalIncome,
       residentCount,
       leaseRent,
@@ -604,20 +729,50 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       includeRentAnalysis,
       hasLihtcData: !!lihtcRentData?.lihtcMaxRents,
       lihtcDataStructure: lihtcRentData ? Object.keys(lihtcRentData) : 'No data'
-    });
+    };
+    
+    console.log(`🔍 Rent Analysis Debug - Unit ${unitNumber}:`, debugData);
+    
+    // Special detailed logging for Unit 809-204 only
+    if (unitNumber === '809-204') {
+      console.log('🎯 UNIT 809-204 DETAILED ANALYSIS:', {
+        ...debugData,
+        utilityAllowance: utilityAllowances[bedroomCount || 0] || 0,
+        lihtcMaxRents: lihtcRentData?.lihtcMaxRents,
+        maxRent50: lihtcRentData?.lihtcMaxRents ? 
+          ((lihtcRentData.lihtcMaxRents as any)['50percent']?.[`${bedroomCount}br`] || 0) - (utilityAllowances[bedroomCount || 0] || 0) : 'No LIHTC data',
+        maxRent80: lihtcRentData?.lihtcMaxRents ? 
+          ((lihtcRentData.lihtcMaxRents as any)['80percent']?.[`${bedroomCount}br`] || 0) - (utilityAllowances[bedroomCount || 0] || 0) : 'No LIHTC data'
+      });
+    }
     
     // If no rent analysis data or no lease rent, fall back to income-only
     if (!includeRentAnalysis || !lihtcRentData?.lihtcMaxRents || !bedroomCount || !leaseRent) {
-      console.log('❌ Rent Analysis BYPASSED:', {
+      const bypassReason = !includeRentAnalysis ? 'Rent analysis disabled' :
+                          !lihtcRentData?.lihtcMaxRents ? 'No LIHTC data' :
+                          !bedroomCount ? 'No bedroom count' :
+                          !leaseRent ? 'No lease rent' : 'Unknown';
+      
+      console.log(`❌ Rent Analysis BYPASSED - Unit ${unitNumber}:`, {
         includeRentAnalysis,
         hasLihtcData: !!lihtcRentData?.lihtcMaxRents,
         bedroomCount,
         leaseRent,
-        reason: !includeRentAnalysis ? 'Rent analysis disabled' :
-                !lihtcRentData?.lihtcMaxRents ? 'No LIHTC data' :
-                !bedroomCount ? 'No bedroom count' :
-                !leaseRent ? 'No lease rent' : 'Unknown'
+        reason: bypassReason,
+        fallingBackTo: incomeBucket
       });
+      
+      // Special logging for Unit 809-204 to track the bypass
+      if (unitNumber === '809-204') {
+        console.log('🚨 UNIT 809-204 BYPASS DETAILS:', {
+          bypassReason,
+          incomeBucket,
+          totalIncome,
+          residentCount,
+          shouldBe: residentCount > 0 && (!totalIncome || totalIncome === 0) ? 'No Income Information' : 'Other'
+        });
+      }
+      
       return incomeBucket;
     }
 
@@ -645,9 +800,15 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       availableBedroomKeys50: maxRents['50percent'] ? Object.keys(maxRents['50percent']) : 'None'
     });
 
+    // If no income information, return that status regardless of rent
+    if (incomeBucket === 'No Income Information' || incomeBucket === 'Vacant') {
+      console.log(`✅ Preserving status: ${incomeBucket} (no rent analysis needed)`);
+      return incomeBucket;
+    }
+
     // Check rent compliance for the specific income bucket they qualify for
     console.log(`🔍 Checking rent compliance for ${incomeBucket} with compliance option: ${complianceOption}`);
-    console.log(`💰 Unit rent: $${leaseRent}, Max rents - 60%: $${maxRent60}, 80%: $${maxRent80}`);
+    console.log(`💰 Unit rent: $${leaseRent}, Max rents - 50%: $${maxRent50}, 80%: $${maxRent80}`);
     
     if (incomeBucket === '50% AMI' && leaseRent <= maxRent50) {
       console.log('✅ Qualifies for 50% AMI (income + rent compliant)');
@@ -663,20 +824,6 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
         console.log('❌ 50% AMI income unit rent too high even for 80% AMI', { leaseRent, maxRent80, difference: leaseRent - maxRent80 });
       }
     }
-    if (incomeBucket === '60% AMI' && leaseRent <= maxRent60) {
-      console.log('✅ Qualifies for 60% AMI (income + rent compliant)', { leaseRent, maxRent60 });
-      return '60% AMI';
-    }
-    if (incomeBucket === '60% AMI' && leaseRent > maxRent60) {
-      console.log('❌ 60% AMI income but rent too high for 60% AMI limits', { leaseRent, maxRent60, difference: leaseRent - maxRent60 });
-      // Check if this unit can qualify for 80% AMI by rent
-      if (leaseRent <= maxRent80) {
-        console.log('✅ 60% AMI income unit qualifies for 80% AMI by rent', { leaseRent, maxRent80 });
-        return '80% AMI';
-      } else {
-        console.log('❌ 60% AMI income unit rent too high even for 80% AMI', { leaseRent, maxRent80, difference: leaseRent - maxRent80 });
-      }
-    }
     if (incomeBucket === '80% AMI' && leaseRent <= maxRent80) {
       console.log('✅ Qualifies for 80% AMI (income + rent compliant)', { leaseRent, maxRent80 });
       return '80% AMI';
@@ -690,7 +837,6 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       incomeBucket,
       leaseRent,
       maxRent50,
-      maxRent60,
       maxRent80
     });
     return 'Market';
@@ -724,9 +870,10 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
           Number(tenancy?.Lease.leaseRent || 0),
           unit.bedroomCount,
           lihtcRentData,
-          utilityAllowances
+          utilityAllowances,
+          unit.unitNumber
         ) : 
-        getActualBucket(totalIncomeAtTime, residentCountAtTime, hudIncomeLimits, complianceOption);
+        hudIncomeLimits ? getActualBucket(totalIncomeAtTime, residentCountAtTime, hudIncomeLimits, complianceOption) : 'HUD data loading...';
     }
 
     // Apply 140% rule: if original was Market, show actual. Otherwise show better of original vs actual
@@ -744,9 +891,11 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
 
   // Process tenancies whenever dependencies change
   useEffect(() => {
-    if (!selectedRentRollId || !hudIncomeLimits) {
+    if (!selectedRentRollId) {
       return;
     }
+    
+    // Allow processing even without hudIncomeLimits - we'll use fallback values
 
     const selectedRentRoll = property.RentRoll.find((rr: FullRentRoll) => rr.id === selectedRentRollId);
     if (!selectedRentRoll) {
@@ -760,7 +909,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       const residentCount = residents.length;
       const totalIncome = residents.reduce((acc: number, resident: any) => acc + Number(resident.annualizedIncome || 0), 0);
 
-      const actualBucket = includeRentAnalysis ?
+      const actualBucket = includeRentAnalysis && hudIncomeLimits ?
         getActualBucketWithRentAnalysis(
           totalIncome,
           residentCount,
@@ -769,9 +918,24 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
           Number(tenancy?.Lease.leaseRent || 0),
           unit.bedroomCount,
           lihtcRentData,
-          includeUtilityAllowances ? utilityAllowances : {}
+          includeUtilityAllowances ? utilityAllowances : {},
+          unit.unitNumber
         ) :
-        getActualBucket(totalIncome, residentCount, hudIncomeLimits, complianceOption);
+        hudIncomeLimits ? getActualBucket(totalIncome, residentCount, hudIncomeLimits, complianceOption) : 'HUD data loading...';
+      
+      // Debug logging for Unit 809-204 to see what actualBucket gets assigned
+      if (unit.unitNumber === '809-204') {
+        console.log('🔍 UNIT 809-204 ACTUAL BUCKET ASSIGNMENT:', {
+          unitNumber: unit.unitNumber,
+          includeRentAnalysis,
+          hudIncomeLimits: !!hudIncomeLimits,
+          actualBucket,
+          totalIncome,
+          residentCount
+        });
+      }
+      
+
 
       // Get verification status for this unit
       const unitVerification = verificationData?.units.find(v => v.unitId === unit.id);
@@ -781,6 +945,15 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       
       // Get future lease for this unit (for Future Leases column)
       const unitFutureLease = futureLeases.find(fl => fl.unitId === unit.id);
+      
+      if (unit.unitNumber === '101' || unit.unitNumber === '102') { // Debug first few units
+        console.log(`[PROCESSING DEBUG] Unit ${unit.unitNumber}:`, {
+          unitId: unit.id,
+          futureLeases: futureLeases.length,
+          unitFutureLease: unitFutureLease ? 'found' : 'not found',
+          futureLeaseData: unitFutureLease
+        });
+      }
 
       
       return {
@@ -813,9 +986,9 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       return { ...unit, complianceBucket };
     });
 
-    console.log('Final processed tenancies:', processedWithCompliance.length);
+    // console.log('Final processed tenancies:', processedWithCompliance.length);
     setProcessedTenancies(processedWithCompliance);
-  }, [selectedRentRollId, property.RentRoll, property.Unit, hudIncomeLimits, complianceOption, includeRentAnalysis, lihtcRentData, includeUtilityAllowances, utilityAllowances, verificationData, provisionalLeases, getActualBucket, getActualBucketWithRentAnalysis, getComplianceBucket, futureLeases]);
+  }, [selectedRentRollId, property.RentRoll, property.Unit, hudIncomeLimits, complianceOption, includeRentAnalysis, lihtcRentData, includeUtilityAllowances, utilityAllowances, verificationData, provisionalLeases, futureLeases]);
 
   // Handle provisional lease checkbox changes
   const handleProvisionalLeaseToggle = (leaseId: string) => {
@@ -1071,7 +1244,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
         const excess = currentCount - targetCount;
         bucketCountsWithVacants[currentBucket] = targetCount;
         bucketCountsWithVacants[nextBucket] = (bucketCountsWithVacants[nextBucket] || 0) + excess;
-        console.log(`📊 Compliance adjustment: Moving ${excess} excess units from ${currentBucket} to ${nextBucket}`);
+        // console.log(`📊 Compliance adjustment: Moving ${excess} excess units from ${currentBucket} to ${nextBucket}`);
       }
     }
 
@@ -1247,7 +1420,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
         const excess = currentCount - targetCount;
         bucketCountsWithVacants[currentBucket] = targetCount;
         bucketCountsWithVacants[nextBucket] = (bucketCountsWithVacants[nextBucket] || 0) + excess;
-        console.log(`📊 Projected compliance adjustment: Moving ${excess} excess units from ${currentBucket} to ${nextBucket}`);
+        // console.log(`📊 Projected compliance adjustment: Moving ${excess} excess units from ${currentBucket} to ${nextBucket}`);
       }
     }
 
@@ -1277,8 +1450,8 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     };
   };
 
-  const stats = calculateSummaryStats();
-      const projectedStats = calculateProjectedSummaryStats();
+  const stats = useMemo(() => calculateSummaryStats(), [processedTenancies, complianceOption, includeRentAnalysis]);
+  const projectedStats = useMemo(() => calculateProjectedSummaryStats(), [processedTenancies, complianceOption, selectedProvisionalLeases, selectedFutureLeases, provisionalLeases, futureLeases]);
     const hasSelectedProvisionalLeases = selectedProvisionalLeases.size > 0;
     const hasSelectedFutureLeases = selectedFutureLeases.size > 0;
     const hasAnySelectedLeases = hasSelectedProvisionalLeases || hasSelectedFutureLeases;
@@ -1401,12 +1574,17 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                   <select
                     id="rent-roll-select"
                     value={selectedRentRollId || ''}
-                    onChange={(e) => setSelectedRentRollId(e.target.value)}
+                    onChange={(e) => {
+                      const newValue = e.target.value;
+                      setSelectedRentRollId(newValue);
+                      // Persist the selection in sessionStorage
+                      sessionStorage.setItem(`selectedRentRollId_${property.id}`, newValue);
+                    }}
                     className="w-full pl-3 pr-10 py-2.5 text-sm border-gray-300 focus:outline-none focus:ring-brand-blue focus:border-brand-blue rounded-md shadow-sm bg-white"
                                               >
                     {property.RentRoll.map((rentRoll: FullRentRoll) => (
                       <option key={rentRoll.id} value={rentRoll.id}>
-                        {new Date(rentRoll.date).toLocaleDateString('en-US', { timeZone: 'UTC' })}
+                        {new Date(rentRoll.uploadDate).toLocaleDateString('en-US', { timeZone: 'UTC' })}
                       </option>
                     ))}
                   </select>
@@ -1951,7 +2129,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       )}
 
       {/* Show message if no data */}
-      {processedTenancies.length === 0 && hudIncomeLimits && (
+      {processedTenancies.length === 0 && selectedRentRollId && (
         <div className="mb-8 bg-white rounded-lg shadow-md overflow-hidden">
           <div className="p-8 text-center">
             <p className="text-red-600 font-medium mb-6">No compliance data available. Choose how you'd like to set up your property:</p>

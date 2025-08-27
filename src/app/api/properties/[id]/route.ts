@@ -26,7 +26,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         },
         RentRoll: {
           orderBy: {
-            date: 'desc',
+            uploadDate: 'desc',
           },
           include: {
             Tenancy: {

@@ -29,6 +29,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   console.log(`[FUTURE LEASE API] ======================== GET REQUEST RECEIVED ========================`);
+  console.log(`[FUTURE LEASE API] Request URL: ${request.url}`);
+  console.log(`[FUTURE LEASE API] Method: ${request.method}`);
+  console.log(`[FUTURE LEASE API] Headers:`, Object.fromEntries(request.headers.entries()));
   
   try {
     const session = await getServerSession(authOptions);
@@ -40,6 +43,18 @@ export async function GET(
     console.log(`[FUTURE LEASE API] Property ID: ${propertyId}`);
     console.log(`[FUTURE LEASE API] Request URL: ${request.url}`);
     console.log(`[FUTURE LEASE API] ============================================================================`);
+    
+    // Force a visible log that should definitely appear
+    console.error(`🚀 FUTURE LEASE API CALLED FOR PROPERTY: ${propertyId}`);
+    
+    // Write to file to confirm API is being called
+    try {
+      const fs = await import('fs');
+      fs.appendFileSync('/tmp/future-lease-debug.log', `${new Date().toISOString()} - API called for property ${propertyId}\n`);
+      fs.appendFileSync('/tmp/future-lease-debug.log', `${new Date().toISOString()} - About to query property with units\n`);
+    } catch (e) {
+      // Ignore file write errors
+    }
 
     // Get property with units and their future leases
     const property = await prisma.property.findUnique({
@@ -51,9 +66,8 @@ export async function GET(
         Unit: {
           include: {
             Lease: {
-              where: {
-                Tenancy: null // Future leases have no tenancy record
-              },
+              // Get all leases - we'll filter for future ones later
+              // Some future leases might have tenancy records if they're in the current rent roll
               include: {
                 Resident: {
                   include: {
@@ -64,7 +78,8 @@ export async function GET(
                   orderBy: {
                     createdAt: 'desc'
                   }
-                }
+                },
+                Tenancy: true // Include tenancy to check if lease is current or future
               },
               orderBy: {
                 leaseStartDate: 'desc'
@@ -74,24 +89,38 @@ export async function GET(
         },
         RentRoll: {
           orderBy: {
-            date: 'desc'
+            uploadDate: 'desc'
           }
         }
       }
     });
 
     if (!property) {
+      try {
+        const fs = await import('fs');
+        fs.appendFileSync('/tmp/future-lease-debug.log', `${new Date().toISOString()} - Property not found!\n`);
+      } catch (e) {}
       return NextResponse.json({ error: 'Property not found' }, { status: 404 });
     }
 
     // Get the most recent rent roll date for filtering future leases
     const mostRecentRentRoll = property.RentRoll[0];
-    const rentRollDate = mostRecentRentRoll ? new Date(mostRecentRentRoll.date) : new Date();
+    const rentRollDate = mostRecentRentRoll ? new Date(mostRecentRentRoll.uploadDate) : new Date();
+
+    try {
+      const fs = await import('fs');
+      fs.appendFileSync('/tmp/future-lease-debug.log', `${new Date().toISOString()} - Property found with ${property.Unit.length} units\n`);
+      fs.appendFileSync('/tmp/future-lease-debug.log', `${new Date().toISOString()} - Rent roll date: ${rentRollDate.toISOString()}\n`);
+    } catch (e) {}
 
     const units: UnitFutureLeaseData[] = [];
 
+    console.error(`🔍 STARTING TO PROCESS ${property.Unit.length} UNITS FOR FUTURE LEASES`);
+
         // Process each unit
     for (const unit of property.Unit) {
+      console.log(`[FUTURE LEASE API] ========== Processing Unit ${unit.unitNumber} ==========`);
+      
       const unitData: UnitFutureLeaseData = {
         unitId: unit.id,
         unitNumber: unit.unitNumber
@@ -100,17 +129,53 @@ export async function GET(
 
 
       // Find future leases (leases that start after rent roll date OR have null start date)
+      console.log(`[FUTURE LEASE DEBUG] Unit ${unit.unitNumber} - Total leases: ${unit.Lease.length}`);
+      console.log(`[FUTURE LEASE DEBUG] Unit ${unit.unitNumber} - Rent roll date: ${rentRollDate.toISOString()}`);
+      console.log(`[FUTURE LEASE DEBUG] Unit ${unit.unitNumber} - Current date: ${new Date().toISOString()}`);
+      
+      unit.Lease.forEach((lease: any, index: number) => {
+        console.log(`[FUTURE LEASE DEBUG] Unit ${unit.unitNumber} - Lease ${index + 1}:`, {
+          id: lease.id,
+          name: lease.name,
+          leaseStartDate: lease.leaseStartDate?.toISOString() || 'null',
+          hasResidents: (lease.Resident || []).length > 0,
+          residentCount: (lease.Resident || []).length,
+          hasTenancy: !!lease.Tenancy
+        });
+        
+        // Also write to debug file (removed to fix compilation error)
+      });
+      
       const futureLeases = unit.Lease.filter((lease: any) => {
         // If start date is null, this could be a future lease (like "August 2025 Lease Renewal")
         if (!lease.leaseStartDate) {
+          console.log(`[FUTURE LEASE DEBUG] Unit ${unit.unitNumber} - Including lease with null start date: ${lease.name}`);
           return true; // Include leases with null start dates as potential future leases
         }
         
         const leaseStartDate = new Date(lease.leaseStartDate);
+        const now = new Date();
+        const isAfterNow = leaseStartDate > now;
         const isAfterRentRoll = leaseStartDate > rentRollDate;
         
-        return isAfterRentRoll;
+        // A lease is considered "future" if it starts after the rent roll date
+        // This means leases that start after the snapshot date are "future leases"
+        const isFutureLease = isAfterRentRoll;
+        
+        console.log(`[FUTURE LEASE DEBUG] Unit ${unit.unitNumber} - Lease ${lease.name}:`, {
+          leaseStart: leaseStartDate.toISOString(),
+          now: now.toISOString(),
+          rentRollDate: rentRollDate.toISOString(),
+          isAfterNow,
+          isAfterRentRoll,
+          hasTenancy: !!lease.Tenancy,
+          isFutureLease
+        });
+        
+        return isFutureLease;
       });
+      
+      console.log(`[FUTURE LEASE DEBUG] Unit ${unit.unitNumber} - Found ${futureLeases.length} future leases`);
 
         if (futureLeases.length > 0) {
           // Get the most recent future lease
@@ -171,7 +236,8 @@ export async function GET(
         // Only calculate compliance bucket if income is verified AND we have actual verified income
         let complianceBucket = '-';
         if (verificationStatus === 'Verified' && totalIncome > 0) {
-          const hudIncomeLimits = await getHudIncomeLimits(property.county, property.state);
+          try {
+            const hudIncomeLimits = await getHudIncomeLimits(property.county, property.state);
           console.log(`[FUTURE LEASE AMI DEBUG] AMI calculation for lease ${futureLease.id}:`, {
             verificationStatus,
             totalIncome,
@@ -181,14 +247,18 @@ export async function GET(
             state: property.state
           });
           
-          complianceBucket = getActualAmiBucket(
-            totalIncome,
-            (futureLease.Resident || []).length,
-            hudIncomeLimits,
-            property.complianceOption || "20% at 50% AMI, 55% at 80% AMI"
-          );
-          
-          console.log(`[FUTURE LEASE AMI DEBUG] Calculated AMI bucket: ${complianceBucket}`);
+            complianceBucket = getActualAmiBucket(
+              totalIncome,
+              (futureLease.Resident || []).length,
+              hudIncomeLimits,
+              property.complianceOption || "20% at 50% AMI, 55% at 80% AMI"
+            );
+            
+            console.log(`[FUTURE LEASE AMI DEBUG] Calculated AMI bucket: ${complianceBucket}`);
+          } catch (hudError) {
+            console.error(`[FUTURE LEASE AMI DEBUG] Failed to fetch HUD income limits for AMI calculation:`, hudError);
+            complianceBucket = 'Error loading AMI data';
+          }
         } else {
           console.log(`[FUTURE LEASE AMI DEBUG] Lease ${futureLease.id} - Not calculating AMI bucket:`, {
             verificationStatus,
@@ -215,9 +285,30 @@ export async function GET(
     // Filter to only return units that have future leases
     const unitsWithFutureLeases = units.filter(unit => unit.futureLease);
 
+    console.log(`[FUTURE LEASE API] Final results:`, {
+      totalUnits: units.length,
+      unitsWithFutureLeases: unitsWithFutureLeases.length,
+      rentRollDate: rentRollDate.toISOString(),
+      units: units.map(u => ({
+        unitId: u.unitId,
+        unitNumber: u.unitNumber,
+        hasFutureLease: !!u.futureLease,
+        totalLeases: property.Unit.find(unit => unit.id === u.unitId)?.Lease.length || 0
+      }))
+    });
+
     return NextResponse.json({ 
       units: unitsWithFutureLeases,
-      totalFutureLeases: unitsWithFutureLeases.length
+      totalFutureLeases: unitsWithFutureLeases.length,
+      debug: {
+        totalUnitsProcessed: units.length,
+        rentRollDate: rentRollDate.toISOString(),
+        sampleLeases: units.slice(0, 3).map(u => ({
+          unitNumber: u.unitNumber,
+          totalLeases: property.Unit.find(unit => unit.id === u.unitId)?.Lease.length || 0,
+          leaseStartDates: property.Unit.find(unit => unit.id === u.unitId)?.Lease.map(l => l.leaseStartDate?.toISOString() || 'null') || []
+        }))
+      }
     });
 
   } catch (error) {

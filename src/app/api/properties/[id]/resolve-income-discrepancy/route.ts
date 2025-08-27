@@ -47,11 +47,19 @@ export async function POST(
         // Keep verified income: Update the new resident's annualizedIncome to match verified income
         console.log(`[RESOLVE DISCREPANCY] Keeping verified income: Updating new resident ${discrepancy.newResidentId} from $${discrepancy.newRentRollIncome} to $${discrepancy.verifiedIncome}`);
         
-        await tx.resident.update({
+        const updatedResident = await tx.resident.update({
           where: { id: discrepancy.newResidentId },
           data: {
             annualizedIncome: discrepancy.verifiedIncome
           }
+        });
+        
+        console.log(`[RESOLVE DISCREPANCY] Updated resident ${discrepancy.newResidentId}:`, {
+          name: updatedResident.name,
+          oldAnnualizedIncome: discrepancy.newRentRollIncome,
+          newAnnualizedIncome: updatedResident.annualizedIncome,
+          calculatedAnnualizedIncome: updatedResident.calculatedAnnualizedIncome,
+          incomeFinalized: updatedResident.incomeFinalized
         });
         
         return {

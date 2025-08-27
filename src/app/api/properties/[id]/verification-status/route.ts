@@ -1,405 +1,451 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth/next';
+import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { getUnitVerificationStatus, PropertyVerificationSummary, UnitVerificationData } from '@/services/verification';
-import { createAutoOverrideRequest } from '@/services/override';
 
 export async function GET(
-  req: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  console.log(`🚨🚨🚨 VERIFICATION STATUS API FUNCTION CALLED 🚨🚨🚨`);
-  console.log(`[VERIFICATION STATUS API] ============== FUNCTION ENTRY ==============`);
-  console.log(`[VERIFICATION STATUS API] Request URL: ${req.url}`);
+  console.log(`🚨 [VERIFICATION STATUS API] ===== API ENDPOINT HIT =====`);
+  console.error(`🚨 [VERIFICATION STATUS API] ===== THIS SHOULD APPEAR IN CONSOLE =====`);
   
-  const session = await getServerSession(authOptions);
-  console.log(`[VERIFICATION STATUS API] Session check complete, user ID: ${session?.user?.id || 'NONE'}`);
-  
-  if (!session?.user?.id) {
-    console.log(`[VERIFICATION STATUS API] Authentication failed - returning 401`);
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
-  }
-
-  const { id: propertyId } = await params;
-  const { searchParams } = new URL(req.url);
-  const rentRollId = searchParams.get('rentRollId');
-  
-  console.log(`[VERIFICATION STATUS API] ============== STARTING API CALL ==============`);
-  console.log(`[VERIFICATION STATUS API] Property ID: ${propertyId}`);
-  console.log(`[VERIFICATION STATUS API] Rent Roll ID: ${rentRollId || 'latest'}`);
-  console.log(`[VERIFICATION STATUS API] Request URL: ${req.url}`);
-
+  // Write logs to a file for easier debugging
+  const fs = require('fs');
+  const logFile = '/tmp/verification-debug.log';
+  const timestamp = new Date().toISOString();
+  fs.writeFileSync(logFile, `\n=== VERIFICATION STATUS DEBUG - ${timestamp} ===\n`, { flag: 'a' });
   try {
-    console.log(`[VERIFICATION STATUS API] About to query property: ${propertyId}`);
-    console.log(`[VERIFICATION STATUS API] User ID: ${session.user.id}`);
-    
-    // Get the property with units, leases, residents, income documents, and rent rolls
-    const property = await prisma.property.findFirst({
-      where: {
-        id: propertyId,
-        ownerId: session.user.id,
-      },
-      include: {
-        Unit: {
-          include: {
-            Lease: {
-              include: {
-                Resident: {
-                  include: {
-                    IncomeDocument: {
-                      where: {
-                        status: { in: ['COMPLETED', 'NEEDS_REVIEW'] }, // Include completed and needs review documents
-                      },
-                      orderBy: {
-                        uploadDate: 'desc',
-                      },
-                    },
-                  },
-                },
-                IncomeVerification: {
-                  orderBy: {
-                    createdAt: 'desc',
-                  },
-                },
-                Tenancy: {
-                  include: {
-                    RentRoll: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-        RentRoll: rentRollId ? {
-          where: {
-            id: rentRollId
-          }
-        } : {
-          orderBy: {
-            date: 'desc',
-          },
-          take: 1, // Get the most recent rent roll
-        },
-      },
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { id: propertyId } = await params;
+    const { searchParams } = new URL(request.url);
+    const rentRollId = searchParams.get('rentRollId');
+
+    console.log(`🔍 [VERIFICATION STATUS API] ===== STARTING VERIFICATION STATUS CHECK =====`);
+    console.log(`[VERIFICATION STATUS] Fetching status for property ${propertyId}, rentRoll: ${rentRollId || 'latest'}`);
+
+    // Verify property ownership
+    const property = await prisma.property.findUnique({
+      where: { id: propertyId },
+      include: { User: true }
     });
 
-    if (!property) {
-      console.log(`[VERIFICATION STATUS API] Property ${propertyId} not found - returning 404`);
+    if (!property || property.ownerId !== session.user.id) {
       return NextResponse.json({ error: 'Property not found or access denied' }, { status: 404 });
     }
-    
-    console.log(`[VERIFICATION STATUS API] Property found: ${property.name} with ${property.Unit.length} units`);
 
-    if (property.RentRoll.length === 0) {
-      console.log(`[VERIFICATION STATUS API] No rent rolls found for property ${propertyId} - returning 404`);
-      return NextResponse.json({ error: 'No rent rolls found for this property' }, { status: 404 });
+    // Get the target rent roll (specific or latest active)
+    let targetRentRoll;
+    if (rentRollId) {
+      targetRentRoll = await prisma.rentRoll.findUnique({
+        where: { id: rentRollId, propertyId }
+      });
+    } else {
+      targetRentRoll = await prisma.rentRoll.findFirst({
+        where: { propertyId },
+        orderBy: { uploadDate: 'desc' }
+      });
     }
 
-    const latestRentRollDate = new Date(property.RentRoll[0].date);
-    const units: UnitVerificationData[] = [];
-    const summary = {
-      verified: 0,
-      outOfDate: 0,
-      vacant: 0,
-      verificationInProgress: 0,
-      waitingForAdminReview: 0,
-    };
+    if (!targetRentRoll) {
+      return NextResponse.json({ error: 'No rent roll found' }, { status: 404 });
+    }
 
-    // Process each unit
-    console.log(`[VERIFICATION STATUS DEBUG] Total units in property: ${property.Unit.length}`);
-    console.log(`[VERIFICATION STATUS DEBUG] All unit numbers:`, property.Unit.map((u: any) => u.unitNumber));
+    console.log(`[VERIFICATION STATUS] Using rent roll ${targetRentRoll.id} from ${targetRentRoll.uploadDate}`);
+    console.error(`🔍 VERIFICATION STATUS API CALLED - Property: ${propertyId}, RentRoll: ${targetRentRoll.id}`);
     
-    for (const unit of property.Unit) {
-      console.log(`[VERIFICATION STATUS DEBUG] Processing unit ${unit.unitNumber} (ID: ${unit.id})`);
-      // SIMPLIFIED: Only handle current leases (with tenancy)
-      console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: Found ${unit.Lease.length} total leases`);
-      const leasesWithTenancy = unit.Lease.filter((l: any) => l.tenancy !== null);
-      console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: ${leasesWithTenancy.length} leases with tenancy`);
-      
-      const currentLease = leasesWithTenancy
-        .sort((a: any, b: any) => {
-          const aDate = a.tenancy?.createdAt ? new Date(a.tenancy.createdAt).getTime() : 0;
-          const bDate = b.tenancy?.createdAt ? new Date(b.tenancy.createdAt).getTime() : 0;
-          return bDate - aDate;
-        })[0];
-        
-      if (!currentLease) {
-        console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: No current lease found, skipping`);
-        continue;
-      }
-      
-      console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: Processing with lease ${currentLease.id}`);
+    // Log rent roll info to file
+    fs.writeFileSync(logFile, `Property ID: ${propertyId}\n`, { flag: 'a' });
+    fs.writeFileSync(logFile, `Rent Roll ID: ${targetRentRoll.id}\n`, { flag: 'a' });
+    fs.writeFileSync(logFile, `Rent Roll Date: ${targetRentRoll.uploadDate}\n`, { flag: 'a' });
 
-      // Calculate total uploaded income (from compliance uploads) - only use active lease
-      const totalUploadedIncome = currentLease 
-        ? (currentLease.Resident || []).reduce((acc: any, r: any) => acc + (r.annualizedIncome || 0), 0)
-        : 0;
-
-      // Calculate total verified income using resident-level data and create enhanced unit for verification status
-      let totalVerifiedIncome = 0;
-      let enhancedUnit = { ...unit };
-      
-      if (currentLease) {
-        // Batch fetch all resident income data in a single query instead of individual queries
-        const residentIds = (currentLease.Resident || []).map((r: any) => r.id);
-        const residentIncomeDataMap = await prisma.resident.findMany({
-          where: { id: { in: residentIds } },
-          select: {
-            id: true,
-            incomeFinalized: true,
-            hasNoIncome: true,
-            annualizedIncome: true,
-            calculatedAnnualizedIncome: true
-          }
-        }).then((results: any[]) => 
-          results.reduce((map: Record<string, any>, resident: any) => {
-            map[resident.id] = resident;
-            return map;
-          }, {} as Record<string, any>)
-        );
-
-        const enhancedResidents = [];
-        for (const resident of currentLease.Resident || []) {
-          const residentIncomeData = residentIncomeDataMap[resident.id];
-          
-          const enhancedResident = {
-            ...resident,
-            incomeFinalized: residentIncomeData?.incomeFinalized || false,
-            hasNoIncome: residentIncomeData?.hasNoIncome || false,
-            calculatedAnnualizedIncome: residentIncomeData?.calculatedAnnualizedIncome ? Number(residentIncomeData.calculatedAnnualizedIncome) : null,
-            // Preserve the IncomeDocument array from the original resident
-            IncomeDocument: resident.IncomeDocument || []
-          };
-          enhancedResidents.push(enhancedResident);
-          
-          // Calculate verified income using approved amounts that users have already accepted
-          if (residentIncomeData?.incomeFinalized) {
-            // For finalized residents, use their approved income amount
-            // Prioritize calculatedAnnualizedIncome (the approved amount) over annualizedIncome (rent roll)
-            const approvedIncome = residentIncomeData.calculatedAnnualizedIncome || residentIncomeData.annualizedIncome || 0;
-            
-            console.log(`[DEBUG ${unit.unitNumber}] Resident ${resident.id} - USING APPROVED AMOUNT:`, {
-              incomeFinalized: residentIncomeData.incomeFinalized,
-              calculatedAnnualizedIncome: residentIncomeData.calculatedAnnualizedIncome,
-              annualizedIncome: residentIncomeData.annualizedIncome,
-              approvedIncome: approvedIncome
-            });
-            
-            totalVerifiedIncome += Number(approvedIncome);
-          }
-        }
-        
-        // Create enhanced unit with enhanced residents for verification status calculation
-        const enhancedLease = { 
-          ...currentLease, 
-          Resident: enhancedResidents,
-          // Ensure all original relationships are preserved
-          Tenancy: currentLease.Tenancy,
-          IncomeVerification: currentLease.IncomeVerification
-        };
-        enhancedUnit = {
-          ...unit,
-          Lease: (unit.Lease || []).map((lease: any) => 
-            lease.id === currentLease.id ? enhancedLease : lease
-          )
-        };
-        
-        // DEBUG: Check if IncomeDocument arrays are preserved
-        console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber} enhanced residents:`, 
-          enhancedResidents.map((r: any) => ({
-            name: r.name,
-            documentsCount: r.IncomeDocument?.length || 0,
-            documents: r.IncomeDocument?.map((d: any) => ({ type: d.documentType, status: d.status })) || []
-          }))
-        );
-      }
-
-      // NOW calculate verification status with enhanced unit data
-      let verificationStatus: any;
-
-      if (!currentLease) {
-        // No active lease = Vacant
-        verificationStatus = 'Vacant';
-      } else {
-        // Check if there's an active income verification in progress  
-        if (currentLease.IncomeVerification.length > 0) {
-          const latestVerification = currentLease.IncomeVerification[0]; // Already sorted by createdAt desc
-          
-          if (latestVerification.status === 'IN_PROGRESS') {
-            // Check if any documents are waiting for admin review
-            const documentsNeedingReview = (currentLease.Resident || []).flatMap((resident: any) => 
-              (resident.IncomeDocument || []).filter((doc: any) => doc.status === 'NEEDS_REVIEW')
-            );
-            
-            if (documentsNeedingReview.length > 0) {
-              // Check if there are pending override requests for these documents
-              const pendingOverrideRequests = await prisma.overrideRequest.findMany({
-                where: {
-                  status: 'PENDING',
-                  documentId: {
-                    in: documentsNeedingReview.map((doc: any) => doc.id)
+    // Get all units with ALL their leases and residents (we'll filter for current ones later)
+    const units = await prisma.unit.findMany({
+      where: { propertyId },
+      include: {
+        Lease: {
+          include: {
+            Resident: {
+              include: {
+                IncomeDocument: {
+                  include: {
+                    IncomeVerification: true
                   }
                 }
-              });
-              
-              if (pendingOverrideRequests.length > 0) {
-                verificationStatus = 'Waiting for Admin Review';
-              } else {
-                // NEEDS_REVIEW documents exist but no pending override requests (denied/approved)
-                // Return "Out of Date Income Documents" directly to avoid getUnitVerificationStatus
-                // which would return "Waiting for Admin Review" for any NEEDS_REVIEW documents
-                verificationStatus = 'Out of Date Income Documents';
               }
-            } else {
-              // Check for pending validation exception override requests
-              console.log(`[VERIFICATION STATUS DEBUG] Checking for pending validation exceptions for verification ${latestVerification.id}`);
-              const pendingValidationExceptions = await prisma.overrideRequest.findMany({
-                where: {
-                  status: 'PENDING',
-                  type: 'VALIDATION_EXCEPTION',
-                  verificationId: latestVerification.id
-                }
-              });
-              
-              console.log(`[VERIFICATION STATUS DEBUG] Found ${pendingValidationExceptions.length} pending validation exceptions:`, pendingValidationExceptions);
-              
-              if (pendingValidationExceptions.length > 0) {
-                console.log(`[VERIFICATION STATUS DEBUG] Setting status to 'Waiting for Admin Review' due to pending validation exceptions`);
-                verificationStatus = 'Waiting for Admin Review';
-              } else {
-                console.log(`[VERIFICATION STATUS DEBUG] No pending validation exceptions found, setting status to 'In Progress - Finalize to Process'`);
-                verificationStatus = 'In Progress - Finalize to Process';
-              }
-            }
-          } else if (latestVerification.status === 'FINALIZED') {
-            // Only check for discrepancies if verification is finalized
-            verificationStatus = getUnitVerificationStatus(enhancedUnit as any, latestRentRollDate);
-          } else {
-            // Fallback verification status for edge cases
-            verificationStatus = getUnitVerificationStatus(enhancedUnit as any, latestRentRollDate);
+            },
+            Tenancy: true
+          }
+        }
+      },
+      orderBy: { unitNumber: 'asc' }
+    });
+
+    console.log(`🔍 [VERIFICATION STATUS API] ===== PROCESSING ${units.length} UNITS =====`);
+    
+    // Log all unit numbers to see what we're processing
+    const unitNumbers = units.map((u: any) => u.unitNumber).sort();
+    fs.writeFileSync(logFile, `Total units found: ${units.length}\n`, { flag: 'a' });
+    fs.writeFileSync(logFile, `Unit numbers: ${unitNumbers.join(', ')}\n`, { flag: 'a' });
+    fs.writeFileSync(logFile, `Looking for units 102 and 107...\n`, { flag: 'a' });
+
+    const verificationStatus = units.map((unit: any) => {
+      console.log(`[VERIFICATION STATUS DEBUG] Processing unit ${unit.unitNumber} (ID: ${unit.id})`);
+      
+      const unitLeases = unit.Lease;
+      
+      // Special debugging for problematic units
+      const unitNum = unit.unitNumber.toString();
+      if (unitNum === '102' || unitNum === '107' || unitNum === '0102' || unitNum === '0107' || 
+          unitNum === '801-104' || unitNum === '805-206') {
+        const debugMsg = `🚨 [SPECIAL DEBUG] Unit ${unit.unitNumber} - Investigating lease classification`;
+        console.log(debugMsg);
+        fs.writeFileSync(logFile, debugMsg + '\n', { flag: 'a' });
+        
+        // Log detailed lease information
+        fs.writeFileSync(logFile, `  Rent Roll Date: ${targetRentRoll.uploadDate}\n`, { flag: 'a' });
+        fs.writeFileSync(logFile, `  Total Leases: ${unitLeases.length}\n`, { flag: 'a' });
+        
+        unitLeases.forEach((lease: any, index: number) => {
+          fs.writeFileSync(logFile, `  Lease ${index + 1}:\n`, { flag: 'a' });
+          fs.writeFileSync(logFile, `    ID: ${lease.id}\n`, { flag: 'a' });
+          fs.writeFileSync(logFile, `    Start Date: ${lease.leaseStartDate}\n`, { flag: 'a' });
+          fs.writeFileSync(logFile, `    End Date: ${lease.leaseEndDate}\n`, { flag: 'a' });
+          fs.writeFileSync(logFile, `    Rent: ${lease.rent}\n`, { flag: 'a' });
+          fs.writeFileSync(logFile, `    Has Tenancy: ${!!lease.Tenancy}\n`, { flag: 'a' });
+          fs.writeFileSync(logFile, `    Tenancy Rent Roll ID: ${lease.Tenancy?.rentRollId || 'none'}\n`, { flag: 'a' });
+          fs.writeFileSync(logFile, `    Target Rent Roll ID: ${targetRentRoll.id}\n`, { flag: 'a' });
+          
+          if (lease.leaseStartDate) {
+            const leaseStart = new Date(lease.leaseStartDate);
+            const rentRollDate = new Date(targetRentRoll.uploadDate);
+            const isFuture = leaseStart > rentRollDate;
+            fs.writeFileSync(logFile, `    Is Future Lease: ${isFuture} (${lease.leaseStartDate} vs ${targetRentRoll.uploadDate})\n`, { flag: 'a' });
           }
           
-          // IMPORTANT: After setting verification status through other means, check for pending validation exceptions
-          // This must come AFTER the other status checks to avoid being overridden
-          if (latestVerification && latestVerification.status === 'IN_PROGRESS') {
-            console.log(`[VERIFICATION STATUS DEBUG] Final check for pending validation exceptions for verification ${latestVerification.id}`);
-            const finalPendingValidationExceptions = await prisma.overrideRequest.findMany({
-              where: {
-                status: 'PENDING',
-                type: 'VALIDATION_EXCEPTION',
-                verificationId: latestVerification.id
-              }
+          fs.writeFileSync(logFile, `    Residents: ${lease.Resident?.length || 0}\n`, { flag: 'a' });
+          if (lease.Resident?.length > 0) {
+            lease.Resident.forEach((resident: any) => {
+              fs.writeFileSync(logFile, `      - ${resident.name} (finalized: ${resident.incomeFinalized})\n`, { flag: 'a' });
             });
-            
-            if (finalPendingValidationExceptions.length > 0) {
-              console.log(`[VERIFICATION STATUS DEBUG] FINAL: Overriding status to 'Waiting for Admin Review' due to ${finalPendingValidationExceptions.length} pending validation exceptions`);
-              verificationStatus = 'Waiting for Admin Review';
-            }
           }
+          fs.writeFileSync(logFile, `\n`, { flag: 'a' });
+        });
+      }
+      console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: Found ${unitLeases.length} total leases`);
+
+      // Filter to leases with tenancy for this specific rent roll AND that started on or before the rent roll date
+      const rentRollDate = new Date(targetRentRoll.uploadDate);
+      const currentLeases = unitLeases.filter((lease: any) => {
+        if (!lease.Tenancy || lease.Tenancy.rentRollId !== targetRentRoll.id) {
+          return false;
+        }
+        
+        // Check if lease start date is on or before the rent roll upload date
+        const leaseStartDate = new Date(lease.leaseStartDate);
+        const isCurrentLease = leaseStartDate <= rentRollDate;
+        
+        if (!isCurrentLease) {
+          console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: Lease ${lease.id} starts ${lease.leaseStartDate} (after rent roll date ${targetRentRoll.uploadDate}) - treating as future lease`);
+        }
+        
+        return isCurrentLease;
+      });
+      console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: ${currentLeases.length} current leases (started on/before rent roll date)`);
+
+      if (unit.unitNumber === '0101') {
+        console.error(`🏠 UNIT 0101 DEBUG - Processing verification status for Unit 0101`);
+        
+        // Write debug info to file for Unit 0101
+        const fs = require('fs');
+        const debugInfo = {
+          timestamp: new Date().toISOString(),
+          unitNumber: unit.unitNumber,
+          unitId: unit.id,
+          totalLeases: unitLeases.length,
+          currentLeases: currentLeases.length,
+          targetRentRollId: targetRentRoll.id,
+          leaseDetails: unitLeases.map(lease => ({
+            id: lease.id,
+            leaseStartDate: lease.leaseStartDate,
+            leaseEndDate: lease.leaseEndDate,
+            rent: lease.rent,
+            hasTenancy: !!lease.Tenancy,
+            tenancyRentRollId: lease.Tenancy?.rentRollId,
+            residents: lease.Resident?.map(r => ({
+              name: r.name,
+              incomeFinalized: r.incomeFinalized,
+              calculatedAnnualizedIncome: r.calculatedAnnualizedIncome,
+              documentsCount: r.IncomeDocument?.length || 0
+            })) || []
+          }))
+        };
+        
+        fs.writeFileSync('/tmp/unit-0101-debug.log', JSON.stringify(debugInfo, null, 2));
+      }
+
+      let targetLease = null;
+      if (currentLeases.length > 0) {
+        // Use the most recent current lease
+        targetLease = currentLeases.sort((a: any, b: any) => 
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        )[0];
+        console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: Using current lease ${targetLease.id}`);
+      } else {
+        console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: No current leases found for this rent roll - treating as Vacant`);
+        return {
+          unitId: unit.id,
+          unitNumber: unit.unitNumber,
+          status: 'Vacant',
+          totalResidents: 0,
+          residentsWithVerifiedIncome: 0,
+          verifiedDocuments: 0,
+          leaseStartDate: null,
+          residents: []
+        };
+      }
+
+      // Check if current lease has verified residents
+      const currentLeaseHasVerifiedResidents = targetLease.Resident && 
+        targetLease.Resident.some((r: any) => r.incomeFinalized && r.calculatedAnnualizedIncome !== null);
+
+      // If current lease doesn't have verified residents, look for matching lease with verified data
+      if (!currentLeaseHasVerifiedResidents) {
+        console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: Current lease has no verified residents, looking for matching lease with verification`);
+        
+        // Look for leases with same key information and verified residents
+        const matchingVerifiedLeases = unitLeases.filter((lease: any) => {
+          // Must have verified residents
+          const hasVerifiedResidents = lease.Resident && 
+            lease.Resident.some((r: any) => r.incomeFinalized && r.calculatedAnnualizedIncome !== null);
+          
+          if (!hasVerifiedResidents) return false;
+          
+          // IMPORTANT: Only inherit from leases of the same type (current vs future)
+          // Current leases have Tenancy, future leases don't
+          const targetIsCurrentLease = !!targetLease.Tenancy;
+          const leaseIsCurrentLease = !!lease.Tenancy;
+          
+          if (targetIsCurrentLease !== leaseIsCurrentLease) {
+            console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: Skipping lease ${lease.id} - different lease type (current: ${targetIsCurrentLease} vs ${leaseIsCurrentLease})`);
+            return false;
+          }
+          
+          // Extra debugging for Unit 505
+          if (unit.unitNumber === '505') {
+            console.log(`[UNIT 505 DEBUG] Comparing leases:`, {
+              targetLeaseId: targetLease.id,
+              candidateLeaseId: lease.id,
+              targetIsCurrentLease,
+              leaseIsCurrentLease,
+              targetHasTenancy: !!targetLease.Tenancy,
+              leaseHasTenancy: !!lease.Tenancy,
+              targetResidents: targetLease.Resident?.length || 0,
+              leaseResidents: lease.Resident?.length || 0
+            });
+          }
+          
+          // Must match key lease information
+          const sameStartDate = lease.leaseStartDate?.getTime() === targetLease.leaseStartDate?.getTime();
+          const sameEndDate = lease.leaseEndDate?.getTime() === targetLease.leaseEndDate?.getTime();
+          // Handle rent comparison (both null is considered matching, convert to numbers for comparison)
+          const leaseRentNum = lease.leaseRent ? parseFloat(lease.leaseRent.toString().trim()) : null;
+          const targetRentNum = targetLease.leaseRent ? parseFloat(targetLease.leaseRent.toString().trim()) : null;
+          const sameRent = (leaseRentNum === targetRentNum) || 
+                          (leaseRentNum == null && targetRentNum == null);
+          
+          // Check if resident names match
+          const currentResidentNames = targetLease.Resident?.map((r: any) => r.name.toLowerCase().trim()).sort() || [];
+          const leaseResidentNames = lease.Resident?.map((r: any) => r.name.toLowerCase().trim()).sort() || [];
+          const sameResidents = JSON.stringify(currentResidentNames) === JSON.stringify(leaseResidentNames);
+          
+          console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: Checking lease ${lease.id} - Start: ${sameStartDate}, End: ${sameEndDate}, Rent: ${sameRent}, Residents: ${sameResidents}`);
+          
+          if (unit.unitNumber === '0101') {
+            const fs = require('fs');
+            const matchingDebug = {
+              timestamp: new Date().toISOString(),
+              leaseId: lease.id,
+              targetLeaseId: targetLease.id,
+              sameStartDate,
+              sameEndDate, 
+              sameRent,
+              sameResidents,
+              leaseStartDate: lease.leaseStartDate,
+              targetStartDate: targetLease.leaseStartDate,
+              leaseEndDate: lease.leaseEndDate,
+              targetEndDate: targetLease.leaseEndDate,
+              leaseRent: lease.leaseRent,
+              targetRent: targetLease.leaseRent,
+              leaseRentNum,
+              targetRentNum,
+              currentResidentNames,
+              leaseResidentNames,
+              hasVerifiedResidents
+            };
+            fs.appendFileSync('/tmp/unit-0101-debug.log', '\n\nMATCHING DEBUG:\n' + JSON.stringify(matchingDebug, null, 2));
+          }
+          
+          return sameStartDate && sameEndDate && sameRent && sameResidents;
+        });
+        
+        if (matchingVerifiedLeases.length > 0) {
+          const matchingLease = matchingVerifiedLeases[0];
+          console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: Found matching verified lease ${matchingLease.id}, inheriting verification data`);
+          
+          // Inherit verified residents from matching lease
+          targetLease.Resident = matchingLease.Resident;
         } else {
-          // No verification in progress, check overall unit status
-          verificationStatus = getUnitVerificationStatus(enhancedUnit as any, latestRentRollDate);
+          console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: No matching verified lease found`);
         }
       }
+
+      console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: Processing with lease ${targetLease.id}`);
+
+      const allResidents = targetLease.Resident;
       
-      // Note: Income discrepancy requests should be created at the resident level, not unit level
-      // This automatic unit-level override creation was causing inappropriate admin review requests
-      // Resident-level discrepancy handling is done through the ResidentFinalizationDialog and individual resident workflows
+      // Filter residents to only include those whose lease has started as of the report date
+      // This prevents future residents from being counted as current residents
+      const reportDate = new Date(targetRentRoll.uploadDate);
+      const leaseStartDate = targetLease.leaseStartDate;
       
+      let residents = allResidents;
+      if (leaseStartDate && leaseStartDate > reportDate) {
+        // This is a future lease - no residents should be counted as current
+        console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: Future lease detected (starts ${leaseStartDate.toISOString()} > report ${reportDate.toISOString()}) - treating as vacant`);
+        residents = [];
+      }
       
+      const totalResidents = residents.length;
+
+      console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: {
+        leaseStartDate: '${targetLease.leaseStartDate?.toISOString()}',
+        residentsCount: ${totalResidents},
+        totalDocuments: ${residents.reduce((sum: number, r: any) => sum + r.IncomeDocument.length, 0)}
+      }`);
+
+      // Calculate verification metrics
+      let residentsWithVerifiedIncome = 0;
+      let verifiedDocuments = 0;
+      let residentsWithFinalizedIncome = 0;
+      let residentsWithInProgressVerification = 0;
+
+      const residentDetails = residents.map((resident: any) => {
+        const hasVerifiedIncome = resident.incomeFinalized && resident.calculatedAnnualizedIncome !== null;
+        const documentsCount = resident.IncomeDocument.length;
+        const hasDocumentsButNotFinalized = documentsCount > 0 && !resident.incomeFinalized;
         
-      // Debug logging for Unit 0101
-      if (unit.unitNumber === '0101') {
-        console.log(`[DEBUG Unit 0101] Total uploaded income: $${totalUploadedIncome}`);
-        console.log(`[DEBUG Unit 0101] Total verified income: $${totalVerifiedIncome}`);
-        console.log(`[DEBUG Unit 0101] Discrepancy: $${Math.abs(totalUploadedIncome - totalVerifiedIncome)}`);
-        console.log(`[DEBUG Unit 0101] Verification status: ${verificationStatus}`);
+        // Enhanced debugging for status determination
+        const residentDebug = {
+          incomeFinalized: resident.incomeFinalized,
+          calculatedAnnualizedIncome: resident.calculatedAnnualizedIncome,
+          documentsCount: documentsCount,
+          hasVerifiedIncome: hasVerifiedIncome,
+          hasDocumentsButNotFinalized: hasDocumentsButNotFinalized
+        };
+        console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber} - Resident ${resident.name}:`, residentDebug);
+        
+        // Write to file for problematic units
+        if (unitNum === '102' || unitNum === '107' || unitNum === '0102' || unitNum === '0107' || 
+            unitNum === '801-104' || unitNum === '805-206') {
+          fs.writeFileSync(logFile, `  Resident ${resident.name}: ${JSON.stringify(residentDebug, null, 2)}\n`, { flag: 'a' });
+        }
+        
+        if (hasVerifiedIncome) {
+          residentsWithVerifiedIncome++;
+          residentsWithFinalizedIncome++;
+        } else if (hasDocumentsButNotFinalized) {
+          residentsWithInProgressVerification++;
+        }
+        
+        verifiedDocuments += documentsCount;
+
+        return {
+          id: resident.id,
+          name: resident.name,
+          hasNoIncome: resident.hasNoIncome,
+          incomeFinalized: resident.incomeFinalized,
+          calculatedAnnualizedIncome: resident.calculatedAnnualizedIncome,
+          documentsCount,
+          documents: resident.IncomeDocument.map((doc: any) => ({
+            id: doc.id,
+            documentType: doc.documentType,
+            status: doc.status,
+            uploadDate: doc.uploadDate,
+            calculatedAnnualizedIncome: doc.calculatedAnnualizedIncome
+          }))
+        };
+      });
+
+      console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber} - Resident Details: [
+        ${residentDetails.map((r: any) => `{
+          id: '${r.id}',
+          name: '${r.name}',
+          hasNoIncome: ${r.hasNoIncome},
+          incomeFinalized: ${r.incomeFinalized},
+          calculatedAnnualizedIncome: ${r.calculatedAnnualizedIncome}
+        }`).join(',\n  ')}
+      ]`);
+
+      console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber} SUMMARY: {
+        verifiedDocuments: ${verifiedDocuments},
+        residentsWithFinalizedIncome: ${residentsWithFinalizedIncome},
+        totalResidentsWithVerifiedIncome: ${residentsWithVerifiedIncome},
+        residentsWithInProgressVerification: ${residentsWithInProgressVerification},
+        totalResidents: ${totalResidents},
+        documentStatuses: []
+      }`);
+
+      // Determine overall status
+      // Valid statuses: Verified, In Progress - Finalize to Process, Out of Date Income Documents, Waiting for Admin Review, Vacant
+      let status: string;
+      if (totalResidents === 0) {
+        status = 'Vacant';
+      } else if (residentsWithVerifiedIncome === 0 && residentsWithInProgressVerification === 0) {
+        status = 'Out of Date Income Documents';
+        console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: No residents with verified income or in-progress verification - returning Out of Date Income Documents`);
+      } else if (residentsWithVerifiedIncome === totalResidents) {
+        status = 'Verified';
+      } else {
+        // Any unit with mixed verification states (some verified, some not) = In Progress
+        status = 'In Progress - Finalize to Process';
+        const statusMsg = `[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: ✅ MIXED VERIFICATION STATES: residentsWithVerifiedIncome (${residentsWithVerifiedIncome}) < totalResidents (${totalResidents}) - returning In Progress - Finalize to Process`;
+        console.log(statusMsg);
+        if (unitNum === '102' || unitNum === '107' || unitNum === '0102' || unitNum === '0107' || 
+            unitNum === '801-104' || unitNum === '805-206') {
+          fs.writeFileSync(logFile, statusMsg + '\n', { flag: 'a' });
+        }
       }
 
-      // Debug logging for Unit 0208 to understand finalization issue
-      if (unit.unitNumber === '0208') {
-        console.log(`[DEBUG Unit 0208] Unit ID: ${unit.id}`);
-        console.log(`[DEBUG Unit 0208] Current lease:`, currentLease?.id);
-        console.log(`[DEBUG Unit 0208] Residents in lease:`, (currentLease?.Resident || []).map((r: any) => ({
-          id: r.id,
-          name: r.name,
-          incomeFinalized: r.incomeFinalized,
-          hasNoIncome: r.hasNoIncome,
-          calculatedAnnualizedIncome: r.calculatedAnnualizedIncome
-        })));
-        console.log(`[DEBUG Unit 0208] Documents count:`, (currentLease?.Resident || []).flatMap((r: any) => r.IncomeDocument || []).length);
-        console.log(`[DEBUG Unit 0208] Document statuses:`, (currentLease?.Resident || []).flatMap((r: any) => r.IncomeDocument || []).map((d: any) => ({
-          id: d.id,
-          type: d.documentType,
-          status: d.status,
-          residentId: d.residentId
-        })));
-        console.log(`[DEBUG Unit 0208] Verification from service: ${verificationStatus}`);
-        console.log(`[DEBUG Unit 0208] Total uploaded income: $${totalUploadedIncome}`);
-        console.log(`[DEBUG Unit 0208] Total verified income: $${totalVerifiedIncome}`);
-      }
-
-      // Count documents
-      const documentCount = currentLease 
-        ? (currentLease.Resident || []).flatMap((r: any) => r.IncomeDocument || []).length
-        : 0;
-
-      // Find last verification update
-      const lastVerificationUpdate = currentLease 
-        ? (currentLease.Resident || [])
-            .flatMap((r: any) => r.IncomeDocument || [])
-            .reduce((latest: any, doc: any) => {
-              const docDate = new Date(doc.uploadDate);
-              return !latest || docDate > latest ? docDate : latest;
-            }, null as Date | null)
-        : null;
-
-      const unitData: UnitVerificationData = {
+      return {
         unitId: unit.id,
         unitNumber: unit.unitNumber,
-        verificationStatus,
-        totalUploadedIncome,
-        totalVerifiedIncome,
-        leaseStartDate: currentLease?.leaseStartDate ? new Date(currentLease.leaseStartDate) : null,
-        documentCount,
-        lastVerificationUpdate,
+        status,
+        totalResidents,
+        residentsWithVerifiedIncome,
+        verifiedDocuments,
+        leaseStartDate: targetLease.leaseStartDate,
+        residents: residentDetails
       };
+    });
 
-      units.push(unitData);
+    console.log(`[VERIFICATION STATUS] Completed processing ${units.length} units for rent roll ${targetRentRoll.id}`);
 
-      // Update summary counts
-      switch (verificationStatus) {
-        case 'Verified':
-          summary.verified++;
-          break;
+    return NextResponse.json({
+      success: true,
+      rentRollId: targetRentRoll.id,
+      rentRollDate: targetRentRoll.uploadDate,
+      verificationStatus
+    });
 
-        case 'Out of Date Income Documents':
-          summary.outOfDate++;
-          break;
-        case 'Vacant':
-          summary.vacant++;
-          break;
-        case 'In Progress - Finalize to Process':
-          summary.verificationInProgress++;
-          break;
-        case 'Waiting for Admin Review':
-          summary.waitingForAdminReview++;
-          break;
-      }
-    }
-
-    const response: PropertyVerificationSummary = {
-      propertyId,
-      units: units.sort((a, b) => a.unitNumber.localeCompare(b.unitNumber, undefined, { numeric: true })),
-      summary,
-    };
-
-    return NextResponse.json(response);
   } catch (error) {
-    console.error('Error fetching verification status:', error);
+    console.error('[VERIFICATION STATUS] Error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch verification status' },
+      { error: 'Failed to fetch verification status', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

@@ -68,8 +68,9 @@ export async function GET(
     }
 
     // Try current year first, then fall back to previous year
-    let hudIncomeLimits: HudIncomeLimits;
+    let hudIncomeLimits: HudIncomeLimits | null = null;
     let actualYear = currentYear;
+    let hudError = null;
     
     try {
       hudIncomeLimits = await getHudIncomeLimits(property.county, property.state, currentYear);
@@ -79,18 +80,29 @@ export async function GET(
         hudIncomeLimits = await getHudIncomeLimits(property.county, property.state, currentYear - 1);
         actualYear = currentYear - 1;
       } catch (fallbackError) {
-        return NextResponse.json({ 
-          error: 'HUD income limits not found for this property location' 
-        }, { status: 400 });
+        console.error('AMI Bucket API: HUD income limits failed for both years:', fallbackError);
+        hudError = 'HUD API timeout or unavailable';
+        // Don't return 400 - continue with null income limits
       }
     }
 
     // Calculate AMI bucket information
-    const amiBucketInfo = calculateAmiBucketForLease(
-      lease.Resident,
-      finalized.IncomeDocument,
-      hudIncomeLimits
-    );
+    let amiBucketInfo;
+    if (hudIncomeLimits) {
+      amiBucketInfo = calculateAmiBucketForLease(
+        lease.Resident,
+        finalized.IncomeDocument,
+        hudIncomeLimits
+      );
+    } else {
+      // Return placeholder data when HUD limits are unavailable
+      amiBucketInfo = {
+        amiBucket: 'HUD data unavailable',
+        totalIncome: 0,
+        householdSize: lease.Resident.length,
+        error: hudError
+      };
+    }
 
     // Add additional context information
     const response = {
@@ -99,7 +111,7 @@ export async function GET(
       leaseName: lease.name,
       verificationId: finalized.id,
       finalizedAt: finalized.finalizedAt,
-      hudDataYear: actualYear,
+      hudDataYear: hudIncomeLimits ? actualYear : null,
       propertyLocation: `${property.county}, ${property.state}`
     };
 
