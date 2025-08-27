@@ -168,7 +168,7 @@ export async function GET(
           totalLeases: unitLeases.length,
           currentLeases: currentLeases.length,
           targetRentRollId: targetRentRoll.id,
-          leaseDetails: unitLeases.map(lease => ({
+          leaseDetails: unitLeases.map((lease: any) => ({
             id: lease.id,
             leaseStartDate: lease.leaseStartDate,
             leaseEndDate: lease.leaseEndDate,
