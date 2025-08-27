@@ -968,7 +968,7 @@ export default function LeaseDetailPage() {
           onClose={() => setResidentFinalizationDialog({ isOpen: false, verification: null, resident: null, leaseName: '' })}
           onConfirm={handleFinalizeResidentVerification}
           verification={residentFinalizationDialog.verification as any}
-          resident={residentFinalizationDialog.resident}
+          resident={residentFinalizationDialog.resident as any}
           leaseName={residentFinalizationDialog.leaseName}
           onDataRefresh={handleRefresh}
         />
