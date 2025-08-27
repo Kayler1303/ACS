@@ -34,7 +34,7 @@ export async function GET(
         // Only include leases that START after the most recent rent roll date
         // This excludes active leases (including month-to-month) and past leases
         leaseStartDate: mostRecentRentRoll ? {
-          gt: mostRecentRentRoll.date
+          gt: mostRecentRentRoll.uploadDate
         } : undefined,
       },
       include: {
