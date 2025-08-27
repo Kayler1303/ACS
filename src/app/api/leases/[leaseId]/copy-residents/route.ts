@@ -45,7 +45,7 @@ export async function POST(
       where: {
         id: { in: residentIds },
         // Security check: ensure the residents being copied belong to a lease in the same unit
-        lease: {
+        Lease: {
           unitId: targetLease.unitId,
         },
       },
