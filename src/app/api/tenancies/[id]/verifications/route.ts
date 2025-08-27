@@ -95,6 +95,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           leaseYear,
           associatedLeaseStart: (tenancy as any).leaseStartDate || null,
           associatedLeaseEnd: (tenancy as any).leaseEndDate || null,
+          updatedAt: new Date(),
         },
       });
 
