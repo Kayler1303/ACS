@@ -19,17 +19,17 @@ export async function PATCH(
     const lease = await prisma.lease.findUnique({
       where: { id: leaseId },
       include: {
-        unit: {
+        Unit: {
           include: {
-            property: true
+            Property: true
           }
         },
-        residents: true,
-        incomeVerifications: true
+        Resident: true,
+        IncomeVerification: true
       }
     });
 
-    if (!lease || lease.unit?.property?.ownerId !== session.user.id) {
+    if (!lease || lease.Unit?.Property?.ownerId !== session.user.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
