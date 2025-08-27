@@ -415,7 +415,7 @@ export async function POST(
 
             let incomeFinalized = false;
             let calculatedAnnualizedIncome = null;
-            let hasDiscrepancy = false;
+            const hasDiscrepancy = false;
             
             if (existingResident) {
               console.log(`[COMPLIANCE UPDATE] Found existing finalized resident: ${resident.name} in unit ${unitNumber}`);

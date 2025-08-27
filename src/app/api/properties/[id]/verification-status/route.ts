@@ -11,7 +11,7 @@ export async function GET(
   console.error(`🚨 [VERIFICATION STATUS API] ===== THIS SHOULD APPEAR IN CONSOLE =====`);
   
   // Write logs to a file for easier debugging
-  const fs = require('fs');
+  import * as fs from 'fs';
   const logFile = '/tmp/verification-debug.log';
   const timestamp = new Date().toISOString();
   fs.writeFileSync(logFile, `\n=== VERIFICATION STATUS DEBUG - ${timestamp} ===\n`, { flag: 'a' });
@@ -161,7 +161,7 @@ export async function GET(
         console.error(`🏠 UNIT 0101 DEBUG - Processing verification status for Unit 0101`);
         
         // Write debug info to file for Unit 0101
-        const fs = require('fs');
+        import * as fs from 'fs';
         const debugInfo = {
           timestamp: new Date().toISOString(),
           unitNumber: unit.unitNumber,
@@ -266,7 +266,7 @@ export async function GET(
           console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: Checking lease ${lease.id} - Start: ${sameStartDate}, End: ${sameEndDate}, Rent: ${sameRent}, Residents: ${sameResidents}`);
           
           if (unit.unitNumber === '0101') {
-            const fs = require('fs');
+            import * as fs from 'fs';
             const matchingDebug = {
               timestamp: new Date().toISOString(),
               leaseId: lease.id,
