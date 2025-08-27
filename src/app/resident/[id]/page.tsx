@@ -32,16 +32,16 @@ export default async function ResidentPage({ params }: ResidentPageProps) {
   const resident = await prisma.resident.findUnique({
     where: { id: residentId },
     include: {
-      tenancy: {
+      Tenancy: {
         include: {
-          unit: {
+          Unit: {
             include: {
-              property: true,
+              Property: true,
             },
           },
         },
       },
-      incomeDocuments: {
+      IncomeDocument: {
         orderBy: {
           uploadDate: 'desc',
         },
@@ -50,7 +50,7 @@ export default async function ResidentPage({ params }: ResidentPageProps) {
   });
 
   // Security check: Ensure the logged-in user owns the property this resident belongs to
-  if (!resident || resident.tenancy.unit.property.ownerId !== session.user.id) {
+  if (!resident || resident.Tenancy.Unit.Property.ownerId !== session.user.id) {
     return (
       <div className="container mx-auto px-4 py-8 text-center">
         <h1 className="text-4xl font-bold mb-4">Resident Not Found</h1>
@@ -69,7 +69,7 @@ export default async function ResidentPage({ params }: ResidentPageProps) {
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-4xl font-bold mb-2">{resident.name}</h1>
       <p className="text-lg text-gray-600 mb-8">
-        Unit {resident.tenancy.unit.unitNumber} at {resident.tenancy.unit.property.name}
+        Unit {resident.Tenancy.Unit.unitNumber} at {resident.Tenancy.Unit.Property.name}
       </p>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -82,9 +82,9 @@ export default async function ResidentPage({ params }: ResidentPageProps) {
 
           <h2 className="text-2xl font-semibold mb-4">Uploaded Documents</h2>
            <div className="bg-white p-6 rounded-lg shadow-md">
-            {resident.incomeDocuments.length > 0 ? (
+            {resident.IncomeDocument.length > 0 ? (
               <ul className="space-y-3">
-                {resident.incomeDocuments.map((doc: IncomeDocumentForPage) => (
+                {resident.IncomeDocument.map((doc: IncomeDocumentForPage) => (
                   <li key={doc.id} className="flex justify-between items-center p-2 border rounded-md">
                     <div>
                       <p className="font-semibold">{doc.documentType}</p>
