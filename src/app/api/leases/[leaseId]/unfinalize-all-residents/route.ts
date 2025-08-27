@@ -26,7 +26,7 @@ export async function PATCH(
             Property: true
           }
         },
-        incomeVerifications: {
+        IncomeVerification: {
           orderBy: { createdAt: 'desc' }
         }
       }
