@@ -123,15 +123,35 @@ export async function POST(
 
       console.log(`[DATA IMPORT] Created rent roll ${newRentRoll.id}`);
 
+      // First, get all units for this property to map unit numbers to unit IDs
+      const propertyUnits = await tx.unit.findMany({
+        where: { propertyId: propertyId },
+        select: { id: true, unitNumber: true }
+      });
+
+      const unitNumberToIdMap = new Map<string, string>();
+      propertyUnits.forEach(unit => {
+        unitNumberToIdMap.set(unit.unitNumber, unit.id);
+      });
+
+      console.log(`[DATA IMPORT] Found ${propertyUnits.length} units for property`);
+
       // Process the unit groups and create leases/tenancies/residents
       const leasesData: any[] = [];
       const tenanciesData: any[] = [];
       const residentsData: any[] = [];
 
-      for (const [unitId, leases] of Object.entries(unitGroups as UnitGroup)) {
+      for (const [unitKey, leases] of Object.entries(unitGroups as UnitGroup)) {
         for (const leaseData of leases) {
           const leaseId = randomUUID();
           const tenancyId = randomUUID();
+
+          // Look up the actual unit ID from the unit number
+          const actualUnitId = unitNumberToIdMap.get(leaseData.unitNumber);
+          if (!actualUnitId) {
+            console.error(`[DATA IMPORT] Unit not found for unit number: ${leaseData.unitNumber}`);
+            throw new Error(`Unit not found for unit number: ${leaseData.unitNumber}`);
+          }
 
           // Parse dates
           let leaseStartDate: Date | null = null;
@@ -151,7 +171,7 @@ export async function POST(
             leaseStartDate: leaseStartDate,
             leaseEndDate: leaseEndDate,
             leaseRent: leaseData.leaseRent ? new Prisma.Decimal(leaseData.leaseRent) : null,
-            unitId: unitId,
+            unitId: actualUnitId, // Use the actual unit ID, not the unit number
             createdAt: new Date(),
             updatedAt: new Date()
           });
