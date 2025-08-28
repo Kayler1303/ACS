@@ -166,6 +166,118 @@ export async function POST(
 
       console.log(`[COMPLIANCE UPDATE] Created rent roll ${newRentRoll.id}`);
 
+      // STEP 1: Preserve existing future leases in this snapshot
+      console.log(`[COMPLIANCE UPDATE] 🔄 Preserving existing future leases in new snapshot`);
+      
+      const preservedLeaseMap = new Map<string, string>(); // originalLeaseId -> newLeaseId
+      const preservedResidentMap = new Map<string, string>(); // originalResidentId -> newResidentId
+      
+      for (const futureLease of existingFutureLeases) {
+        console.log(`[COMPLIANCE UPDATE] 📋 Preserving future lease: "${futureLease.name}" in unit ${futureLease.Unit.unitNumber}`);
+        
+        // Create a copy of the lease for this snapshot
+        const newLeaseId = randomUUID();
+        const preservedLease = await tx.lease.create({
+          data: {
+            id: newLeaseId,
+            name: futureLease.name,
+            leaseStartDate: futureLease.leaseStartDate,
+            leaseEndDate: futureLease.leaseEndDate,
+            leaseRent: futureLease.leaseRent,
+            unitId: futureLease.unitId,
+            createdAt: futureLease.createdAt, // Preserve original creation date
+            updatedAt: new Date()
+          }
+        });
+        
+        preservedLeaseMap.set(futureLease.id, newLeaseId);
+        console.log(`[COMPLIANCE UPDATE] ✅ Created preserved lease copy: ${newLeaseId}`);
+        
+        // Copy income verifications for this lease first (so we have the IDs for documents)
+        const verificationMap = new Map<string, string>(); // originalVerificationId -> newVerificationId
+        for (const verification of futureLease.IncomeVerification) {
+          const newVerificationId = randomUUID();
+          await tx.incomeVerification.create({
+            data: {
+              id: newVerificationId,
+              status: verification.status,
+              createdAt: verification.createdAt, // Preserve original creation date
+              updatedAt: new Date(),
+              finalizedAt: verification.finalizedAt,
+              calculatedVerifiedIncome: verification.calculatedVerifiedIncome,
+              associatedLeaseEnd: verification.associatedLeaseEnd,
+              associatedLeaseStart: verification.associatedLeaseStart,
+              dueDate: verification.dueDate,
+              leaseYear: verification.leaseYear,
+              reason: verification.reason,
+              reminderSentAt: verification.reminderSentAt,
+              verificationPeriodEnd: verification.verificationPeriodEnd,
+              verificationPeriodStart: verification.verificationPeriodStart,
+              leaseId: newLeaseId
+            }
+          });
+          verificationMap.set(verification.id, newVerificationId);
+          console.log(`[COMPLIANCE UPDATE] ✅ Created preserved verification copy: ${newVerificationId}`);
+        }
+        
+        // Copy residents for this lease
+        for (const resident of futureLease.Resident) {
+          const newResidentId = randomUUID();
+          const preservedResident = await tx.resident.create({
+            data: {
+              id: newResidentId,
+              name: resident.name,
+              verifiedIncome: resident.verifiedIncome,
+              annualizedIncome: resident.annualizedIncome,
+              calculatedAnnualizedIncome: resident.calculatedAnnualizedIncome,
+              incomeFinalized: resident.incomeFinalized,
+              leaseId: newLeaseId,
+              createdAt: resident.createdAt, // Preserve original creation date
+              updatedAt: new Date()
+            }
+          });
+          
+          preservedResidentMap.set(resident.id, newResidentId);
+          console.log(`[COMPLIANCE UPDATE] ✅ Created preserved resident copy: ${newResidentId} for ${resident.name}`);
+          
+          // Create new document records that reference the original files but point to the new resident
+          const existingDocuments = await tx.incomeDocument.findMany({
+            where: { residentId: resident.id }
+          });
+          
+          for (const doc of existingDocuments) {
+            const newVerificationId = verificationMap.get(doc.verificationId || '');
+            await tx.incomeDocument.create({
+              data: {
+                id: randomUUID(),
+                documentType: doc.documentType,
+                documentDate: doc.documentDate,
+                uploadDate: doc.uploadDate,
+                status: doc.status,
+                filePath: doc.filePath, // Reference same file, don't copy
+                box1_wages: doc.box1_wages,
+                box3_ss_wages: doc.box3_ss_wages,
+                box5_med_wages: doc.box5_med_wages,
+                employeeName: doc.employeeName,
+                employerName: doc.employerName,
+                taxYear: doc.taxYear,
+                grossPayAmount: doc.grossPayAmount,
+                payFrequency: doc.payFrequency,
+                payPeriodEndDate: doc.payPeriodEndDate,
+                payPeriodStartDate: doc.payPeriodStartDate,
+                calculatedAnnualizedIncome: doc.calculatedAnnualizedIncome,
+                verificationId: newVerificationId, // Link to new verification
+                residentId: newResidentId // Point to new resident
+              }
+            });
+          }
+          console.log(`[COMPLIANCE UPDATE] 🔗 Created ${existingDocuments.length} document references for preserved resident`);
+        }
+      }
+      
+      console.log(`[COMPLIANCE UPDATE] 🎯 Preserved ${existingFutureLeases.length} future leases in snapshot ${snapshot.id}`);
+
+      // STEP 2: Process new rent roll data
       const leasesData: any[] = [];
       const tenanciesData: any[] = [];
       const residentsData: any[] = [];
