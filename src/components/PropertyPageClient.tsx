@@ -173,7 +173,6 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
 
 
   const [processedTenancies, setProcessedTenancies] = useState<ProcessedUnit[]>([]);
-  const [snapshotData, setSnapshotData] = useState<any>(null);
   const [hudIncomeLimits, setHudIncomeLimits] = useState<HudIncomeLimits | null>(null);
   const [hudIncomeLimitsLoading, setHudIncomeLimitsLoading] = useState(true);
   const [hudIncomeLimitsError, setHudIncomeLimitsError] = useState<string | null>(null);
@@ -570,34 +569,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     fetchVerificationData();
   }, [property.id, selectedSnapshotId]);
 
-  // Fetch snapshot-specific data
-  useEffect(() => {
-    const fetchSnapshotData = async () => {
-      try {
-        const url = selectedRentRollId 
-          ? `/api/properties/${property.id}/snapshot-data?rentRollId=${selectedRentRollId}`
-          : `/api/properties/${property.id}/snapshot-data`;
-        const res = await fetch(url);
-        if (res.ok) {
-          const data = await res.json();
-          setSnapshotData(data);
-          console.log(`[SNAPSHOT DATA] Loaded data for rent roll:`, data.rentRoll.uploadDate);
-          console.log(`[SNAPSHOT DATA] Units:`, data.units.map((u: any) => ({
-            unitNumber: u.unitNumber,
-            status: u.status,
-            hasCurrent: !!u.currentLease,
-            futureCount: u.futureLeases.length
-          })));
-        } else {
-          console.error('Failed to fetch snapshot data:', res.status, res.statusText);
-        }
-      } catch (error) {
-        console.error('Error fetching snapshot data:', error);
-      }
-    };
-
-    fetchSnapshotData();
-  }, [property.id, selectedSnapshotId]);
+  // No longer need separate snapshot data fetch - using existing property data with snapshot filtering
 
   // Fetch provisional leases data (for projected compliance)
   useEffect(() => {
