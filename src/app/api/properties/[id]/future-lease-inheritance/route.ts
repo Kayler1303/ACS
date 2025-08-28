@@ -24,14 +24,9 @@ export async function POST(
       const inheritedLeases: any[] = [];
 
       for (const [unitNumber, shouldInherit] of Object.entries(inheritanceChoices)) {
-        if (!shouldInherit) {
-          console.log(`[FUTURE LEASE INHERITANCE] Skipping inheritance for unit ${unitNumber}`);
-          continue;
-        }
+        console.log(`[FUTURE LEASE INHERITANCE] Processing unit ${unitNumber}, shouldInherit: ${shouldInherit}`);
 
-        console.log(`[FUTURE LEASE INHERITANCE] Processing inheritance for unit ${unitNumber}`);
-
-        // Find the existing future lease for this unit
+        // Find the existing future lease for this unit (regardless of inheritance choice)
         const existingFutureLease = await tx.lease.findFirst({
           where: {
             Unit: {
@@ -62,6 +57,22 @@ export async function POST(
 
         if (!existingFutureLease) {
           console.log(`[FUTURE LEASE INHERITANCE] No existing future lease found for unit ${unitNumber}`);
+          continue;
+        }
+
+        // Mark the future lease as processed by updating its name (so it won't appear in future snapshots)
+        const processedName = `[PROCESSED] ${existingFutureLease.name}`;
+        await tx.lease.update({
+          where: { id: existingFutureLease.id },
+          data: { 
+            name: processedName,
+            updatedAt: new Date()
+          }
+        });
+        console.log(`[FUTURE LEASE INHERITANCE] Marked future lease as processed: ${processedName}`);
+
+        if (!shouldInherit) {
+          console.log(`[FUTURE LEASE INHERITANCE] User chose not to inherit - future lease marked as processed but no inheritance`);
           continue;
         }
 
@@ -194,17 +205,8 @@ export async function POST(
           });
         }
 
-        // After successful inheritance, delete the original future lease
-        // First delete related records (residents will cascade delete their documents and verifications)
-        console.log(`[FUTURE LEASE INHERITANCE] Cleaning up original future lease ${existingFutureLease.id}`);
-        
-        await tx.lease.delete({
-          where: {
-            id: existingFutureLease.id
-          }
-        });
-        
-        console.log(`[FUTURE LEASE INHERITANCE] Successfully deleted original future lease ${existingFutureLease.id}`);
+        // Future lease is already marked as processed above, no need to delete
+        console.log(`[FUTURE LEASE INHERITANCE] Future lease ${existingFutureLease.id} successfully processed and inherited`);
 
         inheritedLeases.push({
           unitNumber,

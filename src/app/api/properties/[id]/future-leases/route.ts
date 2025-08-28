@@ -156,6 +156,12 @@ export async function GET(
       });
       
       const futureLeases = unit.Lease.filter((lease: any) => {
+        // Filter out processed leases (marked with [PROCESSED] prefix)
+        if (lease.name.startsWith('[PROCESSED]')) {
+          console.log(`[FUTURE LEASE DEBUG] Unit ${unit.unitNumber} - Excluding processed lease: ${lease.name}`);
+          return false;
+        }
+        
         // If start date is null, this could be a future lease (like "August 2025 Lease Renewal")
         if (!lease.leaseStartDate) {
           console.log(`[FUTURE LEASE DEBUG] Unit ${unit.unitNumber} - Including lease with null start date: ${lease.name}`);

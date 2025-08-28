@@ -103,6 +103,11 @@ export async function POST(
             propertyId: propertyId
           },
           Tenancy: null, // Future leases don't have Tenancy records
+          NOT: {
+            name: {
+              startsWith: '[PROCESSED]' // Exclude processed leases
+            }
+          },
           IncomeVerification: {
             some: {
               status: 'FINALIZED' // Only consider leases with finalized verifications
