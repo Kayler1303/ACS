@@ -1006,7 +1006,12 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
 
     // Apply 140% rule for compliance buckets
     const processedWithCompliance = processed.map((unit: ProcessedUnit) => {
-      const tenancy = selectedRentRoll.Tenancy.find((t: FullTenancy) => t.Lease.unitId === unit.id);
+      // Find tenancy for this unit in any of the selected snapshot's rent rolls
+      let tenancy = null;
+      for (const rentRoll of selectedRentRolls) {
+        tenancy = rentRoll.Tenancy.find((t: FullTenancy) => t.Lease?.unitId === unit.id);
+        if (tenancy) break;
+      }
       const complianceBucket = getComplianceBucket(
         unit,
         tenancy,
