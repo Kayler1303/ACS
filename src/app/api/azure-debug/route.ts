@@ -15,7 +15,8 @@ export async function GET() {
     // Test basic Azure connectivity with a simpler endpoint
     try {
         // First try to list available models (simpler test)
-        const response = await fetch(`${endpoint}/documentModels?api-version=2024-11-30`, {
+        // Document Intelligence API requires /formrecognizer/ path
+        const response = await fetch(`${endpoint}/formrecognizer/documentModels?api-version=2024-11-30`, {
             method: 'GET',
             headers: { 
                 'Ocp-Apim-Subscription-Key': key
@@ -28,7 +29,7 @@ export async function GET() {
         let fallbackTest = null;
         if (response.status === 404) {
             try {
-                const fallbackResponse = await fetch(`${endpoint}/documentModels?api-version=2023-07-31`, {
+                const fallbackResponse = await fetch(`${endpoint}/formrecognizer/documentModels?api-version=2023-07-31`, {
                     method: 'GET',
                     headers: { 
                         'Ocp-Apim-Subscription-Key': key
