@@ -175,7 +175,7 @@ export async function POST(
               if (typeof residentData.annualizedIncome === 'string') {
                 income = parseFloat(residentData.annualizedIncome.replace(/[$,]/g, ''));
               } else {
-                income = parseFloat(residentData.annualizedIncome.toString());
+                income = parseFloat(String(residentData.annualizedIncome));
               }
               if (!isNaN(income)) {
                 annualizedIncome = new Prisma.Decimal(income);
