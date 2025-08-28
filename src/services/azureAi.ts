@@ -18,7 +18,14 @@ export async function analyzeIncomeDocument(fileBuffer: Buffer, modelId: string)
   
   // Create client with v4.0 API version (required for paystub model)
   // The 2024-11-30 API uses /documentintelligence/ path (confirmed by debug test)
-  const client = DocumentIntelligence(endpoint, credential, {
+  // Modify endpoint to include the correct base path for v4.0 API
+  const documentIntelligenceEndpoint = endpoint.endsWith('/') 
+    ? endpoint + 'documentintelligence' 
+    : endpoint + '/documentintelligence';
+    
+  console.log(`Using Document Intelligence endpoint: ${documentIntelligenceEndpoint}`);
+  
+  const client = DocumentIntelligence(documentIntelligenceEndpoint, credential, {
     apiVersion: "2024-11-30"
   });
 
@@ -31,7 +38,7 @@ export async function analyzeIncomeDocument(fileBuffer: Buffer, modelId: string)
   
   try {
     const initialResponse = await client
-      .path("/documentintelligence/documentModels/{modelId}:analyze", modelId)
+      .path("/documentModels/{modelId}:analyze", modelId)
       .post({
         contentType: "application/octet-stream",
         body: fileBuffer,
@@ -73,7 +80,7 @@ export async function analyzeIncomeDocument(fileBuffer: Buffer, modelId: string)
       
       try {
         const statusResponse = await client
-          .path("/documentintelligence/documentModels/{modelId}/analyzeResults/{resultId}", modelId, operationId)
+          .path("/documentModels/{modelId}/analyzeResults/{resultId}", modelId, operationId)
           .get({
             queryParameters: {
               "api-version": "2024-11-30"
