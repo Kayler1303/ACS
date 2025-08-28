@@ -24,7 +24,7 @@ export async function GET() {
         ];
         
         let workingPath = null;
-        let testResults = {};
+        let testResults: Record<string, any> = {};
         
         for (const path of paths) {
             try {
