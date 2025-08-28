@@ -1,5 +1,4 @@
-import DocumentIntelligence from '@azure-rest/ai-document-intelligence';
-import { AzureKeyCredential } from '@azure/core-auth';
+// Using direct fetch calls instead of SDK for better endpoint control
 
 /**
  * Analyzes an income document (like a W-2 or pay stub) using Azure's pre-built models.
@@ -14,20 +13,14 @@ export async function analyzeIncomeDocument(fileBuffer: Buffer, modelId: string)
     throw new Error('Azure Document Intelligence credentials are not set.');
   }
   
-  const credential = new AzureKeyCredential(key);
+  console.log(`Using Document Intelligence endpoint: ${endpoint}`);
+  console.log(`Model ID: ${modelId}`);
   
-  // Create client with v4.0 API version (required for paystub model)
-  // The 2024-11-30 API uses /documentintelligence/ path (confirmed by debug test)
-  // Modify endpoint to include the correct base path for v4.0 API
-  const documentIntelligenceEndpoint = endpoint.endsWith('/') 
-    ? endpoint + 'documentintelligence' 
-    : endpoint + '/documentintelligence';
-    
-  console.log(`Using Document Intelligence endpoint: ${documentIntelligenceEndpoint}`);
+  // Use direct fetch instead of SDK since SDK isn't working with our endpoint configuration
+  // Debug test confirmed /documentintelligence/documentModels works with 2024-11-30 API
+  const analyzeUrl = `${endpoint}/documentintelligence/documentModels/${modelId}:analyze?api-version=2024-11-30`;
   
-  const client = DocumentIntelligence(documentIntelligenceEndpoint, credential, {
-    apiVersion: "2024-11-30"
-  });
+  console.log(`Azure analyze URL: ${analyzeUrl}`);
 
   console.log(`Starting document analysis with model: ${modelId}`);
 
@@ -37,24 +30,25 @@ export async function analyzeIncomeDocument(fileBuffer: Buffer, modelId: string)
   // These models automatically extract the relevant fields for each document type.
   
   try {
-    const initialResponse = await client
-      .path("/documentModels/{modelId}:analyze", modelId)
-      .post({
-        contentType: "application/octet-stream",
-        body: fileBuffer,
-        queryParameters: {
-          "api-version": "2024-11-30"
-        }
-      });
+    // Start analysis with direct fetch call
+    const initialResponse = await fetch(analyzeUrl, {
+      method: 'POST',
+      headers: {
+        'Ocp-Apim-Subscription-Key': key,
+        'Content-Type': 'application/octet-stream'
+      },
+      body: fileBuffer
+    });
 
     console.log(`Initial response status: ${initialResponse.status}`);
 
-    if (initialResponse.status !== "202") {
-      throw new Error(`Analysis failed with status ${initialResponse.status}: ${JSON.stringify(initialResponse.body)}`);
+    if (initialResponse.status !== 202) {
+      const errorText = await initialResponse.text();
+      throw new Error(`Analysis failed with status ${initialResponse.status}: ${errorText}`);
     }
 
     // Get operation location from headers
-    const operationLocation = initialResponse.headers["operation-location"];
+    const operationLocation = initialResponse.headers.get("operation-location");
     if (!operationLocation) {
       throw new Error("No operation location received from Azure");
     }
@@ -79,18 +73,18 @@ export async function analyzeIncomeDocument(fileBuffer: Buffer, modelId: string)
       await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
       
       try {
-        const statusResponse = await client
-          .path("/documentModels/{modelId}/analyzeResults/{resultId}", modelId, operationId)
-          .get({
-            queryParameters: {
-              "api-version": "2024-11-30"
-            }
-          });
+        const statusUrl = `${endpoint}/documentintelligence/documentModels/${modelId}/analyzeResults/${operationId}?api-version=2024-11-30`;
+        const statusResponse = await fetch(statusUrl, {
+          method: 'GET',
+          headers: {
+            'Ocp-Apim-Subscription-Key': key
+          }
+        });
 
         console.log(`Status check ${attempts + 1}: ${statusResponse.status}`);
 
-        if (statusResponse.status === "200") {
-          const statusBody = statusResponse.body as any;
+        if (statusResponse.status === 200) {
+          const statusBody = await statusResponse.json();
           
           console.log(`Analysis status: ${statusBody.status}`);
           
@@ -102,7 +96,8 @@ export async function analyzeIncomeDocument(fileBuffer: Buffer, modelId: string)
           }
           // Continue polling if status is "running" or "notStarted"
         } else {
-          console.error(`Status response error: ${statusResponse.status}`, statusResponse.body);
+          const errorText = await statusResponse.text();
+          console.error(`Status response error: ${statusResponse.status}`, errorText);
           throw new Error(`Failed to get analysis status: ${statusResponse.status}`);
         }
       } catch (pollError) {
