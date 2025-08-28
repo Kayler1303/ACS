@@ -134,21 +134,21 @@ const EditableCell: React.FC<EditableCellProps> = ({ value, onSave, className })
 export default function PropertyPageClient({ initialProperty }: PropertyPageClientProps) {
   const [property, setProperty] = useState(initialProperty);
   
-  // Initialize selectedRentRollId with persistence logic
-  const initializeSelectedRentRollId = () => {
+  // Initialize selectedSnapshotId with persistence logic
+  const initializeSelectedSnapshotId = () => {
     // Check if there's a stored selection in sessionStorage
-    const storedSelection = sessionStorage.getItem(`selectedRentRollId_${initialProperty.id}`);
+    const storedSelection = sessionStorage.getItem(`selectedSnapshotId_${initialProperty.id}`);
     
     // If there's a stored selection and it exists in the current rent rolls, use it
-    if (storedSelection && initialProperty.RentRoll.some(rr => rr.id === storedSelection)) {
+    if (storedSelection && initialProperty.RentRoll.some(rr => rr.snapshotId === storedSelection)) {
       return storedSelection;
     }
     
-    // Otherwise, default to the most recent rent roll (first in the array, as they're sorted by date desc)
-    return initialProperty.RentRoll[0]?.id || null;
+    // Otherwise, default to the most recent rent roll's snapshot (first in the array, as they're sorted by date desc)
+    return initialProperty.RentRoll[0]?.snapshotId || null;
   };
   
-  const [selectedRentRollId, setSelectedRentRollId] = useState<string | null>(initializeSelectedRentRollId());
+  const [selectedSnapshotId, setSelectedSnapshotId] = useState<string | null>(initializeSelectedSnapshotId());
   const [availableSnapshots, setAvailableSnapshots] = useState<{id: string, date: string, createdAt: string}[]>([]);
   
   // Track rent roll count to detect new uploads
@@ -158,12 +158,12 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
   useEffect(() => {
     const currentRentRollCount = property.RentRoll.length;
     
-    // If new rent rolls were added, auto-select the newest one
+    // If new rent rolls were added, auto-select the newest snapshot
     if (currentRentRollCount > previousRentRollCount) {
-      const newestRentRollId = property.RentRoll[0]?.id;
-      if (newestRentRollId) {
-        setSelectedRentRollId(newestRentRollId);
-        sessionStorage.setItem(`selectedRentRollId_${property.id}`, newestRentRollId);
+      const newestSnapshotId = property.RentRoll[0]?.snapshotId;
+      if (newestSnapshotId) {
+        setSelectedSnapshotId(newestSnapshotId);
+        sessionStorage.setItem(`selectedSnapshotId_${property.id}`, newestSnapshotId);
       }
     }
     
@@ -173,6 +173,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
 
 
   const [processedTenancies, setProcessedTenancies] = useState<ProcessedUnit[]>([]);
+  const [snapshotData, setSnapshotData] = useState<any>(null);
   const [hudIncomeLimits, setHudIncomeLimits] = useState<HudIncomeLimits | null>(null);
   const [hudIncomeLimitsLoading, setHudIncomeLimitsLoading] = useState(true);
   const [hudIncomeLimitsError, setHudIncomeLimitsError] = useState<string | null>(null);
@@ -527,7 +528,13 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       setVerificationLoading(true);
       try {
         console.log(`🔍 [PropertyPageClient] Making verification-status API call to: /api/properties/${property.id}/verification-status`);
-        const res = await fetch(`/api/properties/${property.id}/verification-status?bust=${Date.now()}`);
+        // Get the first rent roll from the selected snapshot to use as the rentRollId parameter
+        const selectedRentRoll = property.RentRoll.find((rr: FullRentRoll) => rr.snapshotId === selectedSnapshotId);
+        const rentRollId = selectedRentRoll?.id;
+        const url = rentRollId 
+          ? `/api/properties/${property.id}/verification-status?rentRollId=${rentRollId}&bust=${Date.now()}`
+          : `/api/properties/${property.id}/verification-status?bust=${Date.now()}`;
+        const res = await fetch(url);
         console.log(`🔍 [PropertyPageClient] Verification-status API response:`, res.status, res.statusText);
         if (res.ok) {
           const data = await res.json();
@@ -561,14 +568,46 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     };
 
     fetchVerificationData();
-  }, [property.id, selectedRentRollId]);
+  }, [property.id, selectedSnapshotId]);
+
+  // Fetch snapshot-specific data
+  useEffect(() => {
+    const fetchSnapshotData = async () => {
+      try {
+        const url = selectedRentRollId 
+          ? `/api/properties/${property.id}/snapshot-data?rentRollId=${selectedRentRollId}`
+          : `/api/properties/${property.id}/snapshot-data`;
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          setSnapshotData(data);
+          console.log(`[SNAPSHOT DATA] Loaded data for rent roll:`, data.rentRoll.uploadDate);
+          console.log(`[SNAPSHOT DATA] Units:`, data.units.map((u: any) => ({
+            unitNumber: u.unitNumber,
+            status: u.status,
+            hasCurrent: !!u.currentLease,
+            futureCount: u.futureLeases.length
+          })));
+        } else {
+          console.error('Failed to fetch snapshot data:', res.status, res.statusText);
+        }
+      } catch (error) {
+        console.error('Error fetching snapshot data:', error);
+      }
+    };
+
+    fetchSnapshotData();
+  }, [property.id, selectedSnapshotId]);
 
   // Fetch provisional leases data (for projected compliance)
   useEffect(() => {
     const fetchProvisionalLeases = async () => {
       try {
-        const url = selectedRentRollId 
-          ? `/api/properties/${property.id}/provisional-leases?rentRollId=${selectedRentRollId}`
+        // Get the first rent roll from the selected snapshot to use as the rentRollId parameter
+        const selectedRentRoll = property.RentRoll.find((rr: FullRentRoll) => rr.snapshotId === selectedSnapshotId);
+        const rentRollId = selectedRentRoll?.id;
+        const url = rentRollId 
+          ? `/api/properties/${property.id}/provisional-leases?rentRollId=${rentRollId}`
           : `/api/properties/${property.id}/provisional-leases`;
         const res = await fetch(url);
         if (res.ok) {
@@ -589,7 +628,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     };
 
     fetchProvisionalLeases();
-  }, [property.id, selectedRentRollId]);
+  }, [property.id, selectedSnapshotId]);
 
   // Fetch future leases data (for Future Leases column)
   useEffect(() => {
@@ -598,15 +637,18 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
         futureLeaseFetchInProgress.current = true;
         const baseUrl = `/api/properties/${property.id}/future-leases`;
         const params = new URLSearchParams();
-        if (selectedRentRollId) {
-          params.append('rentRollId', selectedRentRollId);
+        // Get the first rent roll from the selected snapshot to use as the rentRollId parameter
+        const selectedRentRoll = property.RentRoll.find((rr: FullRentRoll) => rr.snapshotId === selectedSnapshotId);
+        const rentRollId = selectedRentRoll?.id;
+        if (rentRollId) {
+          params.append('rentRollId', rentRollId);
         }
         params.append('bust', Date.now().toString());
         const url = `${baseUrl}?${params.toString()}`;
         console.log(`[PROPERTY PAGE DEBUG] ====== FRONTEND FETCH STARTING ======`);
         console.log(`[PROPERTY PAGE DEBUG] Fetching URL: ${url}`);
         console.log(`[PROPERTY PAGE DEBUG] Property ID: ${property.id}`);
-        console.log(`[PROPERTY PAGE DEBUG] Selected Rent Roll ID: ${selectedRentRollId || 'latest'}`);
+        console.log(`[PROPERTY PAGE DEBUG] Selected Snapshot ID: ${selectedSnapshotId || 'latest'}`);
         console.log(`[PROPERTY PAGE DEBUG] ===================================`);
         const res = await fetch(url, {
           credentials: 'include',
@@ -651,7 +693,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     }
     
     fetchFutureLeases();
-  }, [property.id, selectedRentRollId]);
+  }, [property.id, selectedSnapshotId]);
 
   // Load future lease selections from localStorage on mount
   useEffect(() => {
@@ -901,20 +943,29 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
 
   // Process tenancies whenever dependencies change
   useEffect(() => {
-    if (!selectedRentRollId) {
+    if (!selectedSnapshotId) {
       return;
     }
     
     // Allow processing even without hudIncomeLimits - we'll use fallback values
 
-    const selectedRentRoll = property.RentRoll.find((rr: FullRentRoll) => rr.id === selectedRentRollId);
-    if (!selectedRentRoll) {
+    // Get all rent rolls for the selected snapshot
+    const selectedRentRolls = property.RentRoll.filter((rr: FullRentRoll) => rr.snapshotId === selectedSnapshotId);
+    if (selectedRentRolls.length === 0) {
       return;
     }
 
+    console.log(`[SNAPSHOT PROCESSING] Processing snapshot ${selectedSnapshotId} with ${selectedRentRolls.length} rent rolls`);
+
     // Process each unit
     const processed = property.Unit.map((unit: any) => {
-      const tenancy = selectedRentRoll.Tenancy.find((t: FullTenancy) => t.Lease?.unitId === unit.id);
+      // Find tenancy for this unit in any of the selected snapshot's rent rolls
+      let tenancy = null;
+      for (const rentRoll of selectedRentRolls) {
+        tenancy = rentRoll.Tenancy.find((t: FullTenancy) => t.Lease?.unitId === unit.id);
+        if (tenancy) break;
+      }
+      
       const residents = tenancy?.Lease?.Resident || [];
       const residentCount = residents.length;
       const totalIncome = residents.reduce((acc: number, resident: any) => acc + Number(resident.annualizedIncome || 0), 0);
@@ -998,7 +1049,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
 
     // console.log('Final processed tenancies:', processedWithCompliance.length);
     setProcessedTenancies(processedWithCompliance);
-  }, [selectedRentRollId, property.RentRoll, property.Unit, hudIncomeLimits, complianceOption, includeRentAnalysis, lihtcRentData, includeUtilityAllowances, utilityAllowances, verificationData, provisionalLeases, futureLeases]);
+  }, [selectedSnapshotId, property.RentRoll, property.Unit, hudIncomeLimits, complianceOption, includeRentAnalysis, lihtcRentData, includeUtilityAllowances, utilityAllowances, verificationData, provisionalLeases, futureLeases]);
 
   // Handle provisional lease checkbox changes
   const handleProvisionalLeaseToggle = (leaseId: string) => {
@@ -1583,18 +1634,22 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                   </label>
                   <select
                     id="rent-roll-select"
-                    value={selectedRentRollId || ''}
+                    value={selectedSnapshotId || ''}
                     onChange={(e) => {
                       const newValue = e.target.value;
-                      setSelectedRentRollId(newValue);
+                      setSelectedSnapshotId(newValue);
                       // Persist the selection in sessionStorage
-                      sessionStorage.setItem(`selectedRentRollId_${property.id}`, newValue);
+                      sessionStorage.setItem(`selectedSnapshotId_${property.id}`, newValue);
                     }}
                     className="w-full pl-3 pr-10 py-2.5 text-sm border-gray-300 focus:outline-none focus:ring-brand-blue focus:border-brand-blue rounded-md shadow-sm bg-white"
                                               >
-                    {property.RentRoll.map((rentRoll: FullRentRoll) => (
-                      <option key={rentRoll.id} value={rentRoll.id}>
-                        {new Date(rentRoll.uploadDate).toLocaleDateString('en-US', { timeZone: 'UTC' })}
+                    {/* Group rent rolls by snapshot and show unique snapshots */}
+                    {Array.from(new Map(property.RentRoll.map((rentRoll: FullRentRoll) => [
+                      rentRoll.snapshotId, 
+                      { snapshotId: rentRoll.snapshotId, uploadDate: rentRoll.uploadDate }
+                    ])).values()).map((snapshot: any) => (
+                      <option key={snapshot.snapshotId} value={snapshot.snapshotId}>
+                        {new Date(snapshot.uploadDate).toLocaleDateString('en-US', { timeZone: 'UTC' })}
                       </option>
                     ))}
                   </select>
