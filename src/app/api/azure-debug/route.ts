@@ -12,18 +12,38 @@ export async function GET() {
         });
     }
 
-    // Test basic Azure connectivity
+    // Test basic Azure connectivity with a simpler endpoint
     try {
-        const response = await fetch(`${endpoint}/documentModels/prebuilt-layout:analyze?api-version=2024-11-30`, {
-            method: 'POST',
+        // First try to list available models (simpler test)
+        const response = await fetch(`${endpoint}/documentModels?api-version=2024-11-30`, {
+            method: 'GET',
             headers: { 
-                'Ocp-Apim-Subscription-Key': key,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({})
+                'Ocp-Apim-Subscription-Key': key
+            }
         });
 
         const responseText = await response.text();
+        
+        // If the first test fails, try with an older API version
+        let fallbackTest = null;
+        if (response.status === 404) {
+            try {
+                const fallbackResponse = await fetch(`${endpoint}/documentModels?api-version=2023-07-31`, {
+                    method: 'GET',
+                    headers: { 
+                        'Ocp-Apim-Subscription-Key': key
+                    }
+                });
+                const fallbackText = await fallbackResponse.text();
+                fallbackTest = {
+                    status: fallbackResponse.status,
+                    statusText: fallbackResponse.statusText,
+                    body: fallbackText.substring(0, 200) + '...'
+                };
+            } catch (e) {
+                fallbackTest = { error: 'Fallback test failed' };
+            }
+        }
         
         return NextResponse.json({
             hasEndpoint: true,
@@ -37,7 +57,8 @@ export async function GET() {
                 statusText: response.statusText,
                 headers: Object.fromEntries(response.headers.entries()),
                 body: responseText.substring(0, 500) + (responseText.length > 500 ? '...' : '')
-            }
+            },
+            fallbackTest
         });
     } catch (error: unknown) {
         return NextResponse.json({
