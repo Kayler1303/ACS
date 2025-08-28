@@ -569,7 +569,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     fetchVerificationData();
   }, [property.id, selectedSnapshotId]);
 
-  // No longer need separate snapshot data fetch - using existing property data with snapshot filtering
+  // No longer need separate snapshot state fetch - will fix snapshot creation instead
 
   // Fetch provisional leases data (for projected compliance)
   useEffect(() => {
@@ -948,7 +948,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
           residentCount,
           hudIncomeLimits,
           complianceOption,
-          Number(tenancy?.Lease.leaseRent || 0),
+          Number(tenancy?.Lease?.leaseRent || 0),
           unit.bedroomCount,
           lihtcRentData,
           includeUtilityAllowances ? utilityAllowances : {},
@@ -979,9 +979,10 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       // Get future lease for this unit (for Future Leases column)
       const unitFutureLease = futureLeases.find(fl => fl.unitId === unit.id);
       
-      if (unit.unitNumber === '101' || unit.unitNumber === '102') { // Debug first few units
+      if (unit.unitNumber === '101' || unit.unitNumber === '102' || unit.unitNumber === '103' || unit.unitNumber === '505') { // Debug specific units
         console.log(`[PROCESSING DEBUG] Unit ${unit.unitNumber}:`, {
           unitId: unit.id,
+          tenancy: tenancy ? 'found' : 'none',
           futureLeases: futureLeases.length,
           unitFutureLease: unitFutureLease ? 'found' : 'not found',
           futureLeaseData: unitFutureLease
