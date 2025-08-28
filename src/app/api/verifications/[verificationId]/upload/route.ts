@@ -332,16 +332,28 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   let document: any = null;
   
   try {
+    console.log('🔍 [UPLOAD DEBUG] Starting document upload process');
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
+      console.log('❌ [UPLOAD DEBUG] Unauthorized - no session');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    console.log('✅ [UPLOAD DEBUG] Session validated for user:', session.user.id);
 
     const { verificationId } = await params;
+    console.log('🔍 [UPLOAD DEBUG] Verification ID:', verificationId);
+    
     const formData = await request.formData();
     const file = formData.get('file') as File;
     const documentType = formData.get('documentType') as DocumentType;
     const residentId = formData.get('residentId') as string;
+    
+    console.log('🔍 [UPLOAD DEBUG] Form data:', { 
+      fileName: file?.name, 
+      fileSize: file?.size, 
+      documentType, 
+      residentId 
+    });
     
     // CRITICAL: Log every single document upload to verify our code is running
     console.log(`🚀 [UPLOAD] ANY DOCUMENT UPLOAD - Type: "${documentType}" | File: ${file?.name} | Time: ${new Date().toISOString()}`);
@@ -352,6 +364,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     // Verify that the user owns this property through the verification
+    console.log('🔍 [UPLOAD DEBUG] Querying verification from database...');
     const verification = await prisma.incomeVerification.findUnique({
       where: { id: verificationId },
       include: {
@@ -365,6 +378,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           }
         }
       }
+    });
+    
+    console.log('🔍 [UPLOAD DEBUG] Verification query result:', {
+      found: !!verification,
+      leaseId: verification?.Lease?.id,
+      unitId: verification?.Lease?.Unit?.id,
+      propertyId: verification?.Lease?.Unit?.Property?.id,
+      ownerId: verification?.Lease?.Unit?.Property?.ownerId
     });
 
     if (!verification || verification.Lease?.Unit?.Property?.ownerId !== session.user.id) {
@@ -1205,7 +1226,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json(document, { status: 201 });
 
   } catch (error) {
-    console.error('Error uploading document:', error);
+    console.error('❌ [UPLOAD DEBUG] Error uploading document:', error);
+    console.error('❌ [UPLOAD DEBUG] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    console.error('❌ [UPLOAD DEBUG] Error message:', error instanceof Error ? error.message : String(error));
     
     // Critical: If we have a document ID, ensure it's not left in PROCESSING status
     if (document?.id) {
