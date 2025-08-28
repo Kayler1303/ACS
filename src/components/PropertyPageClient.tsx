@@ -506,7 +506,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
   // Fetch verification status data
   useEffect(() => {
     const fetchVerificationData = async () => {
-      if (!selectedRentRollId) return;
+      if (!selectedSnapshotId) return;
       
       // Don't fetch verification data if we're on a unit detail page or other nested pages
       // This prevents expensive property-wide API calls when viewing individual units

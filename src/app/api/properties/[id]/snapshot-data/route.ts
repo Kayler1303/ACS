@@ -92,7 +92,7 @@ export async function GET(
       // Find future leases (exist but no tenancy in this rent roll, start after rent roll date)
       const futureLeases = allLeases.filter(lease => 
         lease.unitId === unit.id && 
-        !lease.Tenancy.length && // No tenancy in this rent roll
+        !lease.Tenancy && // No tenancy in this rent roll
         lease.leaseStartDate && 
         new Date(lease.leaseStartDate) > targetRentRoll.uploadDate
       );
