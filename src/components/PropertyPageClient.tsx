@@ -1303,8 +1303,8 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     });
 
     // 🎯 SUMMARY BREAKDOWN FOR USER DEBUG
-    if (includeRentAnalysis && selectedRentRollId) {
-      const currentRentRoll = property.RentRoll.find((rr: FullRentRoll) => rr.id === selectedRentRollId);
+    if (includeRentAnalysis && selectedSnapshotId) {
+      const currentRentRoll = selectedRentRolls[0]; // Use first rent roll from selected snapshot
       
       if (currentRentRoll) {
         const activeLeasesArray = processedTenancies.filter(unit => unit.actualBucket !== 'Vacant');
