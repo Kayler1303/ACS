@@ -2,34 +2,24 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { unlink } from 'fs/promises';
-
-async function deleteFileLocally(filePath: string): Promise<void> {
-  try {
-    await unlink(filePath);
-  } catch (error: unknown) {
-    // If the file doesn't exist, we can ignore the error.
-    if ((error as { code?: string })?.code !== 'ENOENT') {
-      throw error;
-    }
-  }
-}
 
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ documentId: string }> }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
-  }
-
-  const { documentId } = await params;
-  if (!documentId) {
-    return NextResponse.json({ error: 'Document ID is required' }, { status: 400 });
-  }
-
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
+    const { documentId } = await params;
+    if (!documentId) {
+      return NextResponse.json({ error: 'Document ID is required' }, { status: 400 });
+    }
+
+    console.log(`🗑️ [DELETE DEBUG] Starting document deletion for ID: ${documentId}`);
+    console.log(`🗑️ [DELETE DEBUG] User ID: ${session.user.id}`);
     const document = await prisma.incomeDocument.findFirst({
       where: {
         id: documentId,
@@ -258,17 +248,19 @@ export async function DELETE(
       }
     });
 
-    // Delete the physical file after successful database operations
-    if (document.filePath) {
-      await deleteFileLocally(document.filePath);
-    }
+    console.log(`✅ [DELETE DEBUG] Document ${documentId} deleted successfully`);
 
     return NextResponse.json({ 
       message: 'Document deleted and resident income recalculated successfully',
       recalculatedIncome: true
     });
   } catch (error) {
-    console.error('Error deleting document:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    console.error('❌ [DELETE DEBUG] Error deleting document:', error);
+    console.error('❌ [DELETE DEBUG] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    console.error('❌ [DELETE DEBUG] Error message:', error instanceof Error ? error.message : String(error));
+    return NextResponse.json({ 
+      error: 'Internal Server Error',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
   }
 } 
