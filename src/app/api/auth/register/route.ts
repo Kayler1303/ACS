@@ -27,23 +27,30 @@ async function sendVerificationEmail(email: string, name: string, token: string)
 
 export async function POST(req: Request) {
   try {
+    console.log('🔍 [REGISTER DEBUG] Starting registration process');
     const { name, company, email, password } = await req.json();
+    console.log('🔍 [REGISTER DEBUG] Registration data received:', { name, company, email, passwordLength: password?.length });
 
     if (!name || !email || !password || !company) {
       return NextResponse.json({ message: 'Missing required fields' }, { status: 400 });
     }
 
+    console.log('🔍 [REGISTER DEBUG] Checking for existing user...');
     const existingUser = await prisma.user.findUnique({ where: { email } });
 
     if (existingUser) {
+      console.log('❌ [REGISTER DEBUG] User already exists');
       return NextResponse.json({ message: 'User with this email already exists' }, { status: 409 });
     }
 
+    console.log('🔍 [REGISTER DEBUG] Hashing password...');
     const hashedPassword = await bcrypt.hash(password, 10);
     
+    console.log('🔍 [REGISTER DEBUG] Generating verification token...');
     const verificationToken = randomBytes(32).toString('hex');
     const tokenExpiry = new Date(Date.now() + 3600 * 1000); // Token expires in 1 hour
 
+    console.log('🔍 [REGISTER DEBUG] Creating user in database...');
     const user = await prisma.user.create({
       data: {
         id: randomUUID(),
@@ -55,6 +62,7 @@ export async function POST(req: Request) {
       },
     });
 
+    console.log('🔍 [REGISTER DEBUG] Creating verification token...');
     await prisma.verificationToken.create({
         data: {
             identifier: user.id,
@@ -63,16 +71,19 @@ export async function POST(req: Request) {
         }
     });
 
+    console.log('🔍 [REGISTER DEBUG] Sending verification email...');
     const emailSent = await sendVerificationEmail(email, name, verificationToken);
 
     if (!emailSent.success) {
+      console.log('❌ [REGISTER DEBUG] Failed to send verification email');
       return NextResponse.json({ message: 'User created but failed to send verification email.' }, { status: 500 });
     }
 
+    console.log('✅ [REGISTER DEBUG] Registration completed successfully');
     return NextResponse.json({ message: 'User created successfully. Please check your email to verify your account.' }, { status: 201 });
 
   } catch (error: unknown) {
-    console.error('Registration error:', error);
+    console.error('❌ [REGISTER DEBUG] Registration error:', error);
     if (error instanceof PrismaClientKnownRequestError) {
       if (error.code === 'P2002') {
         return NextResponse.json({ message: 'User with this email already exists' }, { status: 409 });
