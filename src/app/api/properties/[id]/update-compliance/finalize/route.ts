@@ -266,7 +266,7 @@ export async function POST(
                 payPeriodEndDate: doc.payPeriodEndDate,
                 payPeriodStartDate: doc.payPeriodStartDate,
                 calculatedAnnualizedIncome: doc.calculatedAnnualizedIncome,
-                verificationId: newVerificationId, // Link to new verification
+                verificationId: newVerificationId || doc.verificationId, // Link to new verification or keep original
                 residentId: newResidentId // Point to new resident
               }
             });
