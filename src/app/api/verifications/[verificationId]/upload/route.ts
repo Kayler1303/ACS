@@ -476,6 +476,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         return NextResponse.json(document, { status: 201 });
       }
 
+      console.log(`🔍 [UPLOAD DEBUG] Starting Azure AI analysis for document type: ${documentType}`);
+      console.log(`🔍 [UPLOAD DEBUG] Azure endpoint configured:`, !!process.env.AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT);
+      console.log(`🔍 [UPLOAD DEBUG] Azure key configured:`, !!process.env.AZURE_DOCUMENT_INTELLIGENCE_KEY);
+      
       analyzeResult = await analyzeIncomeDocument(buffer, modelId);
       console.log(`Azure analysis completed for document ${document.id} using model ${modelId}`);
     } catch (azureError) {
