@@ -211,8 +211,53 @@ export default function UpdateComplianceForm({ propertyId }: UpdateComplianceFor
         return; // Don't proceed with navigation yet
       }
       
-      // If no future lease matches, proceed with normal navigation
-      proceedWithNavigation(result);
+      // If no future lease matches, call import-data API to import the new data
+      console.log(`[COMPLIANCE] No inheritance matches, proceeding with data import`);
+      setProcessingMessage('Importing new data...');
+      
+      const importRes = await fetch(`/api/properties/${propertyId}/update-compliance/import-data`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          unitGroups,
+          filename: `Compliance Upload ${new Date(rentRollDate).toLocaleDateString()}`,
+          rentRollDate: rentRollDate,
+          snapshotId: result.snapshotId,
+          inheritanceChoices: {} // No inheritance choices
+        }),
+      });
+
+      if (!importRes.ok) {
+        const data = await importRes.json();
+        throw new Error(data.error || 'Failed to import data');
+      }
+
+      const importResult = await importRes.json();
+      console.log(`[COMPLIANCE] Data import completed:`, importResult);
+
+      // Check for discrepancies after import
+      try {
+        const discrepancyRes = await fetch(`/api/properties/${propertyId}/income-discrepancies?rentRollId=${importResult.rentRollId}`);
+        if (discrepancyRes.ok) {
+          const discrepancyData = await discrepancyRes.json();
+          
+          const finalResult = {
+            ...importResult,
+            hasDiscrepancies: discrepancyData.count > 0,
+            requiresReconciliation: discrepancyData.count > 0,
+            discrepancies: discrepancyData.discrepancies || []
+          };
+          
+          proceedWithNavigation(finalResult);
+        } else {
+          proceedWithNavigation(importResult);
+        }
+      } catch (discrepancyError) {
+        console.warn(`[COMPLIANCE] Failed to check discrepancies:`, discrepancyError);
+        proceedWithNavigation(importResult);
+      }
 
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
@@ -225,52 +270,90 @@ export default function UpdateComplianceForm({ propertyId }: UpdateComplianceFor
     if (!pendingResult) return;
 
     setIsLoading(true);
-    setProcessingMessage('Processing future lease inheritance...');
+    setProcessingMessage('Processing inheritance decisions and importing data...');
     try {
-      // Call the inheritance API
-      const inheritanceRes = await fetch(`/api/properties/${propertyId}/future-lease-inheritance`, {
+      // Transform mergedData into unitGroups format for the import API
+      const unitGroups: { [unitId: string]: any[] } = {};
+      
+      // Group by unit and lease (same unit, start date, end date, rent = same lease)
+      const leaseMap = new Map<string, any>();
+      
+      mergedData.forEach(row => {
+        const unitId = String(row.unit);
+        const leaseKey = `${unitId}-${row.leaseStartDate}-${row.leaseEndDate}-${row.rent}`;
+        
+        if (!leaseMap.has(leaseKey)) {
+          leaseMap.set(leaseKey, {
+            unitNumber: row.unit,
+            leaseStartDate: row.leaseStartDate,
+            leaseEndDate: row.leaseEndDate,
+            leaseRent: row.rent,
+            residents: []
+          });
+        }
+        
+        // Add resident to this lease
+        leaseMap.get(leaseKey).residents.push({
+          name: row.resident,
+          annualizedIncome: row.totalIncome
+        });
+      });
+      
+      // Group leases by unit
+      leaseMap.forEach(lease => {
+        const unitId = String(lease.unitNumber);
+        if (!unitGroups[unitId]) {
+          unitGroups[unitId] = [];
+        }
+        unitGroups[unitId].push(lease);
+      });
+
+      // Call the new import-data API (Phase 2)
+      const importRes = await fetch(`/api/properties/${propertyId}/update-compliance/import-data`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          inheritanceChoices,
-          rentRollId: pendingResult.rentRollId
+          unitGroups,
+          filename: `Compliance Upload ${new Date(rentRollDate).toLocaleDateString()}`,
+          rentRollDate: rentRollDate,
+          snapshotId: pendingResult.snapshotId,
+          inheritanceChoices
         }),
       });
 
-      if (!inheritanceRes.ok) {
-        const data = await inheritanceRes.json();
-        throw new Error(data.error || 'Failed to process future lease inheritance');
+      if (!importRes.ok) {
+        const data = await importRes.json();
+        throw new Error(data.error || 'Failed to import data and process inheritance');
       }
 
-      const inheritanceResult = await inheritanceRes.json();
-      console.log(`[COMPLIANCE] Future lease inheritance completed:`, inheritanceResult);
+      const importResult = await importRes.json();
+      console.log(`[COMPLIANCE] Data import and inheritance completed:`, importResult);
 
       // Close the modal
       setShowFutureLeaseModal(false);
       setFutureLeaseMatches([]);
       setPendingResult(null);
 
-      // After inheritance, we need to recalculate discrepancies since verified income may have changed
-      // Fetch updated discrepancy information
-      console.log(`[COMPLIANCE] Recalculating discrepancies after inheritance...`);
+      // After import, check for discrepancies
+      console.log(`[COMPLIANCE] Checking for income discrepancies after import...`);
       
       try {
-        const discrepancyRes = await fetch(`/api/properties/${propertyId}/income-discrepancies?rentRollId=${pendingResult.rentRollId}`);
+        const discrepancyRes = await fetch(`/api/properties/${propertyId}/income-discrepancies?rentRollId=${importResult.rentRollId}`);
         if (discrepancyRes.ok) {
           const discrepancyData = await discrepancyRes.json();
           
-          // Update the result with fresh discrepancy data
-          const updatedResult = {
-            ...pendingResult,
+          // Create final result with discrepancy data
+          const finalResult = {
+            ...importResult,
             hasDiscrepancies: discrepancyData.count > 0,
             requiresReconciliation: discrepancyData.count > 0,
             discrepancies: discrepancyData.discrepancies || []
           };
           
-          console.log(`[COMPLIANCE] Updated discrepancies after inheritance:`, updatedResult);
-          proceedWithNavigation(updatedResult);
+          console.log(`[COMPLIANCE] Final result with discrepancies:`, finalResult);
+          proceedWithNavigation(finalResult);
         } else {
           console.warn(`[COMPLIANCE] Failed to recalculate discrepancies, using original result`);
           proceedWithNavigation(pendingResult);
