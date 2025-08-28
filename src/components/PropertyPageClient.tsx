@@ -2172,7 +2172,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       )}
 
       {/* Show message if no data */}
-      {processedTenancies.length === 0 && selectedRentRollId && (
+      {processedTenancies.length === 0 && selectedSnapshotId && (
         <div className="mb-8 bg-white rounded-lg shadow-md overflow-hidden">
           <div className="p-8 text-center">
             <p className="text-red-600 font-medium mb-6">No compliance data available. Choose how you'd like to set up your property:</p>
