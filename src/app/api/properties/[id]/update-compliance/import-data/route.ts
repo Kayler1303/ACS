@@ -171,7 +171,12 @@ export async function POST(
             let annualizedIncome: Prisma.Decimal | null = null;
 
             if (residentData.annualizedIncome) {
-              const income = parseFloat(residentData.annualizedIncome.replace(/[$,]/g, ''));
+              let income: number;
+              if (typeof residentData.annualizedIncome === 'string') {
+                income = parseFloat(residentData.annualizedIncome.replace(/[$,]/g, ''));
+              } else {
+                income = parseFloat(residentData.annualizedIncome.toString());
+              }
               if (!isNaN(income)) {
                 annualizedIncome = new Prisma.Decimal(income);
               }
