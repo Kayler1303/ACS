@@ -2047,7 +2047,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
                       <Link
-                        href={`/property/${property.id}/rent-roll/${selectedRentRollId}/unit/${unit.id}`}
+                        href={`/property/${property.id}/rent-roll/${property.RentRoll.find((rr: FullRentRoll) => rr.snapshotId === selectedSnapshotId)?.id}/unit/${unit.id}`}
                         className="text-brand-blue hover:text-brand-blue-dark underline cursor-pointer font-medium"
                       >
                         {unit.residentCount}
@@ -2070,7 +2070,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                        ) : unit.verificationStatus ? (
                          unit.verificationStatus === 'Out of Date Income Documents' ? (
                            <Link
-                             href={`/property/${property.id}/rent-roll/${selectedRentRollId}/unit/${unit.id}`}
+                             href={`/property/${property.id}/rent-roll/${property.RentRoll.find((rr: FullRentRoll) => rr.snapshotId === selectedSnapshotId)?.id}/unit/${unit.id}`}
                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 border border-red-200 hover:bg-red-200 cursor-pointer transition-colors`}
                            >
                              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
@@ -2080,7 +2080,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                            </Link>
                          ) : unit.verificationStatus === 'In Progress - Finalize to Process' ? (
                            <Link
-                             href={`/property/${property.id}/rent-roll/${selectedRentRollId}/unit/${unit.id}`}
+                             href={`/property/${property.id}/rent-roll/${property.RentRoll.find((rr: FullRentRoll) => rr.snapshotId === selectedSnapshotId)?.id}/unit/${unit.id}`}
                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200 hover:bg-blue-200 cursor-pointer transition-colors`}
                            >
                              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
