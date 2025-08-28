@@ -1304,6 +1304,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
 
     // 🎯 SUMMARY BREAKDOWN FOR USER DEBUG
     if (includeRentAnalysis && selectedSnapshotId) {
+      const selectedRentRolls = property.RentRoll.filter((rr: FullRentRoll) => rr.snapshotId === selectedSnapshotId);
       const currentRentRoll = selectedRentRolls[0]; // Use first rent roll from selected snapshot
       
       if (currentRentRoll) {
