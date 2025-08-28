@@ -13,17 +13,28 @@ export async function GET(
   }
 
   const { id: propertyId } = await params;
+  const { searchParams } = new URL(req.url);
+  const rentRollId = searchParams.get('rentRollId');
+
+  console.log(`[PROVISIONAL LEASES API] Property: ${propertyId}, RentRoll: ${rentRollId || 'latest'}`);
 
   try {
-    // Get the most recent rent roll date for this property to determine what's "future"
-    const mostRecentRentRoll = await prisma.rentRoll.findFirst({
-      where: {
-        propertyId: propertyId,
-      },
-      orderBy: {
-        uploadDate: 'desc'
-      }
-    });
+    // Get the target rent roll date for this property to determine what's "future"
+    let targetRentRoll;
+    if (rentRollId) {
+      targetRentRoll = await prisma.rentRoll.findUnique({
+        where: { id: rentRollId, propertyId }
+      });
+    } else {
+      targetRentRoll = await prisma.rentRoll.findFirst({
+        where: {
+          propertyId: propertyId,
+        },
+        orderBy: {
+          uploadDate: 'desc'
+        }
+      });
+    }
 
     const provisionalLeases = await prisma.lease.findMany({
       where: {
@@ -31,10 +42,10 @@ export async function GET(
           propertyId: propertyId,
         },
         Tenancy: null,
-        // Only include leases that START after the most recent rent roll date
+        // Only include leases that START after the target rent roll date
         // This excludes active leases (including month-to-month) and past leases
-        leaseStartDate: mostRecentRentRoll ? {
-          gt: mostRecentRentRoll.uploadDate
+        leaseStartDate: targetRentRoll ? {
+          gt: targetRentRoll.uploadDate
         } : undefined,
       },
       include: {

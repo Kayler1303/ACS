@@ -40,12 +40,16 @@ export async function GET(
     }
 
     const { id: propertyId } = await params;
+    const { searchParams } = new URL(request.url);
+    const rentRollId = searchParams.get('rentRollId');
+    
     console.log(`[FUTURE LEASE API] Property ID: ${propertyId}`);
+    console.log(`[FUTURE LEASE API] RentRoll ID: ${rentRollId || 'latest'}`);
     console.log(`[FUTURE LEASE API] Request URL: ${request.url}`);
     console.log(`[FUTURE LEASE API] ============================================================================`);
     
     // Force a visible log that should definitely appear
-    console.error(`🚀 FUTURE LEASE API CALLED FOR PROPERTY: ${propertyId}`);
+    console.error(`🚀 FUTURE LEASE API CALLED FOR PROPERTY: ${propertyId}, RENT ROLL: ${rentRollId || 'latest'}`);
     
     // Write to file to confirm API is being called
     try {
@@ -103,9 +107,14 @@ export async function GET(
       return NextResponse.json({ error: 'Property not found' }, { status: 404 });
     }
 
-    // Get the most recent rent roll date for filtering future leases
-    const mostRecentRentRoll = property.RentRoll[0];
-    const rentRollDate = mostRecentRentRoll ? new Date(mostRecentRentRoll.uploadDate) : new Date();
+    // Get the target rent roll date for filtering future leases
+    let targetRentRoll;
+    if (rentRollId) {
+      targetRentRoll = property.RentRoll.find(rr => rr.id === rentRollId);
+    } else {
+      targetRentRoll = property.RentRoll[0]; // Most recent
+    }
+    const rentRollDate = targetRentRoll ? new Date(targetRentRoll.uploadDate) : new Date();
 
     try {
       const fs = await import('fs');

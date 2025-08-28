@@ -567,7 +567,10 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
   useEffect(() => {
     const fetchProvisionalLeases = async () => {
       try {
-        const res = await fetch(`/api/properties/${property.id}/provisional-leases`);
+        const url = selectedRentRollId 
+          ? `/api/properties/${property.id}/provisional-leases?rentRollId=${selectedRentRollId}`
+          : `/api/properties/${property.id}/provisional-leases`;
+        const res = await fetch(url);
         if (res.ok) {
           const data = await res.json();
           setProvisionalLeases(data);
@@ -586,17 +589,24 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     };
 
     fetchProvisionalLeases();
-  }, [property.id]);
+  }, [property.id, selectedRentRollId]);
 
   // Fetch future leases data (for Future Leases column)
   useEffect(() => {
     const fetchFutureLeases = async () => {
       try {
         futureLeaseFetchInProgress.current = true;
-        const url = `/api/properties/${property.id}/future-leases?bust=${Date.now()}`;
+        const baseUrl = `/api/properties/${property.id}/future-leases`;
+        const params = new URLSearchParams();
+        if (selectedRentRollId) {
+          params.append('rentRollId', selectedRentRollId);
+        }
+        params.append('bust', Date.now().toString());
+        const url = `${baseUrl}?${params.toString()}`;
         console.log(`[PROPERTY PAGE DEBUG] ====== FRONTEND FETCH STARTING ======`);
         console.log(`[PROPERTY PAGE DEBUG] Fetching URL: ${url}`);
         console.log(`[PROPERTY PAGE DEBUG] Property ID: ${property.id}`);
+        console.log(`[PROPERTY PAGE DEBUG] Selected Rent Roll ID: ${selectedRentRollId || 'latest'}`);
         console.log(`[PROPERTY PAGE DEBUG] ===================================`);
         const res = await fetch(url, {
           credentials: 'include',
@@ -641,7 +651,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     }
     
     fetchFutureLeases();
-  }, [property.id]);
+  }, [property.id, selectedRentRollId]);
 
   // Load future lease selections from localStorage on mount
   useEffect(() => {
