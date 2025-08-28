@@ -1014,7 +1014,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       }
       const complianceBucket = getComplianceBucket(
         unit,
-        tenancy,
+        tenancy || undefined,
         hudIncomeLimits,
         complianceOption,
         includeRentAnalysis,
