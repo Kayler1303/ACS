@@ -16,7 +16,41 @@ export async function GET() {
     try {
         // First try to list available models (simpler test)
         // Document Intelligence API requires /formrecognizer/ path
-        const response = await fetch(`${endpoint}/formrecognizer/documentModels?api-version=2024-11-30`, {
+        // Test different endpoint paths to find the correct one
+        const paths = [
+            '/documentModels',
+            '/formrecognizer/documentModels', 
+            '/documentintelligence/documentModels'
+        ];
+        
+        let workingPath = null;
+        let testResults = {};
+        
+        for (const path of paths) {
+            try {
+                const testResponse = await fetch(`${endpoint}${path}?api-version=2024-11-30`, {
+                    method: 'GET',
+                    headers: { 
+                        'Ocp-Apim-Subscription-Key': key
+                    }
+                });
+                const testText = await testResponse.text();
+                testResults[path] = {
+                    status: testResponse.status,
+                    statusText: testResponse.statusText,
+                    body: testText.substring(0, 200) + '...'
+                };
+                if (testResponse.status === 200) {
+                    workingPath = path;
+                    break;
+                }
+            } catch (e) {
+                testResults[path] = { error: e instanceof Error ? e.message : String(e) };
+            }
+        }
+        
+        // Use the primary test for the main response
+        const response = await fetch(`${endpoint}/documentModels?api-version=2024-11-30`, {
             method: 'GET',
             headers: { 
                 'Ocp-Apim-Subscription-Key': key
@@ -50,10 +84,12 @@ export async function GET() {
             hasEndpoint: true,
             hasKey: true,
             endpointLength: endpoint.length,
-            endpointStart: endpoint.substring(0, 30) + '...',
+            endpointStart: endpoint.substring(0, 50) + '...',
             keyLength: key.length,
             keyStart: key.substring(0, 8) + '...',
-            testResponse: {
+            workingPath,
+            pathTests: testResults,
+            mainResponse: {
                 status: response.status,
                 statusText: response.statusText,
                 headers: Object.fromEntries(response.headers.entries()),

@@ -16,9 +16,9 @@ export async function analyzeIncomeDocument(fileBuffer: Buffer, modelId: string)
   
   const credential = new AzureKeyCredential(key);
   
-  // Create client with compatible API version (2023-07-31 works in your region)
+  // Create client with v4.0 API version (required for paystub model)
   const client = DocumentIntelligence(endpoint, credential, {
-    apiVersion: "2023-07-31"
+    apiVersion: "2024-11-30"
   });
 
   console.log(`Starting document analysis with model: ${modelId}`);
@@ -35,7 +35,7 @@ export async function analyzeIncomeDocument(fileBuffer: Buffer, modelId: string)
         contentType: "application/octet-stream",
         body: fileBuffer,
         queryParameters: {
-          "api-version": "2023-07-31"
+          "api-version": "2024-11-30"
         }
       });
 
@@ -75,7 +75,7 @@ export async function analyzeIncomeDocument(fileBuffer: Buffer, modelId: string)
           .path("/documentModels/{modelId}/analyzeResults/{resultId}", modelId, operationId)
           .get({
             queryParameters: {
-              "api-version": "2023-07-31"
+              "api-version": "2024-11-30"
             }
           });
 
