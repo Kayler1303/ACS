@@ -5,9 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { analyzeIncomeDocument } from '@/services/azureAi';
 import { validatePaystubExtraction, validateW2Extraction, type PaystubValidationResult, type W2ValidationResult } from '@/services/azureValidation';
 import { analyzePaystubs } from '@/services/income';
-import { writeFile, mkdir } from 'fs/promises';
-import { join } from 'path';
-import { existsSync } from 'fs';
+// File system imports removed - Vercel serverless doesn't support file writes
 import { DocumentType, DocumentStatus } from '@prisma/client';
 import { isWithinInterval, subMonths, getYear, addMonths } from 'date-fns';
 import { randomUUID } from 'crypto';
@@ -392,19 +390,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Create uploads directory if it doesn't exist
-    const uploadsDir = join(process.cwd(), 'uploads');
-    if (!existsSync(uploadsDir)) {
-      await mkdir(uploadsDir, { recursive: true });
-    }
-
-    // Save file to disk
+    // Process file directly from memory (Vercel serverless doesn't support file system writes)
     const buffer = Buffer.from(await file.arrayBuffer());
     const filename = `${Date.now()}-${file.name}`;
-    const filepath = join(uploadsDir, filename);
-    await writeFile(filepath, buffer);
-
-    console.log(`File uploaded: ${filename} for verification ${verificationId}, resident ${residentId}`);
+    
+    console.log(`Processing file: ${filename} for verification ${verificationId}, resident ${residentId}`);
 
     // Create initial document record
     document = await prisma.incomeDocument.create({
