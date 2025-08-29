@@ -146,6 +146,12 @@ export async function POST(
         // Copy residents for this lease
         for (const resident of futureLease.Resident) {
           const newResidentId = randomUUID();
+          
+          // Check if this resident has a finalized income verification
+          const hasFinalized = futureLease.IncomeVerification.some(verification => 
+            verification.status === 'FINALIZED'
+          );
+          
           await tx.resident.create({
             data: {
               id: newResidentId,
@@ -153,9 +159,9 @@ export async function POST(
               verifiedIncome: resident.verifiedIncome,
               annualizedIncome: resident.annualizedIncome,
               calculatedAnnualizedIncome: resident.calculatedAnnualizedIncome,
-              incomeFinalized: resident.incomeFinalized,
+              incomeFinalized: hasFinalized ? true : resident.incomeFinalized, // Fix: Set to true if verification is finalized
               hasNoIncome: resident.hasNoIncome,
-              finalizedAt: resident.finalizedAt,
+              finalizedAt: hasFinalized && !resident.finalizedAt ? new Date() : resident.finalizedAt, // Set finalizedAt if missing
               leaseId: newLeaseId,
               createdAt: resident.createdAt,
               updatedAt: new Date()
