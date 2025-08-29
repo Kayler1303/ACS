@@ -667,6 +667,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       return;
     }
     
+    console.log(`🚀 [PROPERTY PAGE DEBUG] About to call fetchFutureLeases()`);
     fetchFutureLeases();
   }, [property.id, selectedSnapshotId]);
 
