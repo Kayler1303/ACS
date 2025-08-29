@@ -31,9 +31,14 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    if (!verificationToken || verificationToken.expires < new Date()) {
-      console.log('❌ [EMAIL VERIFICATION] Token invalid or expired');
-      return NextResponse.redirect(new URL('/auth/verification-failed?error=invalid', req.nextUrl.origin));
+    if (!verificationToken) {
+      console.log('❌ [EMAIL VERIFICATION] Token not found - likely already used');
+      return NextResponse.redirect(new URL('/auth/verification-failed?error=already-used', req.nextUrl.origin));
+    }
+    
+    if (verificationToken.expires < new Date()) {
+      console.log('❌ [EMAIL VERIFICATION] Token expired');
+      return NextResponse.redirect(new URL('/auth/verification-failed?error=expired', req.nextUrl.origin));
     }
 
     // Mark user as verified using the identifier from the token
