@@ -1046,6 +1046,8 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
         if (unit.unitNumber === '0505') {
           const futureLeaseByUnitNumber = futureLeases.find(fl => fl.unitNumber === '0505' || fl.unitNumber === '505');
           console.log(`[UNIT 0505 DEBUG] Future lease by unit number:`, futureLeaseByUnitNumber);
+          console.log(`[UNIT 0505 DEBUG] unitFutureLease found by unitId:`, unitFutureLease);
+          console.log(`[UNIT 0505 DEBUG] Final processedFutureLease:`, processedFutureLease);
           
           // Also show all future lease unitIds to see if any match
           const allFutureLeaseUnitIds = futureLeases.map(fl => ({ unitId: fl.unitId, unitNumber: fl.unitNumber }));
@@ -1054,14 +1056,8 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       }
 
       
-      // If we have a future lease, update its verification status with current data
+      // Use the future lease data as-is without overriding verification status
       let processedFutureLease = unitFutureLease?.futureLease;
-      if (processedFutureLease && unitVerification?.verificationStatus) {
-        processedFutureLease = {
-          ...processedFutureLease,
-          verificationStatus: unitVerification.verificationStatus
-        };
-      }
 
       return {
         id: unit.id,
