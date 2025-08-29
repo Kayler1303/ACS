@@ -11,16 +11,22 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 async function sendVerificationEmail(email: string, name: string, token: string) {
   const verificationLink = `${process.env.NEXT_PUBLIC_BASE_URL}/api/verify-email?token=${token}`;
   
+  console.log('🔍 [EMAIL SEND] Starting email send process');
+  console.log('🔍 [EMAIL SEND] Verification link:', verificationLink);
+  console.log('🔍 [EMAIL SEND] Resend API key present:', !!process.env.RESEND_API_KEY);
+  
   try {
-    await resend.emails.send({
+    console.log('🔍 [EMAIL SEND] Calling resend.emails.send...');
+    const result = await resend.emails.send({
       from: 'registration@apartmentcompliance.com',
       to: email,
       subject: 'Welcome to Apartment Compliance Solutions! Please Verify Your Email',
       react: VerificationEmail({ verificationLink }),
     });
+    console.log('✅ [EMAIL SEND] Email sent successfully:', result);
     return { success: true };
   } catch (error) {
-    console.error('Error sending verification email:', error);
+    console.error('❌ [EMAIL SEND] Error sending verification email:', error);
     return { success: false };
   }
 }
