@@ -263,10 +263,8 @@ export async function POST(
                   propertyId: propertyId
                 },
                 Tenancy: {
-                  some: {
-                    RentRoll: {
-                      propertyId: propertyId
-                    }
+                  RentRoll: {
+                    propertyId: propertyId
                   }
                 }
               },
