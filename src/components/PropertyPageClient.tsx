@@ -1087,6 +1087,15 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       // Additional debug logging for Unit 0505 after processedFutureLease is defined
       if (unit.unitNumber === '0505') {
         console.log(`[UNIT 0505 DEBUG] Final processedFutureLease:`, processedFutureLease);
+        console.log(`[UNIT 0505 DEBUG] Unit details:`, {
+          unitId: unit.id,
+          unitNumber: unit.unitNumber
+        });
+        console.log(`[UNIT 0505 DEBUG] All future leases for debugging:`, futureLeases.map(fl => ({
+          unitId: fl.unitId,
+          unitNumber: fl.unitNumber,
+          residentName: fl.futureLease?.residentName
+        })));
       }
 
       return {
