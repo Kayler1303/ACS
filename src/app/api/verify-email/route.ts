@@ -36,27 +36,27 @@ export async function GET(req: NextRequest) {
 
     // Mark user as verified using the identifier from the token
     console.log('🔍 [EMAIL VERIFICATION] Updating user verification status...');
-    await prisma.user.update({
+    const updatedUser = await prisma.user.update({
       where: { id: verificationToken.identifier },
       data: { emailVerified: new Date() },
     });
-    console.log('✅ [EMAIL VERIFICATION] User marked as verified');
+    console.log('✅ [EMAIL VERIFICATION] User marked as verified:', {
+      userId: updatedUser.id,
+      email: updatedUser.email,
+      emailVerified: updatedUser.emailVerified?.toISOString()
+    });
 
     // Delete the token so it cannot be used again
     console.log('🔍 [EMAIL VERIFICATION] Deleting verification token...');
     await prisma.verificationToken.delete({
-      where: {
-        identifier_token: {
-          identifier: verificationToken.identifier,
-          token: verificationToken.token,
-        },
-      },
+      where: { token: verificationToken.token },
     });
-    console.log('✅ [EMAIL VERIFICATION] Token deleted');
+    console.log('✅ [EMAIL VERIFICATION] Token deleted successfully');
 
     // Redirect to a success page
-    console.log('✅ [EMAIL VERIFICATION] Verification successful, redirecting to success page');
-    return NextResponse.redirect(new URL('/auth/verification-success', req.nextUrl.origin));
+    const successUrl = new URL('/auth/verification-success', req.nextUrl.origin);
+    console.log('✅ [EMAIL VERIFICATION] Verification successful, redirecting to:', successUrl.toString());
+    return NextResponse.redirect(successUrl);
 
   } catch (error) {
     console.error('❌ [EMAIL VERIFICATION] Verification error:', error);
