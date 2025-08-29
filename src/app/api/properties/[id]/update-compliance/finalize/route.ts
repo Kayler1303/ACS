@@ -209,6 +209,7 @@ export async function POST(
       for (const [unitId, leases] of Object.entries(unitGroups as UnitGroup)) {
         for (const leaseData of leases) {
           const unitNumber = leaseData.unitNumber;
+          console.log(`[COMPLIANCE UPDATE] 🔄 Processing unit ${unitNumber} for inheritance matching`);
           
           // Check if there's an existing future lease for this unit
           const existingFutureLeaseForUnit = existingFutureLeases.find(lease => 
