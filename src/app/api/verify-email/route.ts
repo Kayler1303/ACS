@@ -5,9 +5,26 @@ export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get('token');
   
   console.log('🔍 [EMAIL VERIFICATION] Starting verification process');
+  console.log('🔍 [EMAIL VERIFICATION] Request method:', req.method);
   console.log('🔍 [EMAIL VERIFICATION] Request URL:', req.nextUrl.toString());
   console.log('🔍 [EMAIL VERIFICATION] Token received:', token ? 'YES' : 'NO');
   console.log('🔍 [EMAIL VERIFICATION] Token value:', token);
+  
+  // Check if this is a HEAD request disguised as GET (email scanners)
+  // Some email clients send HEAD requests that appear as GET
+  const userAgent = req.headers.get('user-agent') || '';
+  const isLikelyEmailScanner = userAgent.includes('bot') || 
+                               userAgent.includes('scanner') || 
+                               userAgent.includes('crawler') ||
+                               userAgent === '';
+  
+  console.log('🔍 [EMAIL VERIFICATION] User-Agent:', userAgent);
+  console.log('🔍 [EMAIL VERIFICATION] Likely email scanner:', isLikelyEmailScanner);
+  
+  if (isLikelyEmailScanner) {
+    console.log('🔍 [EMAIL VERIFICATION] Ignoring request from email scanner to preserve token');
+    return new NextResponse('Email verification link - please open in browser', { status: 200 });
+  }
 
   if (!token) {
     console.log('❌ [EMAIL VERIFICATION] No token provided');
@@ -71,8 +88,13 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// Handle HEAD requests (browser preflight checks)
+// Handle HEAD requests (browser preflight checks and email scanners)
+// HEAD requests should NOT consume the verification token
 export async function HEAD(req: NextRequest) {
-  console.log('🔍 [EMAIL VERIFICATION] HEAD request received');
+  console.log('🔍 [EMAIL VERIFICATION] HEAD request received - ignoring to preserve token');
+  console.log('🔍 [EMAIL VERIFICATION] HEAD Request URL:', req.nextUrl.toString());
+  
+  // Return success without consuming the token
+  // This prevents email scanners from consuming verification tokens
   return new NextResponse(null, { status: 200 });
 } 
