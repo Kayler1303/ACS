@@ -656,10 +656,10 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
 
     console.log(`[PROPERTY PAGE DEBUG] useEffect triggered for future leases`);
     
-    // Prevent duplicate calls if already loading
+    // Clear existing future leases when snapshot changes to ensure fresh data
     if (futureLeases.length > 0) {
-      console.log(`⏭️ [PROPERTY PAGE DEBUG] Skipping duplicate future leases fetch - already have ${futureLeases.length} leases`);
-      return;
+      console.log(`🔄 [PROPERTY PAGE DEBUG] Clearing existing future leases (${futureLeases.length}) for fresh fetch`);
+      setFutureLeases([]);
     }
     
     if (futureLeaseFetchInProgress.current) {

@@ -412,6 +412,12 @@ export async function GET(
           leaseStartDates: property.Unit.find(unit => unit.id === u.unitId)?.Lease.map(l => l.leaseStartDate?.toISOString() || 'null') || []
         }))
       }
+    }, {
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
     });
 
   } catch (error) {
