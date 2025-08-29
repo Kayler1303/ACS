@@ -121,6 +121,7 @@ export async function GET(
     let preservedFutureLeases: any[] = [];
     if (rentRollId && targetRentRoll) {
       console.log(`[FUTURE LEASE API] 🔍 Looking for preserved future leases for rent roll ${rentRollId}`);
+      console.log(`[FUTURE LEASE API] 🔍 Target rent roll upload date: ${targetRentRoll.uploadDate}`);
       
       // Find the snapshot that corresponds to this rent roll
       const snapshot = await prisma.rentRollSnapshot.findFirst({
@@ -130,6 +131,8 @@ export async function GET(
         }
       });
 
+      console.log(`[FUTURE LEASE API] 🔍 Snapshot query result:`, snapshot ? `Found ${snapshot.id}` : 'Not found');
+
       if (snapshot) {
         console.log(`[FUTURE LEASE API] 📸 Found snapshot ${snapshot.id} for rent roll date ${targetRentRoll.uploadDate}`);
         
@@ -137,6 +140,10 @@ export async function GET(
         // These are leases created around the same time as the snapshot with no Tenancy
         const snapshotTime = new Date(snapshot.uploadDate);
         const timeWindow = 5 * 60 * 1000; // 5 minutes window
+        const startTime = new Date(snapshotTime.getTime() - timeWindow);
+        const endTime = new Date(snapshotTime.getTime() + timeWindow);
+        
+        console.log(`[FUTURE LEASE API] 🔍 Searching for preserved leases created between ${startTime.toISOString()} and ${endTime.toISOString()}`);
         
         preservedFutureLeases = await prisma.lease.findMany({
           where: {
@@ -145,8 +152,8 @@ export async function GET(
             },
             Tenancy: null, // Future leases don't have Tenancy records
             createdAt: {
-              gte: new Date(snapshotTime.getTime() - timeWindow),
-              lte: new Date(snapshotTime.getTime() + timeWindow)
+              gte: startTime,
+              lte: endTime
             },
             NOT: {
               name: {
@@ -170,6 +177,20 @@ export async function GET(
         });
         
         console.log(`[FUTURE LEASE API] 🔍 Found ${preservedFutureLeases.length} preserved future leases for snapshot`);
+        
+        // Log details of each preserved lease found
+        preservedFutureLeases.forEach((lease, index) => {
+          console.log(`[FUTURE LEASE API] 📋 Preserved lease ${index + 1}: "${lease.name}" in unit ${lease.Unit.unitNumber}, created at ${lease.createdAt.toISOString()}`);
+        });
+      } else {
+        console.log(`[FUTURE LEASE API] ❌ No snapshot found for rent roll date ${targetRentRoll.uploadDate}`);
+        
+        // Let's also check what snapshots exist for this property
+        const allSnapshots = await prisma.rentRollSnapshot.findMany({
+          where: { propertyId: propertyId },
+          orderBy: { uploadDate: 'desc' }
+        });
+        console.log(`[FUTURE LEASE API] 📊 All snapshots for property:`, allSnapshots.map(s => ({ id: s.id, uploadDate: s.uploadDate.toISOString() })));
       }
     }
 
