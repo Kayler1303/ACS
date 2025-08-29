@@ -202,7 +202,24 @@ export async function POST(
       // STEP 4: Analyze new data for inheritance matches (without importing it yet)
       console.log(`[COMPLIANCE UPDATE] 🔍 Analyzing new data for inheritance matches`);
       console.log(`[COMPLIANCE UPDATE] 🔍 unitGroups keys:`, Object.keys(unitGroups || {}));
-      console.log(`[COMPLIANCE UPDATE] 🔍 unitGroups data:`, JSON.stringify(unitGroups, null, 2));
+      
+      // Check specifically for unit 0103
+      const hasUnit0103 = Object.keys(unitGroups || {}).includes('0103');
+      console.log(`[COMPLIANCE UPDATE] 🎯 Unit 0103 in unitGroups: ${hasUnit0103}`);
+      
+      if (hasUnit0103) {
+        console.log(`[COMPLIANCE UPDATE] 🎯 Unit 0103 data:`, JSON.stringify((unitGroups as any)['0103'], null, 2));
+      }
+      
+      // Check existing future leases for unit 0103
+      const existingFutureLeaseFor0103 = existingFutureLeases.find(lease => 
+        lease.Unit.unitNumber === '0103'
+      );
+      console.log(`[COMPLIANCE UPDATE] 🎯 Existing future lease for 0103:`, existingFutureLeaseFor0103 ? 'YES' : 'NO');
+      
+      if (existingFutureLeaseFor0103) {
+        console.log(`[COMPLIANCE UPDATE] 🎯 Existing 0103 lease dates: ${existingFutureLeaseFor0103.leaseStartDate} to ${existingFutureLeaseFor0103.leaseEndDate}`);
+      }
       
       const futureLeaseMatches: any[] = [];
 
