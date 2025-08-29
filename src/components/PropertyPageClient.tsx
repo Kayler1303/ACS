@@ -948,8 +948,20 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     const allUnits = [...property.Unit];
     
     // Add any units from future leases that aren't already in property.Unit
-    futureLeases.forEach(fl => {
+    console.log('🔍 [FUTURE LEASE STRUCTURE] First few future leases:', futureLeases.slice(0, 3));
+    
+    futureLeases.forEach((fl, index) => {
+      if (index < 3) {
+        console.log(`🔍 [FUTURE LEASE ${index}] Structure:`, {
+          unitId: fl.unitId,
+          unitNumber: fl.unitNumber,
+          hasUnitId: 'unitId' in fl,
+          allKeys: Object.keys(fl)
+        });
+      }
+      
       if (!allUnits.some(unit => unit.id === fl.unitId)) {
+        console.log(`🔍 [SYNTHETIC UNIT] Creating synthetic unit for unitId: ${fl.unitId}, unitNumber: ${fl.unitNumber}`);
         // Create a synthetic unit object for units that only exist in future leases
         allUnits.push({
           id: fl.unitId,
@@ -960,6 +972,10 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
           createdAt: new Date(),
           updatedAt: new Date()
         });
+      } else {
+        if (index < 3) {
+          console.log(`🔍 [EXISTING UNIT] Unit ${fl.unitNumber} (${fl.unitId}) already exists in property.Unit`);
+        }
       }
     });
     
