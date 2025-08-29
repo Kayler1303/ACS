@@ -1065,8 +1065,24 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       }
 
       
-      // Use the future lease data as-is without overriding verification status
+      // Use the future lease data, but update verification status if we have current verification data
       let processedFutureLease = unitFutureLease?.futureLease;
+      
+      // For future leases, update the verification status with current data if available
+      // This fixes stale verification status in preserved future lease data
+      if (processedFutureLease && unitVerification?.verificationStatus) {
+        // Only update if the current status is more complete than the preserved status
+        const currentStatus = unitVerification.verificationStatus;
+        const preservedStatus = processedFutureLease.verificationStatus;
+        
+        // Update if current status is "Verified" or if preserved status is still "In Progress"
+        if (currentStatus === 'Verified' || preservedStatus?.includes('In Progress')) {
+          processedFutureLease = {
+            ...processedFutureLease,
+            verificationStatus: currentStatus
+          };
+        }
+      }
       
       // Additional debug logging for Unit 0505 after processedFutureLease is defined
       if (unit.unitNumber === '0505') {
