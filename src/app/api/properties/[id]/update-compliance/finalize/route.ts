@@ -42,7 +42,7 @@ export async function POST(
     const reportDate = rentRollDate ? new Date(rentRollDate) : new Date();
 
     const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      // STEP 1: Get existing future leases that might need inheritance decisions
+      // STEP 1: Get ALL existing future leases for snapshot preservation
       const existingFutureLeases = await tx.lease.findMany({
         where: {
           Unit: {
@@ -53,12 +53,9 @@ export async function POST(
             name: {
               startsWith: '[PROCESSED]' // Exclude already processed leases
             }
-          },
-          IncomeVerification: {
-            some: {
-              status: 'FINALIZED' // Only consider leases with finalized verifications
-            }
           }
+          // NOTE: We preserve ALL future leases in snapshots, not just those with finalized verifications
+          // The finalized verification check is only used later for inheritance matching
         },
         include: {
           Unit: true,
@@ -228,9 +225,11 @@ export async function POST(
           const unitNumber = leaseData.unitNumber;
           console.log(`[COMPLIANCE UPDATE] 🔄 Processing unit ${unitNumber} for inheritance matching`);
           
-          // Check if there's an existing future lease for this unit
+          // Check if there's an existing future lease for this unit WITH finalized verifications
+          // (only these should trigger inheritance modals)
           const existingFutureLeaseForUnit = existingFutureLeases.find(lease => 
-            lease.Unit.unitNumber === unitNumber
+            lease.Unit.unitNumber === unitNumber &&
+            lease.IncomeVerification.some(verification => verification.status === 'FINALIZED')
           );
 
           if (existingFutureLeaseForUnit) {
