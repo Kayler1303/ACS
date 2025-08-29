@@ -5,7 +5,9 @@ export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get('token');
   
   console.log('🔍 [EMAIL VERIFICATION] Starting verification process');
+  console.log('🔍 [EMAIL VERIFICATION] Request URL:', req.nextUrl.toString());
   console.log('🔍 [EMAIL VERIFICATION] Token received:', token ? 'YES' : 'NO');
+  console.log('🔍 [EMAIL VERIFICATION] Token value:', token);
 
   if (!token) {
     console.log('❌ [EMAIL VERIFICATION] No token provided');
@@ -62,4 +64,10 @@ export async function GET(req: NextRequest) {
     console.error('❌ [EMAIL VERIFICATION] Verification error:', error);
     return NextResponse.redirect(new URL('/auth/verification-failed?error=server', req.nextUrl.origin));
   }
+}
+
+// Handle HEAD requests (browser preflight checks)
+export async function HEAD(req: NextRequest) {
+  console.log('🔍 [EMAIL VERIFICATION] HEAD request received');
+  return new NextResponse(null, { status: 200 });
 } 
