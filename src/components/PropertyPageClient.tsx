@@ -922,6 +922,12 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     console.log('🔄 [UNIT PROCESSING] selectedSnapshotId:', selectedSnapshotId);
     console.log('🔄 [UNIT PROCESSING] futureLeases.length:', futureLeases.length);
     console.log('🔄 [UNIT PROCESSING] property.Unit.length:', property.Unit.length);
+    console.log('🔄 [UNIT PROCESSING] property.Unit numbers:', property.Unit.map((u: any) => u.unitNumber).sort());
+    console.log('🔄 [UNIT PROCESSING] Looking for units 505, 0692, 103 in property.Unit:', {
+      has505: property.Unit.some((u: any) => u.unitNumber === '505'),
+      has0692: property.Unit.some((u: any) => u.unitNumber === '0692'),
+      has103: property.Unit.some((u: any) => u.unitNumber === '103')
+    });
     
     if (!selectedSnapshotId) {
       console.log('❌ [UNIT PROCESSING] No selectedSnapshotId, returning early');
