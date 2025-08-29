@@ -944,8 +944,28 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
 
     console.log(`[SNAPSHOT PROCESSING] Processing snapshot ${selectedSnapshotId} with ${selectedRentRolls.length} rent rolls`);
 
-    // Process each unit
-    const processed = property.Unit.map((unit: any) => {
+    // Create a combined list of units: regular property units + units from future leases
+    const allUnits = [...property.Unit];
+    
+    // Add any units from future leases that aren't already in property.Unit
+    futureLeases.forEach(fl => {
+      if (!allUnits.some(unit => unit.id === fl.unitId)) {
+        // Create a synthetic unit object for units that only exist in future leases
+        allUnits.push({
+          id: fl.unitId,
+          unitNumber: fl.unitNumber || 'Unknown',
+          bedroomCount: fl.bedroomCount || 0,
+          squareFootage: fl.squareFootage || null,
+          propertyId: property.id
+        });
+      }
+    });
+    
+    console.log('🔄 [UNIT PROCESSING] Combined units (property + future lease units):', allUnits.length);
+    console.log('🔄 [UNIT PROCESSING] Added units from future leases:', futureLeases.length);
+
+    // Process each unit (including synthetic units from future leases)
+    const processed = allUnits.map((unit: any) => {
       // Find tenancy for this unit in any of the selected snapshot's rent rolls
       let tenancy = null;
       for (const rentRoll of selectedRentRolls) {
