@@ -1059,8 +1059,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       if (processedFutureLease && unitVerification?.verificationStatus) {
         processedFutureLease = {
           ...processedFutureLease,
-          verificationStatus: unitVerification.verificationStatus,
-          totalIncome: unitVerification.totalIncome || processedFutureLease.totalIncome
+          verificationStatus: unitVerification.verificationStatus
         };
       }
 
