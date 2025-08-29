@@ -604,6 +604,9 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
 
   // Fetch future leases data (for Future Leases column)
   useEffect(() => {
+    console.log(`🔄 [SNAPSHOT CHANGE] Selected snapshot changed to: ${selectedSnapshotId || 'latest'}`);
+    console.log(`🔄 [SNAPSHOT CHANGE] About to fetch future leases for property ${property.id}`);
+    
     const fetchFutureLeases = async () => {
       try {
         futureLeaseFetchInProgress.current = true;
