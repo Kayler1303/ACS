@@ -1041,6 +1041,16 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
           futureLeaseData: unitFutureLease,
           finalFutureLeaseValue: unitFutureLease?.futureLease
         });
+        
+        // For Unit 0505, check if there's a future lease with matching unit number instead of unitId
+        if (unit.unitNumber === '0505') {
+          const futureLeaseByUnitNumber = futureLeases.find(fl => fl.unitNumber === '0505' || fl.unitNumber === '505');
+          console.log(`[UNIT 0505 DEBUG] Future lease by unit number:`, futureLeaseByUnitNumber);
+          
+          // Also show all future lease unitIds to see if any match
+          const allFutureLeaseUnitIds = futureLeases.map(fl => ({ unitId: fl.unitId, unitNumber: fl.unitNumber }));
+          console.log(`[UNIT 0505 DEBUG] All future lease unitIds:`, allFutureLeaseUnitIds);
+        }
       }
 
       
