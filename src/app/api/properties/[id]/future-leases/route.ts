@@ -303,7 +303,17 @@ export async function GET(
           });
         }
         
-        const verificationStatus = getLeaseVerificationStatus({...futureLease, Tenancy: null} as any);
+        let verificationStatus = getLeaseVerificationStatus({...futureLease, Tenancy: null} as any);
+        
+        // TEMPORARY FIX: If the calculated status is "In Progress" but we have FINALIZED verifications,
+        // override the status to "Verified". This handles cases where preserved data has incorrect
+        // incomeFinalized flags but the verification itself is FINALIZED.
+        if (verificationStatus === 'In Progress - Finalize to Process' && 
+            futureLease.IncomeVerification && 
+            futureLease.IncomeVerification.some((v: any) => v.status === 'FINALIZED')) {
+          console.log(`[FUTURE LEASE API] Overriding status for lease ${futureLease.id}: ${verificationStatus} -> Verified (has FINALIZED verification)`);
+          verificationStatus = 'Verified';
+        }
         
         if (unit.unitNumber === '0505') {
           console.log(`[UNIT 0505 LEASE DEBUG] Calculated verification status:`, verificationStatus);
