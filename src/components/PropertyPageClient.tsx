@@ -1030,7 +1030,17 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       const unitProvisionalLeases = provisionalLeases.filter(lease => lease.unitId === unit.id);
       
       // Get future lease for this unit (for Future Leases column)
-      const unitFutureLease = futureLeases.find(fl => fl.unitId === unit.id);
+      // First try to match by unitId, then fall back to unit number matching
+      let unitFutureLease = futureLeases.find(fl => fl.unitId === unit.id);
+      
+      // If no match by unitId, try matching by unit number (for preserved future leases that may have different unitIds)
+      if (!unitFutureLease) {
+        unitFutureLease = futureLeases.find(fl => 
+          fl.unitNumber === unit.unitNumber || 
+          fl.unitNumber === unit.unitNumber.replace(/^0+/, '') || // Remove leading zeros
+          ('0' + fl.unitNumber) === unit.unitNumber // Add leading zero
+        );
+      }
       
       if (unit.unitNumber === '101' || unit.unitNumber === '102' || unit.unitNumber === '103' || unit.unitNumber === '505' || unit.unitNumber === '0505' || unit.unitNumber === '0692') { // Debug specific units
         console.log(`[PROCESSING DEBUG] Unit ${unit.unitNumber}:`, {
