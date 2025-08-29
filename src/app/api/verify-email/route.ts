@@ -3,27 +3,47 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get('token');
+  
+  console.log('🔍 [EMAIL VERIFICATION] Starting verification process');
+  console.log('🔍 [EMAIL VERIFICATION] Token received:', token ? 'YES' : 'NO');
 
   if (!token) {
+    console.log('❌ [EMAIL VERIFICATION] No token provided');
     return NextResponse.redirect(new URL('/auth/verification-failed?error=notoken', req.nextUrl.origin));
   }
 
   try {
+    console.log('🔍 [EMAIL VERIFICATION] Looking up verification token in database...');
     const verificationToken = await prisma.verificationToken.findUnique({
       where: { token },
     });
 
+    console.log('🔍 [EMAIL VERIFICATION] Token lookup result:', verificationToken ? 'FOUND' : 'NOT FOUND');
+    
+    if (verificationToken) {
+      console.log('🔍 [EMAIL VERIFICATION] Token details:', {
+        identifier: verificationToken.identifier,
+        expires: verificationToken.expires.toISOString(),
+        now: new Date().toISOString(),
+        isExpired: verificationToken.expires < new Date()
+      });
+    }
+
     if (!verificationToken || verificationToken.expires < new Date()) {
+      console.log('❌ [EMAIL VERIFICATION] Token invalid or expired');
       return NextResponse.redirect(new URL('/auth/verification-failed?error=invalid', req.nextUrl.origin));
     }
 
     // Mark user as verified using the identifier from the token
+    console.log('🔍 [EMAIL VERIFICATION] Updating user verification status...');
     await prisma.user.update({
       where: { id: verificationToken.identifier },
       data: { emailVerified: new Date() },
     });
+    console.log('✅ [EMAIL VERIFICATION] User marked as verified');
 
     // Delete the token so it cannot be used again
+    console.log('🔍 [EMAIL VERIFICATION] Deleting verification token...');
     await prisma.verificationToken.delete({
       where: {
         identifier_token: {
@@ -32,12 +52,14 @@ export async function GET(req: NextRequest) {
         },
       },
     });
+    console.log('✅ [EMAIL VERIFICATION] Token deleted');
 
     // Redirect to a success page
+    console.log('✅ [EMAIL VERIFICATION] Verification successful, redirecting to success page');
     return NextResponse.redirect(new URL('/auth/verification-success', req.nextUrl.origin));
 
   } catch (error) {
-    console.error('Verification error:', error);
+    console.error('❌ [EMAIL VERIFICATION] Verification error:', error);
     return NextResponse.redirect(new URL('/auth/verification-failed?error=server', req.nextUrl.origin));
   }
 } 
