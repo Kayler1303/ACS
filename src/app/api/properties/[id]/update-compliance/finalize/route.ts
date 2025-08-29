@@ -201,6 +201,8 @@ export async function POST(
 
       // STEP 4: Analyze new data for inheritance matches (without importing it yet)
       console.log(`[COMPLIANCE UPDATE] 🔍 Analyzing new data for inheritance matches`);
+      console.log(`[COMPLIANCE UPDATE] 🔍 unitGroups keys:`, Object.keys(unitGroups || {}));
+      console.log(`[COMPLIANCE UPDATE] 🔍 unitGroups data:`, JSON.stringify(unitGroups, null, 2));
       
       const futureLeaseMatches: any[] = [];
 
