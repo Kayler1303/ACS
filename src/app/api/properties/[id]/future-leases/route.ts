@@ -116,10 +116,68 @@ export async function GET(
     }
     const rentRollDate = targetRentRoll ? new Date(targetRentRoll.uploadDate) : new Date();
 
+    // STEP 2: If we're filtering by a specific rent roll, also look for preserved future leases
+    // that were created during snapshot creation for that rent roll
+    let preservedFutureLeases: any[] = [];
+    if (rentRollId && targetRentRoll) {
+      console.log(`[FUTURE LEASE API] 🔍 Looking for preserved future leases for rent roll ${rentRollId}`);
+      
+      // Find the snapshot that corresponds to this rent roll
+      const snapshot = await prisma.rentRollSnapshot.findFirst({
+        where: {
+          propertyId: propertyId,
+          uploadDate: targetRentRoll.uploadDate
+        }
+      });
+
+      if (snapshot) {
+        console.log(`[FUTURE LEASE API] 📸 Found snapshot ${snapshot.id} for rent roll date ${targetRentRoll.uploadDate}`);
+        
+        // Find preserved future leases that were created during this snapshot
+        // These are leases created around the same time as the snapshot with no Tenancy
+        const snapshotTime = new Date(snapshot.uploadDate);
+        const timeWindow = 5 * 60 * 1000; // 5 minutes window
+        
+        preservedFutureLeases = await prisma.lease.findMany({
+          where: {
+            Unit: {
+              propertyId: propertyId
+            },
+            Tenancy: null, // Future leases don't have Tenancy records
+            createdAt: {
+              gte: new Date(snapshotTime.getTime() - timeWindow),
+              lte: new Date(snapshotTime.getTime() + timeWindow)
+            },
+            NOT: {
+              name: {
+                startsWith: '[PROCESSED]'
+              }
+            }
+          },
+          include: {
+            Unit: true,
+            Resident: {
+              include: {
+                IncomeDocument: true
+              }
+            },
+            IncomeVerification: {
+              orderBy: {
+                createdAt: 'desc'
+              }
+            }
+          }
+        });
+        
+        console.log(`[FUTURE LEASE API] 🔍 Found ${preservedFutureLeases.length} preserved future leases for snapshot`);
+      }
+    }
+
     try {
       const fs = await import('fs');
       fs.appendFileSync('/tmp/future-lease-debug.log', `${new Date().toISOString()} - Property found with ${property.Unit.length} units\n`);
       fs.appendFileSync('/tmp/future-lease-debug.log', `${new Date().toISOString()} - Rent roll date: ${rentRollDate.toISOString()}\n`);
+      fs.appendFileSync('/tmp/future-lease-debug.log', `${new Date().toISOString()} - Preserved future leases: ${preservedFutureLeases.length}\n`);
     } catch (e) {}
 
     const units: UnitFutureLeaseData[] = [];
@@ -155,7 +213,16 @@ export async function GET(
         // Also write to debug file (removed to fix compilation error)
       });
       
-      const futureLeases = unit.Lease.filter((lease: any) => {
+      // Add preserved future leases for this unit to the unit's lease list
+      const allLeasesForUnit = [...unit.Lease];
+      const preservedLeasesForUnit = preservedFutureLeases.filter(lease => lease.Unit.unitNumber === unit.unitNumber);
+      
+      if (preservedLeasesForUnit.length > 0) {
+        console.log(`[FUTURE LEASE DEBUG] Unit ${unit.unitNumber} - Adding ${preservedLeasesForUnit.length} preserved future leases`);
+        allLeasesForUnit.push(...preservedLeasesForUnit);
+      }
+
+      const futureLeases = allLeasesForUnit.filter((lease: any) => {
         // Filter out processed leases (marked with [PROCESSED] prefix)
         if (lease.name.startsWith('[PROCESSED]')) {
           console.log(`[FUTURE LEASE DEBUG] Unit ${unit.unitNumber} - Excluding processed lease: ${lease.name}`);
