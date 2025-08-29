@@ -247,29 +247,66 @@ export async function POST(
               leaseEndDate = new Date(leaseData.leaseEndDate);
             }
 
-            // Determine if new lease would be future or current
-            const rentRollDate = new Date(reportDate);
-            const isNewLeaseFuture = leaseStartDate ? leaseStartDate > rentRollDate : false;
-
             console.log(`[COMPLIANCE UPDATE] 📅 New lease for unit ${unitNumber}:`);
             console.log(`[COMPLIANCE UPDATE] - Start: ${leaseStartDate?.toISOString() || 'null'}`);
             console.log(`[COMPLIANCE UPDATE] - End: ${leaseEndDate?.toISOString() || 'null'}`);
-            console.log(`[COMPLIANCE UPDATE] - Rent roll date: ${rentRollDate.toISOString()}`);
-            console.log(`[COMPLIANCE UPDATE] - Is future: ${isNewLeaseFuture}`);
 
-            // Compare lease dates to determine if this is actually a different lease
-            const existingStartTime = existingFutureLeaseForUnit.leaseStartDate?.getTime();
-            const existingEndTime = existingFutureLeaseForUnit.leaseEndDate?.getTime();
-            const newStartTime = leaseStartDate?.getTime();
-            const newEndTime = leaseEndDate?.getTime();
+            // CRITICAL: We need to compare the new lease dates to the CURRENT lease dates
+            // from the previous snapshot, NOT to the future lease dates (which are often null).
+            // Find the current lease for this unit from the most recent rent roll before this upload.
+            
+            // Query the current lease from the most recent rent roll for this unit
+            const currentLeaseForUnit = await tx.lease.findFirst({
+              where: {
+                Unit: {
+                  unitNumber: unitNumber,
+                  propertyId: propertyId
+                },
+                Tenancy: {
+                  some: {
+                    RentRoll: {
+                      propertyId: propertyId
+                    }
+                  }
+                }
+              },
+              include: {
+                Tenancy: {
+                  include: {
+                    RentRoll: true
+                  }
+                }
+              },
+              orderBy: {
+                createdAt: 'desc'
+              }
+            });
 
-            console.log(`[COMPLIANCE UPDATE] 🔍 Comparing lease dates:`);
-            console.log(`[COMPLIANCE UPDATE] - Existing: ${existingFutureLeaseForUnit.leaseStartDate?.toISOString() || 'null'} to ${existingFutureLeaseForUnit.leaseEndDate?.toISOString() || 'null'}`);
-            console.log(`[COMPLIANCE UPDATE] - New: ${leaseStartDate?.toISOString() || 'null'} to ${leaseEndDate?.toISOString() || 'null'}`);
+            let shouldTriggerModal = true; // Default to showing modal
 
-            const datesAreIdentical = existingStartTime === newStartTime && existingEndTime === newEndTime;
+            if (currentLeaseForUnit) {
+              const currentStartTime = currentLeaseForUnit.leaseStartDate?.getTime();
+              const currentEndTime = currentLeaseForUnit.leaseEndDate?.getTime();
+              const newStartTime = leaseStartDate?.getTime();
+              const newEndTime = leaseEndDate?.getTime();
 
-            if (datesAreIdentical) {
+              console.log(`[COMPLIANCE UPDATE] 🔍 Comparing new lease to CURRENT lease (not future lease):`);
+              console.log(`[COMPLIANCE UPDATE] - Current lease: ${currentLeaseForUnit.leaseStartDate?.toISOString() || 'null'} to ${currentLeaseForUnit.leaseEndDate?.toISOString() || 'null'}`);
+              console.log(`[COMPLIANCE UPDATE] - New lease: ${leaseStartDate?.toISOString() || 'null'} to ${leaseEndDate?.toISOString() || 'null'}`);
+
+              const datesAreIdentical = currentStartTime === newStartTime && currentEndTime === newEndTime;
+              shouldTriggerModal = !datesAreIdentical;
+
+              if (datesAreIdentical) {
+                console.log(`[COMPLIANCE UPDATE] ✅ New lease dates match current lease - same lease continuing. Future lease will carry forward automatically.`);
+              } else {
+                console.log(`[COMPLIANCE UPDATE] 🎯 New lease dates differ from current lease - inheritance decision needed.`);
+              }
+            } else {
+              console.log(`[COMPLIANCE UPDATE] ⚠️ No current lease found for unit ${unitNumber} - will show inheritance modal by default.`);
+            }
+
+            if (!shouldTriggerModal) {
               console.log(`[COMPLIANCE UPDATE] ✅ Lease dates are identical - this is the same lease continuing. No inheritance modal needed for unit ${unitNumber}`);
               // Skip adding to futureLeaseMatches - the lease will automatically carry forward in snapshot preservation
             } else {
@@ -288,6 +325,8 @@ export async function POST(
                 existingFutureLease: {
                   id: existingFutureLeaseForUnit.id,
                   name: existingFutureLeaseForUnit.name,
+                  leaseStartDate: existingFutureLeaseForUnit.leaseStartDate,
+                  leaseEndDate: existingFutureLeaseForUnit.leaseEndDate,
                   residents: residents
                 }
               });
