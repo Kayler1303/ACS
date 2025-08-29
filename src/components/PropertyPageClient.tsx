@@ -1032,7 +1032,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       // Get future lease for this unit (for Future Leases column)
       const unitFutureLease = futureLeases.find(fl => fl.unitId === unit.id);
       
-      if (unit.unitNumber === '101' || unit.unitNumber === '102' || unit.unitNumber === '103' || unit.unitNumber === '505' || unit.unitNumber === '0692') { // Debug specific units
+      if (unit.unitNumber === '101' || unit.unitNumber === '102' || unit.unitNumber === '103' || unit.unitNumber === '505' || unit.unitNumber === '0505' || unit.unitNumber === '0692') { // Debug specific units
         console.log(`[PROCESSING DEBUG] Unit ${unit.unitNumber}:`, {
           unitId: unit.id,
           tenancy: tenancy ? 'found' : 'none',
