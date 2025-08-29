@@ -1065,8 +1065,31 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       }
 
       
-      // Use the future lease data as-is - don't override with current lease verification status
+      // Use the future lease data, but check if we need to update stale verification status
       let processedFutureLease = unitFutureLease?.futureLease;
+      
+      // If the future lease has a stale "In Progress" status, try to get the current verification status
+      // for this specific future lease (not the current lease)
+      if (processedFutureLease?.verificationStatus?.includes('In Progress')) {
+        // Look for verification data that matches this specific future lease
+        const futureLeaseVerification = verificationData?.units?.find(
+          (unitData: any) => unitData.unitId === unit.id
+        )?.futureLeases?.find(
+          (fl: any) => fl.leaseId === processedFutureLease?.leaseId
+        );
+        
+        if (futureLeaseVerification?.verificationStatus && 
+            futureLeaseVerification.verificationStatus !== processedFutureLease.verificationStatus) {
+          console.log(`[FUTURE LEASE STATUS UPDATE] Updating stale status for Unit ${unit.unitNumber}:`, {
+            oldStatus: processedFutureLease.verificationStatus,
+            newStatus: futureLeaseVerification.verificationStatus
+          });
+          processedFutureLease = {
+            ...processedFutureLease,
+            verificationStatus: futureLeaseVerification.verificationStatus
+          };
+        }
+      }
       
       // Additional debug logging for Unit 0505 after processedFutureLease is defined
       if (unit.unitNumber === '0505') {
