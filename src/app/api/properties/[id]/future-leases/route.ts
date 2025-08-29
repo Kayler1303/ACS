@@ -286,7 +286,28 @@ export async function GET(
           
                           // Use the lease-specific verification function
         const { getLeaseVerificationStatus } = await import('../../../../../services/verification');
+        
+        // Debug logging for Unit 0505 verification status calculation
+        if (unit.unitNumber === '0505') {
+          console.log(`[UNIT 0505 LEASE DEBUG] Future lease data for verification:`, {
+            leaseId: futureLease.id,
+            leaseName: futureLease.name,
+            totalResidents: (futureLease.Resident || []).length,
+            residents: (futureLease.Resident || []).map(r => ({
+              name: r.name,
+              incomeFinalized: r.incomeFinalized,
+              finalizedAt: r.finalizedAt,
+              verifiedIncome: r.verifiedIncome,
+              calculatedAnnualizedIncome: r.calculatedAnnualizedIncome
+            }))
+          });
+        }
+        
         const verificationStatus = getLeaseVerificationStatus({...futureLease, Tenancy: null} as any);
+        
+        if (unit.unitNumber === '0505') {
+          console.log(`[UNIT 0505 LEASE DEBUG] Calculated verification status:`, verificationStatus);
+        }
 
           // Calculate total income - only for verified leases
           let totalIncome = 0;
