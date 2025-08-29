@@ -298,6 +298,21 @@ export async function POST(
         }
       }
 
+      // Add debug info to response so we can see it in browser network tab
+      const debugInfo = {
+        unit0103InUnitGroups: Object.keys(unitGroups || {}).includes('0103'),
+        unit0103Data: (unitGroups as any)['0103'] || null,
+        existingFutureLeaseFor0103: existingFutureLeases.find(lease => 
+          lease.Unit.unitNumber === '0103'
+        ) ? {
+          leaseStartDate: existingFutureLeases.find(lease => lease.Unit.unitNumber === '0103')?.leaseStartDate,
+          leaseEndDate: existingFutureLeases.find(lease => lease.Unit.unitNumber === '0103')?.leaseEndDate,
+          name: existingFutureLeases.find(lease => lease.Unit.unitNumber === '0103')?.name
+        } : null,
+        totalExistingFutureLeases: existingFutureLeases.length,
+        unitGroupsKeys: Object.keys(unitGroups || {})
+      };
+
       return {
         success: true,
         snapshotId: snapshot.id,
@@ -306,7 +321,8 @@ export async function POST(
         requiresInheritanceDecision: futureLeaseMatches.length > 0,
         message: futureLeaseMatches.length > 0 
           ? `Snapshot created. Found ${futureLeaseMatches.length} potential inheritance matches. Please make inheritance decisions before importing data.`
-          : 'Snapshot created successfully. No inheritance matches found. Ready to import data.'
+          : 'Snapshot created successfully. No inheritance matches found. Ready to import data.',
+        debugInfo: debugInfo // Add debug info to response
       };
     });
 
