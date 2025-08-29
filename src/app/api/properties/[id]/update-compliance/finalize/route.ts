@@ -237,25 +237,43 @@ export async function POST(
             console.log(`[COMPLIANCE UPDATE] - Rent roll date: ${rentRollDate.toISOString()}`);
             console.log(`[COMPLIANCE UPDATE] - Is future: ${isNewLeaseFuture}`);
 
-            // Always prompt for inheritance decision when there's a match
-            const residents = existingFutureLeaseForUnit.Resident.map(r => ({
-              id: r.id,
-              name: r.name,
-              verifiedIncome: r.calculatedAnnualizedIncome ? parseFloat(r.calculatedAnnualizedIncome.toString()) : 0
-            }));
+            // Compare lease dates to determine if this is actually a different lease
+            const existingStartTime = existingFutureLeaseForUnit.leaseStartDate?.getTime();
+            const existingEndTime = existingFutureLeaseForUnit.leaseEndDate?.getTime();
+            const newStartTime = leaseStartDate?.getTime();
+            const newEndTime = leaseEndDate?.getTime();
 
-            futureLeaseMatches.push({
-              unitNumber,
-              newLeaseStartDate: leaseData.leaseStartDate,
-              newLeaseEndDate: leaseData.leaseEndDate,
-              existingFutureLease: {
-                id: existingFutureLeaseForUnit.id,
-                name: existingFutureLeaseForUnit.name,
-                residents: residents
-              }
-            });
+            console.log(`[COMPLIANCE UPDATE] 🔍 Comparing lease dates:`);
+            console.log(`[COMPLIANCE UPDATE] - Existing: ${existingFutureLeaseForUnit.leaseStartDate?.toISOString() || 'null'} to ${existingFutureLeaseForUnit.leaseEndDate?.toISOString() || 'null'}`);
+            console.log(`[COMPLIANCE UPDATE] - New: ${leaseStartDate?.toISOString() || 'null'} to ${leaseEndDate?.toISOString() || 'null'}`);
 
-            console.log(`[COMPLIANCE UPDATE] ✅ Added inheritance match for unit ${unitNumber}`);
+            const datesAreIdentical = existingStartTime === newStartTime && existingEndTime === newEndTime;
+
+            if (datesAreIdentical) {
+              console.log(`[COMPLIANCE UPDATE] ✅ Lease dates are identical - this is the same lease continuing. No inheritance modal needed for unit ${unitNumber}`);
+              // Skip adding to futureLeaseMatches - the lease will automatically carry forward in snapshot preservation
+            } else {
+              console.log(`[COMPLIANCE UPDATE] 🎯 Lease dates have changed - inheritance decision needed for unit ${unitNumber}`);
+              
+              const residents = existingFutureLeaseForUnit.Resident.map(r => ({
+                id: r.id,
+                name: r.name,
+                verifiedIncome: r.calculatedAnnualizedIncome ? parseFloat(r.calculatedAnnualizedIncome.toString()) : 0
+              }));
+
+              futureLeaseMatches.push({
+                unitNumber,
+                newLeaseStartDate: leaseData.leaseStartDate,
+                newLeaseEndDate: leaseData.leaseEndDate,
+                existingFutureLease: {
+                  id: existingFutureLeaseForUnit.id,
+                  name: existingFutureLeaseForUnit.name,
+                  residents: residents
+                }
+              });
+
+              console.log(`[COMPLIANCE UPDATE] ✅ Added inheritance match for unit ${unitNumber}`);
+            }
           }
         }
       }
