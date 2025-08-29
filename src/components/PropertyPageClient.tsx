@@ -956,7 +956,9 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
           unitNumber: fl.unitNumber || 'Unknown',
           bedroomCount: fl.bedroomCount || 0,
           squareFootage: fl.squareFootage || null,
-          propertyId: property.id
+          propertyId: property.id,
+          createdAt: new Date(),
+          updatedAt: new Date()
         });
       }
     });
