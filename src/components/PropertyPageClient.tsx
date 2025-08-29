@@ -918,7 +918,13 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
 
   // Process tenancies whenever dependencies change
   useEffect(() => {
+    console.log('🔄 [UNIT PROCESSING] useEffect triggered');
+    console.log('🔄 [UNIT PROCESSING] selectedSnapshotId:', selectedSnapshotId);
+    console.log('🔄 [UNIT PROCESSING] futureLeases.length:', futureLeases.length);
+    console.log('🔄 [UNIT PROCESSING] property.Unit.length:', property.Unit.length);
+    
     if (!selectedSnapshotId) {
+      console.log('❌ [UNIT PROCESSING] No selectedSnapshotId, returning early');
       return;
     }
     
