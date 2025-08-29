@@ -1054,6 +1054,16 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       }
 
       
+      // If we have a future lease, update its verification status with current data
+      let processedFutureLease = unitFutureLease?.futureLease;
+      if (processedFutureLease && unitVerification?.verificationStatus) {
+        processedFutureLease = {
+          ...processedFutureLease,
+          verificationStatus: unitVerification.verificationStatus,
+          totalIncome: unitVerification.totalIncome || processedFutureLease.totalIncome
+        };
+      }
+
       return {
         id: unit.id,
         unitNumber: unit.unitNumber,
@@ -1065,7 +1075,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
         complianceBucket: actualBucket, // Will be updated below
         verificationStatus: unitVerification?.verificationStatus,
         provisionalLeases: unitProvisionalLeases,
-        futureLease: unitFutureLease?.futureLease,
+        futureLease: processedFutureLease,
       };
     });
 
