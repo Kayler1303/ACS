@@ -182,6 +182,16 @@ export default function AdminDashboard() {
   const [messageContent, setMessageContent] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
 
+  // User management modal states
+  const [showUserPropertiesModal, setShowUserPropertiesModal] = useState(false);
+  const [showPropertySnapshotsModal, setShowPropertySnapshotsModal] = useState(false);
+  const [showDeleteUserModal, setShowDeleteUserModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [userProperties, setUserProperties] = useState<any[]>([]);
+  const [propertySnapshots, setPropertySnapshots] = useState<any>(null);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [deletingUser, setDeletingUser] = useState(false);
+
   // Check if user is admin
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -265,6 +275,89 @@ export default function AdminDashboard() {
       fetchRequests();
     }
   }, [status, session, propertyFilter, activeTab]);
+
+  // User management functions
+  const handleUserClick = async (user: User) => {
+    try {
+      const response = await fetch(`/api/admin/users/${user.id}/properties`);
+      if (response.ok) {
+        const data = await response.json();
+        setUserProperties(data.properties);
+        setSelectedUser(user);
+        setShowUserPropertiesModal(true);
+      } else {
+        console.error('Failed to fetch user properties');
+        alert('Failed to load user properties');
+      }
+    } catch (error) {
+      console.error('Error fetching user properties:', error);
+      alert('Error loading user properties');
+    }
+  };
+
+  const handlePropertyClick = async (property: any) => {
+    try {
+      const response = await fetch(`/api/admin/properties/${property.id}/all-snapshots`);
+      if (response.ok) {
+        const data = await response.json();
+        setPropertySnapshots(data);
+        setShowPropertySnapshotsModal(true);
+      } else {
+        console.error('Failed to fetch property snapshots');
+        alert('Failed to load property snapshots');
+      }
+    } catch (error) {
+      console.error('Error fetching property snapshots:', error);
+      alert('Error loading property snapshots');
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return;
+
+    setDeletingUser(true);
+    try {
+      const response = await fetch(`/api/admin/users/${userToDelete.id}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        // Remove user from the local state
+        setUsers(users.filter(user => user.id !== userToDelete.id));
+        setShowDeleteUserModal(false);
+        setUserToDelete(null);
+        alert('User deleted successfully');
+      } else {
+        const error = await response.json();
+        if (error.code === 'USER_HAS_PROPERTIES') {
+          alert(`Cannot delete user: ${error.error}`);
+        } else {
+          alert(`Failed to delete user: ${error.error}`);
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      alert('Error deleting user. Please try again.');
+    } finally {
+      setDeletingUser(false);
+    }
+  };
+
+  const openDeleteModal = (user: User) => {
+    setUserToDelete(user);
+    setShowDeleteUserModal(true);
+  };
+
+  const closeUserPropertiesModal = () => {
+    setShowUserPropertiesModal(false);
+    setSelectedUser(null);
+    setUserProperties([]);
+  };
+
+  const closePropertySnapshotsModal = () => {
+    setShowPropertySnapshotsModal(false);
+    setPropertySnapshots(null);
+  };
 
   const filteredRequests = overrideRequests.filter(request => {
     // Status filter
@@ -570,7 +663,11 @@ export default function AdminDashboard() {
         )}
 
         {activeTab === 'users' && (
-          <UsersTab users={users} />
+          <UsersTab
+            users={users}
+            onUserClick={handleUserClick}
+            onDeleteUser={openDeleteModal}
+          />
         )}
 
         {activeTab === 'properties' && (
@@ -2032,7 +2129,345 @@ function OverrideRequestItem({
           </div>
         </div>
       )}
+
+      {/* User Properties Modal */}
+      {showUserPropertiesModal && selectedUser && (
+        <UserPropertiesModal
+          user={selectedUser}
+          properties={userProperties}
+          onClose={closeUserPropertiesModal}
+          onPropertyClick={handlePropertyClick}
+        />
+      )}
+
+      {/* Property Snapshots Modal */}
+      {showPropertySnapshotsModal && propertySnapshots && (
+        <PropertySnapshotsModal
+          propertyData={propertySnapshots}
+          onClose={closePropertySnapshotsModal}
+        />
+      )}
+
+      {/* Delete User Confirmation Modal */}
+      {showDeleteUserModal && userToDelete && (
+        <DeleteUserModal
+          user={userToDelete}
+          onClose={() => setShowDeleteUserModal(false)}
+          onConfirm={handleDeleteUser}
+          loading={deletingUser}
+        />
+      )}
     </>
+  );
+}
+
+// User Properties Modal Component
+function UserPropertiesModal({
+  user,
+  properties,
+  onClose,
+  onPropertyClick
+}: {
+  user: User;
+  properties: any[];
+  onClose: () => void;
+  onPropertyClick: (property: any) => void;
+}) {
+  return (
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+      <div className="relative top-20 mx-auto p-5 border w-full max-w-4xl shadow-lg rounded-md bg-white max-h-[80vh] overflow-y-auto">
+        <div className="mt-3">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-medium text-gray-900">
+              Properties for {user.name || user.email}
+            </h3>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="mb-4 grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="bg-blue-50 p-3 rounded">
+              <div className="text-2xl font-bold text-blue-600">{properties.length}</div>
+              <div className="text-sm text-blue-700">Total Properties</div>
+            </div>
+            <div className="bg-green-50 p-3 rounded">
+              <div className="text-2xl font-bold text-green-600">
+                {properties.filter(p => p.ownership === 'owned').length}
+              </div>
+              <div className="text-sm text-green-700">Owned</div>
+            </div>
+            <div className="bg-purple-50 p-3 rounded">
+              <div className="text-2xl font-bold text-purple-600">
+                {properties.filter(p => p.ownership === 'shared').length}
+              </div>
+              <div className="text-sm text-purple-700">Shared</div>
+            </div>
+            <div className="bg-orange-50 p-3 rounded">
+              <div className="text-2xl font-bold text-orange-600">
+                {properties.reduce((sum, p) => sum + (p._count?.RentRollSnapshot || 0), 0)}
+              </div>
+              <div className="text-sm text-orange-700">Total Snapshots</div>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {properties.map((property) => (
+              <div
+                key={property.id}
+                className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                onClick={() => onPropertyClick(property)}
+              >
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-2 mb-2">
+                      <h4 className="text-sm font-medium text-gray-900">{property.name}</h4>
+                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                        property.ownership === 'owned' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
+                      }`}>
+                        {property.ownership === 'owned' ? 'Owned' : 'Shared'}
+                      </span>
+                      {property.isOwned === false && property.sharedBy && (
+                        <span className="text-xs text-gray-500">
+                          via {property.sharedBy.name || property.sharedBy.company}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-600 mb-2">
+                      {property.address}, {property.county}, {property.state}
+                    </p>
+                    <div className="flex items-center space-x-4 text-xs text-gray-500">
+                      <span>{property._count?.Unit || 0} units</span>
+                      <span>{property._count?.RentRollSnapshot || 0} snapshots</span>
+                      <span>{property._count?.OverrideRequest || 0} requests</span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm text-gray-900">
+                      {property._count?.RentRollSnapshot || 0} snapshots
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      Last updated: {new Date(property.updatedAt).toLocaleDateString()}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Recent Snapshots Preview */}
+                {property.recentSnapshots && property.recentSnapshots.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-gray-100">
+                    <h5 className="text-xs font-medium text-gray-700 mb-2">Recent Snapshots:</h5>
+                    <div className="flex flex-wrap gap-1">
+                      {property.recentSnapshots.map((snapshot: any) => (
+                        <span
+                          key={snapshot.id}
+                          className={`inline-flex items-center px-2 py-1 rounded text-xs ${
+                            snapshot.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                          }`}
+                        >
+                          {new Date(snapshot.uploadDate).toLocaleDateString()}
+                          {snapshot.filename && ` - ${snapshot.filename}`}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Property Snapshots Modal Component
+function PropertySnapshotsModal({
+  propertyData,
+  onClose
+}: {
+  propertyData: any;
+  onClose: () => void;
+}) {
+  const { property, snapshots, statistics } = propertyData;
+
+  return (
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+      <div className="relative top-20 mx-auto p-5 border w-full max-w-5xl shadow-lg rounded-md bg-white max-h-[85vh] overflow-y-auto">
+        <div className="mt-3">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h3 className="text-lg font-medium text-gray-900">
+                Snapshots for {property.name}
+              </h3>
+              <p className="text-sm text-gray-600">
+                {property.address}, {property.county}, {property.state}
+              </p>
+            </div>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Statistics */}
+          <div className="mb-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="bg-blue-50 p-4 rounded">
+              <div className="text-2xl font-bold text-blue-600">{statistics.totalSnapshots}</div>
+              <div className="text-sm text-blue-700">Total Snapshots</div>
+            </div>
+            <div className="bg-green-50 p-4 rounded">
+              <div className="text-2xl font-bold text-green-600">
+                {statistics.activeSnapshot ? 'Active' : 'None'}
+              </div>
+              <div className="text-sm text-green-700">Active Snapshot</div>
+            </div>
+            <div className="bg-purple-50 p-4 rounded">
+              <div className="text-2xl font-bold text-purple-600">{statistics.recentUploads}</div>
+              <div className="text-sm text-purple-700">Recent Uploads (30d)</div>
+            </div>
+            <div className="bg-orange-50 p-4 rounded">
+              <div className="text-2xl font-bold text-orange-600">
+                {Object.keys(statistics.fileTypes).length}
+              </div>
+              <div className="text-sm text-orange-700">File Types</div>
+            </div>
+          </div>
+
+          {/* Snapshots by Month */}
+          <div className="space-y-6">
+            {statistics.snapshotsByMonth.map((monthData: any) => (
+              <div key={monthData.month} className="border border-gray-200 rounded-lg p-4">
+                <h4 className="text-md font-medium text-gray-900 mb-3">
+                  {new Date(monthData.month + '-01').toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long'
+                  })}
+                  <span className="ml-2 text-sm text-gray-500">
+                    ({monthData.count} snapshots)
+                  </span>
+                </h4>
+
+                <div className="space-y-2">
+                  {monthData.snapshots.map((snapshot: any) => (
+                    <div
+                      key={snapshot.id}
+                      className={`flex items-center justify-between p-3 rounded border ${
+                        snapshot.isActive
+                          ? 'border-green-200 bg-green-50'
+                          : 'border-gray-200 bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-3">
+                        <div className={`w-3 h-3 rounded-full ${
+                          snapshot.isActive ? 'bg-green-500' : 'bg-gray-400'
+                        }`} />
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {snapshot.filename || 'Unnamed File'}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {new Date(snapshot.uploadDate).toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm text-gray-900">
+                          {snapshot._count?.rentRolls || 0} rent rolls
+                        </div>
+                        {snapshot.isActive && (
+                          <div className="text-xs text-green-600 font-medium">Active</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Delete User Confirmation Modal Component
+function DeleteUserModal({
+  user,
+  onClose,
+  onConfirm,
+  loading
+}: {
+  user: User;
+  onClose: () => void;
+  onConfirm: () => void;
+  loading: boolean;
+}) {
+  return (
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+      <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <div className="mt-3">
+          <div className="flex items-center mb-4">
+            <div className="flex-shrink-0">
+              <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+            </div>
+            <div className="ml-4">
+              <h3 className="text-lg font-medium text-gray-900">Delete User</h3>
+              <p className="text-sm text-gray-500">This action cannot be undone</p>
+            </div>
+          </div>
+
+          <div className="mb-6">
+            <p className="text-sm text-gray-700 mb-3">
+              Are you sure you want to delete <strong>{user.name || user.email}</strong>?
+            </p>
+            <div className="bg-yellow-50 border border-yellow-200 rounded p-3">
+              <div className="text-sm text-yellow-800">
+                <strong>Warning:</strong> This will permanently delete:
+              </div>
+              <ul className="mt-2 text-sm text-yellow-700 list-disc list-inside space-y-1">
+                <li>User account and profile</li>
+                <li>All override requests created by this user</li>
+                <li>All admin messages sent/received</li>
+                <li>Property sharing permissions</li>
+              </ul>
+              <div className="mt-2 text-sm text-yellow-800">
+                <strong>Note:</strong> If the user owns properties, they must be reassigned or deleted first.
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end space-x-3">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200"
+              disabled={loading}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={onConfirm}
+              disabled={loading}
+              className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? 'Deleting...' : 'Delete User'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -2230,7 +2665,15 @@ function OverviewTab({ systemStats }: { systemStats: SystemStats }) {
 }
 
 // Users Tab Component
-function UsersTab({ users }: { users: User[] }) {
+function UsersTab({
+  users,
+  onUserClick,
+  onDeleteUser
+}: {
+  users: User[];
+  onUserClick: (user: User) => void;
+  onDeleteUser: (user: User) => void;
+}) {
   return (
     <div className="bg-white shadow overflow-hidden sm:rounded-md">
       <div className="px-4 py-5 sm:px-6">
@@ -2241,9 +2684,9 @@ function UsersTab({ users }: { users: User[] }) {
       </div>
       <ul className="divide-y divide-gray-200">
         {users.map((user) => (
-          <li key={user.id} className="px-4 py-4 sm:px-6">
+          <li key={user.id} className="px-4 py-4 sm:px-6 hover:bg-gray-50 cursor-pointer group">
             <div className="flex items-center justify-between">
-              <div className="flex items-center">
+              <div className="flex items-center flex-1" onClick={() => onUserClick(user)}>
                 <div className="flex-shrink-0">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
                     user.role === 'ADMIN' ? 'bg-red-100' : 'bg-blue-100'
@@ -2255,7 +2698,7 @@ function UsersTab({ users }: { users: User[] }) {
                     </span>
                   </div>
                 </div>
-                <div className="ml-4">
+                <div className="ml-4 flex-1">
                   <div className="flex items-center">
                     <h4 className="text-sm font-medium text-gray-900">
                       {user.name || user.email}
@@ -2275,15 +2718,32 @@ function UsersTab({ users }: { users: User[] }) {
                   <p className="text-sm text-gray-500">{user.company}</p>
                 </div>
               </div>
-              <div className="text-right">
-                <div className="text-sm text-gray-900">
-                  {user.stats.totalProperties} properties
+              <div className="text-right flex items-center space-x-3">
+                <div className="text-right">
+                  <div className="text-sm text-gray-900">
+                    {user.stats.totalProperties} properties
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    {user.stats.pendingRequests} pending requests
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    Joined {new Date(user.createdAt).toLocaleDateString()}
+                  </div>
                 </div>
-                <div className="text-sm text-gray-500">
-                  {user.stats.pendingRequests} pending requests
-                </div>
-                <div className="text-sm text-gray-500">
-                  Joined {new Date(user.createdAt).toLocaleDateString()}
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteUser(user);
+                    }}
+                    className="inline-flex items-center px-2.5 py-1.5 border border-red-300 shadow-sm text-xs font-medium rounded text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                    disabled={user.role === 'ADMIN'}
+                  >
+                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    Delete
+                  </button>
                 </div>
               </div>
             </div>
