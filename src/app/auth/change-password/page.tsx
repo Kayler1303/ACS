@@ -167,7 +167,10 @@ export default function ChangePasswordPage() {
         </form>
 
         <div className="text-sm text-center space-y-2">
-          <Link href="/dashboard" className="font-medium text-brand-accent hover:text-brand-blue block">
+          <Link href="/account" className="font-medium text-brand-accent hover:text-brand-blue block">
+            ← Back to My Account
+          </Link>
+          <Link href="/dashboard" className="font-medium text-gray-500 hover:text-gray-700 block">
             Back to Dashboard
           </Link>
           <Link href="/auth/forgot-password" className="font-medium text-gray-500 hover:text-gray-700 block">
