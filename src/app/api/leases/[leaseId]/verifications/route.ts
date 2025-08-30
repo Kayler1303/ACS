@@ -92,8 +92,13 @@ export async function POST(
 
   } catch (error) {
     console.error('[VERIFICATION] Error creating verification:', error);
+    console.error('[VERIFICATION] Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      name: error instanceof Error ? error.name : undefined
+    });
     return NextResponse.json(
-      { error: 'Failed to create verification' },
+      { error: 'Failed to create verification', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }
