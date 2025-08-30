@@ -236,6 +236,17 @@ export default function UserDetailPage() {
             <p className="text-gray-600">{user.company} • {user.role}</p>
           </div>
           <div className="mt-4 flex md:mt-0 md:ml-4 space-x-3">
+            {userId === session?.user?.id && (
+              <Link
+                href="/auth/change-password"
+                className="inline-flex items-center px-4 py-2 border border-blue-300 shadow-sm text-sm font-medium rounded-md text-blue-700 bg-white hover:bg-blue-50"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                </svg>
+                Change Password
+              </Link>
+            )}
             <button
               onClick={handleDeleteUser}
               disabled={user.role === 'ADMIN'}

@@ -29,9 +29,14 @@ export default async function DashboardPage() {
       <PageTracker pageName="Dashboard" />
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-brand-blue">Your Properties</h1>
-        <Link href="/property/new" className="bg-brand-accent hover:bg-brand-accent-dark text-white font-bold py-2 px-4 rounded transition-colors duration-300">
-          Create New Property
-        </Link>
+        <div className="flex space-x-3">
+          <Link href="/auth/change-password" className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition-colors duration-300">
+            Change Password
+          </Link>
+          <Link href="/property/new" className="bg-brand-accent hover:bg-brand-accent-dark text-white font-bold py-2 px-4 rounded transition-colors duration-300">
+            Create New Property
+          </Link>
+        </div>
       </div>
 
       {allProperties.length === 0 ? (

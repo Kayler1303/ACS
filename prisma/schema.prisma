@@ -76,18 +76,18 @@ model IncomeVerification {
 }
 
 model Lease {
-  id                   String                 @id
-  name                 String
-  leaseStartDate       DateTime?
-  leaseEndDate         DateTime?
-  leaseRent            Decimal?
-  createdAt            DateTime               @default(now())
-  updatedAt            DateTime
-  unitId               String
-  IncomeVerification   IncomeVerification[]
-  Unit                 Unit                   @relation(fields: [unitId], references: [id], onDelete: Cascade)
-  Resident             Resident[]
-  Tenancy              Tenancy?
+  id                 String               @id
+  name               String
+  leaseStartDate     DateTime?
+  leaseEndDate       DateTime?
+  leaseRent          Decimal?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime
+  unitId             String
+  IncomeVerification IncomeVerification[]
+  Unit               Unit                 @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  Resident           Resident[]
+  Tenancy            Tenancy?
 
   @@index([unitId])
 }
@@ -119,37 +119,37 @@ model OverrideRequest {
 }
 
 model Property {
-  id                       String                   @id
+  id                       String             @id
   name                     String
   address                  String?
   county                   String
   state                    String
   numberOfUnits            Int?
-  createdAt                DateTime                 @default(now())
+  createdAt                DateTime           @default(now())
   updatedAt                DateTime
   ownerId                  String
-  complianceOption         String?                  @default("20% at 50% AMI, 55% at 80% AMI")
-  includeRentAnalysis      Boolean                  @default(false)
-  includeUtilityAllowances Boolean                  @default(false)
+  complianceOption         String?            @default("20% at 50% AMI, 55% at 80% AMI")
+  includeRentAnalysis      Boolean            @default(false)
+  includeUtilityAllowances Boolean            @default(false)
   utilityAllowances        Json?
   placedInServiceDate      DateTime?
   OverrideRequest          OverrideRequest[]
-  User                     User                     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  RentRoll                 RentRoll[]
-  Unit                     Unit[]
+  User                     User               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   PropertyShare            PropertyShare[]
+  RentRoll                 RentRoll[]
   RentRollSnapshot         RentRollSnapshot[]
+  Unit                     Unit[]
 }
 
 model RentRoll {
-  id                       String                 @id
-  uploadDate               DateTime               @default(now())
-  filename                 String?
-  propertyId               String
-  snapshotId               String?
-  Property                 Property               @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  snapshot                 RentRollSnapshot?      @relation(fields: [snapshotId], references: [id])
-  Tenancy                  Tenancy[]
+  id         String            @id
+  uploadDate DateTime          @default(now())
+  filename   String?
+  propertyId String
+  snapshotId String?
+  Property   Property          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  snapshot   RentRollSnapshot? @relation(fields: [snapshotId], references: [id])
+  Tenancy    Tenancy[]
 
   @@index([propertyId])
   @@index([snapshotId])
@@ -188,16 +188,16 @@ model Tenancy {
 }
 
 model Unit {
-  id                     String                   @id
-  unitNumber             String
-  squareFootage          Int?
-  bedroomCount           Int?
-  createdAt              DateTime                 @default(now())
-  updatedAt              DateTime
-  propertyId             String
-  Lease                  Lease[]
-  OverrideRequest        OverrideRequest[]
-  Property               Property                 @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  id              String            @id
+  unitNumber      String
+  squareFootage   Int?
+  bedroomCount    Int?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime
+  propertyId      String
+  Lease           Lease[]
+  OverrideRequest OverrideRequest[]
+  Property        Property          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@index([propertyId])
   @@index([unitNumber])
@@ -218,10 +218,10 @@ model User {
   OverrideRequest_OverrideRequest_requesterIdToUser OverrideRequest[]   @relation("OverrideRequest_requesterIdToUser")
   OverrideRequest_OverrideRequest_reviewerIdToUser  OverrideRequest[]   @relation("OverrideRequest_reviewerIdToUser")
   Property                                          Property[]
-  VerificationToken                                 VerificationToken[]
-  PropertyShare_SharedWith                          PropertyShare[]     @relation("PropertyShare_userId")
   PropertyShare_SharedBy                            PropertyShare[]     @relation("PropertyShare_sharedById")
+  PropertyShare_SharedWith                          PropertyShare[]     @relation("PropertyShare_userId")
   UserActivity                                      UserActivity[]
+  VerificationToken                                 VerificationToken[]
 }
 
 model VerificationToken {
@@ -231,6 +231,50 @@ model VerificationToken {
   User       User     @relation(fields: [identifier], references: [id], onDelete: Cascade)
 
   @@unique([identifier, token])
+}
+
+model PropertyShare {
+  id         String          @id @default(cuid())
+  propertyId String
+  userId     String
+  sharedById String
+  permission PermissionLevel
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  property   Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  sharedBy   User            @relation("PropertyShare_sharedById", fields: [sharedById], references: [id], onDelete: Cascade)
+  user       User            @relation("PropertyShare_userId", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([propertyId, userId])
+}
+
+model RentRollSnapshot {
+  id         String     @id
+  propertyId String
+  uploadDate DateTime   @default(now())
+  filename   String?
+  isActive   Boolean    @default(true)
+  rentRolls  RentRoll[]
+  property   Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@index([uploadDate])
+}
+
+model UserActivity {
+  id           String       @id @default(cuid())
+  userId       String
+  activityType ActivityType
+  description  String?
+  metadata     Json?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime     @default(now())
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([activityType])
+  @@index([createdAt])
 }
 
 enum DocumentStatus {
@@ -290,36 +334,6 @@ enum PermissionLevel {
   EDIT
 }
 
-model PropertyShare {
-  id          String          @id @default(cuid())
-  propertyId  String
-  userId      String
-  sharedById  String
-  permission  PermissionLevel
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-
-  property    Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  user        User            @relation("PropertyShare_userId", fields: [userId], references: [id], onDelete: Cascade)
-  sharedBy    User            @relation("PropertyShare_sharedById", fields: [sharedById], references: [id], onDelete: Cascade)
-
-  @@unique([propertyId, userId])
-}
-
-model RentRollSnapshot {
-  id                String              @id
-  propertyId        String
-  uploadDate        DateTime            @default(now())
-  filename          String?
-  isActive          Boolean             @default(true)
-
-  property          Property            @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  rentRolls         RentRoll[]
-
-  @@index([propertyId])
-  @@index([uploadDate])
-}
-
 enum ActivityType {
   LOGIN
   LOGOUT
@@ -330,21 +344,4 @@ enum ActivityType {
   USER_CREATED
   PROPERTY_CREATED
   ADMIN_ACTION
-}
-
-model UserActivity {
-  id            String       @id @default(cuid())
-  userId        String
-  activityType  ActivityType
-  description   String?
-  metadata      Json?        // Store additional data like IP, user agent, etc.
-  ipAddress     String?
-  userAgent     String?
-  createdAt     DateTime     @default(now())
-
-  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([activityType])
-  @@index([createdAt])
 }
