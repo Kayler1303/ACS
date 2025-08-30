@@ -49,6 +49,7 @@ export async function GET(
         createdAt: true,
         updatedAt: true,
         placedInServiceDate: true,
+        ownerId: true,
         _count: {
           select: {
             Unit: true,
