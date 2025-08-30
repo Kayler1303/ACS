@@ -28,6 +28,10 @@ export const authOptions: AuthOptions = {
           throw new Error('Please verify your email address before logging in.');
         }
 
+        if (user.suspended) {
+          throw new Error('Your account has been suspended. Please contact support for assistance.');
+        }
+
         const isPasswordValid = await bcrypt.compare(
           credentials.password,
           user.password

@@ -11,6 +11,7 @@ interface User {
   name?: string;
   company: string;
   role: 'USER' | 'ADMIN';
+  suspended: boolean;
   createdAt: string;
   emailVerified?: string;
   stats?: {
@@ -86,6 +87,9 @@ export default function UserDetailPage() {
   const [propertySnapshots, setPropertySnapshots] = useState<PropertySnapshots | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showSuspendModal, setShowSuspendModal] = useState(false);
+  const [suspendReason, setSuspendReason] = useState('');
+  const [suspendLoading, setSuspendLoading] = useState(false);
 
   // Check if user is admin and redirect if not
   useEffect(() => {
@@ -168,6 +172,50 @@ export default function UserDetailPage() {
     }
   };
 
+  const handleSuspendUser = async () => {
+    if (!user) return;
+
+    const action = user.suspended ? 'unsuspend' : 'suspend';
+    const confirmMessage = user.suspended
+      ? `Are you sure you want to unsuspend ${user.name || user.email}? They will be able to log in again.`
+      : `Are you sure you want to suspend ${user.name || user.email}? They will not be able to log in until unsuspended.`;
+
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      setSuspendLoading(true);
+      const response = await fetch(`/api/admin/users/${user.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          suspended: !user.suspended,
+          reason: suspendReason || (user.suspended ? 'Account unsuspended by admin' : 'Account suspended by admin'),
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        alert(`User ${action}ed successfully`);
+        // Update the user state with the new suspension status
+        setUser(prev => prev ? { ...prev, suspended: result.user.suspended } : null);
+        setShowSuspendModal(false);
+        setSuspendReason('');
+      } else {
+        const error = await response.json();
+        alert(`Failed to ${action} user: ${error.error}`);
+      }
+    } catch (error) {
+      console.error(`Error ${action}ing user:`, error);
+      alert(`Error ${action}ing user. Please try again.`);
+    } finally {
+      setSuspendLoading(false);
+    }
+  };
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
   };
@@ -230,9 +278,19 @@ export default function UserDetailPage() {
                 </li>
               </ol>
             </nav>
-            <h1 className="mt-4 text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate">
-              {user.name || user.email}
-            </h1>
+            <div className="flex items-center space-x-3">
+              <h1 className="mt-4 text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate">
+                {user.name || user.email}
+              </h1>
+              {user.suspended && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                  <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                  Suspended
+                </span>
+              )}
+            </div>
             <p className="text-gray-600">{user.company} • {user.role}</p>
           </div>
           <div className="mt-4 flex md:mt-0 md:ml-4 space-x-3">
@@ -247,6 +305,31 @@ export default function UserDetailPage() {
                 My Account
               </Link>
             )}
+            <button
+              onClick={() => setShowSuspendModal(true)}
+              disabled={user.role === 'ADMIN' || userId === session?.user?.id}
+              className={`inline-flex items-center px-4 py-2 border shadow-sm text-sm font-medium rounded-md ${
+                user.suspended
+                  ? 'border-green-300 text-green-700 bg-white hover:bg-green-50'
+                  : 'border-orange-300 text-orange-700 bg-white hover:bg-orange-50'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              {user.suspended ? (
+                <>
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Unsuspend User
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                  Suspend User
+                </>
+              )}
+            </button>
             <button
               onClick={handleDeleteUser}
               disabled={user.role === 'ADMIN'}
@@ -532,6 +615,74 @@ export default function UserDetailPage() {
                 </div>
               </>
             )}
+          </div>
+        )}
+
+        {/* Suspend User Modal */}
+        {showSuspendModal && user && (
+          <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+            <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+              <div className="mt-3">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-medium text-gray-900">
+                    {user.suspended ? 'Unsuspend User' : 'Suspend User'}
+                  </h3>
+                  <button
+                    onClick={() => setShowSuspendModal(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                <div className="mb-4">
+                  <p className="text-sm text-gray-600 mb-3">
+                    {user.suspended
+                      ? `Are you sure you want to unsuspend ${user.name || user.email}? They will be able to log in again.`
+                      : `Are you sure you want to suspend ${user.name || user.email}? They will not be able to log in until unsuspended.`
+                    }
+                  </p>
+
+                  {!user.suspended && (
+                    <div className="mb-4">
+                      <label htmlFor="suspendReason" className="block text-sm font-medium text-gray-700 mb-2">
+                        Reason for suspension (optional)
+                      </label>
+                      <textarea
+                        id="suspendReason"
+                        value={suspendReason}
+                        onChange={(e) => setSuspendReason(e.target.value)}
+                        placeholder="Enter reason for suspension..."
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        rows={3}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex justify-end space-x-3">
+                  <button
+                    onClick={() => setShowSuspendModal(false)}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSuspendUser}
+                    disabled={suspendLoading}
+                    className={`px-4 py-2 text-sm font-medium text-white rounded-md ${
+                      user.suspended
+                        ? 'bg-green-600 hover:bg-green-700'
+                        : 'bg-orange-600 hover:bg-orange-700'
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    {suspendLoading ? 'Processing...' : (user.suspended ? 'Unsuspend User' : 'Suspend User')}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>

@@ -213,6 +213,7 @@ model User {
   createdAt                                         DateTime            @default(now())
   updatedAt                                         DateTime
   role                                              UserRole            @default(USER)
+  suspended                                         Boolean             @default(false)
   AdminMessage_AdminMessage_adminIdToUser           AdminMessage[]      @relation("AdminMessage_adminIdToUser")
   AdminMessage_AdminMessage_recipientIdToUser       AdminMessage[]      @relation("AdminMessage_recipientIdToUser")
   OverrideRequest_OverrideRequest_requesterIdToUser OverrideRequest[]   @relation("OverrideRequest_requesterIdToUser")
@@ -346,4 +347,6 @@ enum ActivityType {
   USER_CREATED
   PROPERTY_CREATED
   ADMIN_ACTION
+  ACCOUNT_SUSPENDED
+  ACCOUNT_UNSUSPENDED
 }

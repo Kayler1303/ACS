@@ -3,6 +3,119 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ userId: string }> }
+) {
+  const session = await getServerSession(authOptions);
+
+  if (!session || !session.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  try {
+    // Check if user is admin
+    const adminUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { role: true }
+    });
+
+    if (adminUser?.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
+
+    const { userId } = await params;
+    const body = await request.json();
+    const { suspended, reason } = body;
+
+    if (typeof suspended !== 'boolean') {
+      return NextResponse.json({ error: 'suspended must be a boolean value' }, { status: 400 });
+    }
+
+    // Prevent admin from suspending themselves
+    if (userId === session.user.id && suspended) {
+      return NextResponse.json(
+        { error: 'Cannot suspend your own account' },
+        { status: 400 }
+      );
+    }
+
+    // Check if user exists
+    const userToUpdate = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        suspended: true
+      }
+    });
+
+    if (!userToUpdate) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    // Prevent suspending other admin users
+    if (userToUpdate.role === 'ADMIN' && suspended) {
+      return NextResponse.json(
+        { error: 'Cannot suspend admin users' },
+        { status: 400 }
+      );
+    }
+
+    // Update the user
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        suspended: suspended,
+        updatedAt: new Date()
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        suspended: true,
+        updatedAt: true
+      }
+    });
+
+    // Log the admin action
+    try {
+      await prisma.userActivity.create({
+        data: {
+          userId: userId,
+          activityType: suspended ? 'ACCOUNT_SUSPENDED' : 'ACCOUNT_UNSUSPENDED',
+          description: `Account ${suspended ? 'suspended' : 'unsuspended'} by admin`,
+          metadata: {
+            adminId: session.user.id,
+            reason: reason || 'Admin action',
+            previousStatus: userToUpdate.suspended,
+            newStatus: suspended
+          }
+        }
+      });
+    } catch (logError) {
+      console.error('Failed to log suspension activity:', logError);
+      // Don't fail the operation if logging fails
+    }
+
+    return NextResponse.json({
+      success: true,
+      user: updatedUser,
+      action: suspended ? 'suspended' : 'unsuspended'
+    });
+
+  } catch (error: any) {
+    console.error('Error updating user suspension status:', error);
+    return NextResponse.json(
+      { error: 'An unexpected error occurred while updating the user.' },
+      { status: 500 }
+    );
+  }
+}
+
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ userId: string }> }
