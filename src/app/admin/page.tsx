@@ -177,6 +177,7 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState<User[]>([]);
   const [enhancedProperties, setEnhancedProperties] = useState<EnhancedProperty[]>([]);
   const [systemStats, setSystemStats] = useState<SystemStats | null>(null);
+  const [analyticsData, setAnalyticsData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   // Message modal state
@@ -232,6 +233,13 @@ export default function AdminDashboard() {
           const requestsData = await requestsResponse.json();
           setOverrideRequests(requestsData.requests);
           setOverrideStats(requestsData.stats);
+        }
+
+        // Fetch analytics data
+        const analyticsResponse = await fetch('/api/analytics/summary?days=30');
+        if (analyticsResponse.ok) {
+          const analyticsData = await analyticsResponse.json();
+          setAnalyticsData(analyticsData);
         }
       } catch (error) {
         console.error('Error fetching admin data:', error);
@@ -581,12 +589,18 @@ export default function AdminDashboard() {
             >
               Properties ({enhancedProperties.length})
             </button>
+            <Link
+              href="/admin/analytics"
+              className="py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+            >
+              Analytics
+            </Link>
           </nav>
         </div>
 
         {/* Tab Content */}
         {activeTab === 'overview' && systemStats && (
-          <OverviewTab systemStats={systemStats} />
+          <OverviewTab systemStats={systemStats} analyticsData={analyticsData} />
         )}
 
         {activeTab === 'requests' && (
@@ -2083,7 +2097,7 @@ function OverrideRequestItem({
 
 
 // Overview Tab Component
-function OverviewTab({ systemStats }: { systemStats: SystemStats }) {
+function OverviewTab({ systemStats, analyticsData }: { systemStats: SystemStats; analyticsData?: any }) {
   return (
     <>
       {/* System Stats Cards */}
@@ -2271,6 +2285,127 @@ function OverviewTab({ systemStats }: { systemStats: SystemStats }) {
           </div>
         </div>
       </div>
+
+      {/* Analytics Section */}
+      {analyticsData && (
+        <div className="mt-6">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">User Activity Analytics (Last 30 Days)</h3>
+
+          {/* Analytics Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-6">
+            <div className="bg-white overflow-hidden shadow rounded-lg">
+              <div className="p-5">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                      <span className="text-white font-bold text-sm">{analyticsData.engagement.activeUsers}</span>
+                    </div>
+                  </div>
+                  <div className="ml-5 w-0 flex-1">
+                    <dl>
+                      <dt className="text-sm font-medium text-gray-500 truncate">Active Users</dt>
+                      <dd className="text-lg font-medium text-gray-900">{analyticsData.engagement.activeUsers}</dd>
+                    </dl>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white overflow-hidden shadow rounded-lg">
+              <div className="p-5">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                      <span className="text-white font-bold text-sm">{analyticsData.engagement.loginActivities}</span>
+                    </div>
+                  </div>
+                  <div className="ml-5 w-0 flex-1">
+                    <dl>
+                      <dt className="text-sm font-medium text-gray-500 truncate">Login Sessions</dt>
+                      <dd className="text-lg font-medium text-gray-900">{analyticsData.engagement.loginActivities}</dd>
+                    </dl>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white overflow-hidden shadow rounded-lg">
+              <div className="p-5">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center">
+                      <span className="text-white font-bold text-sm">{analyticsData.engagement.pageViews}</span>
+                    </div>
+                  </div>
+                  <div className="ml-5 w-0 flex-1">
+                    <dl>
+                      <dt className="text-sm font-medium text-gray-500 truncate">Page Views</dt>
+                      <dd className="text-lg font-medium text-gray-900">{analyticsData.engagement.pageViews}</dd>
+                    </dl>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white overflow-hidden shadow rounded-lg">
+              <div className="p-5">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center">
+                      <span className="text-white font-bold text-sm">{analyticsData.engagement.averageActivitiesPerUser}</span>
+                    </div>
+                  </div>
+                  <div className="ml-5 w-0 flex-1">
+                    <dl>
+                      <dt className="text-sm font-medium text-gray-500 truncate">Avg Activities/User</dt>
+                      <dd className="text-lg font-medium text-gray-900">{analyticsData.engagement.averageActivitiesPerUser}</dd>
+                    </dl>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Top Active Users */}
+          <div className="bg-white shadow rounded-lg">
+            <div className="px-4 py-5 sm:p-6">
+              <h4 className="text-lg leading-6 font-medium text-gray-900 mb-4">Most Active Users</h4>
+              <div className="space-y-4">
+                {analyticsData.topActiveUsers.slice(0, 5).map((user: any, index: number) => (
+                  <div key={user.id} className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="flex-shrink-0">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                          user.role === 'ADMIN' ? 'bg-red-100' : 'bg-blue-100'
+                        }`}>
+                          <span className={`text-sm font-medium ${
+                            user.role === 'ADMIN' ? 'text-red-600' : 'text-blue-600'
+                          }`}>
+                            {index + 1}
+                          </span>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {user.name || user.email}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {user.company} • {user.activityCount} activities
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-gray-900">
+                        Last login: {user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : 'Never'}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

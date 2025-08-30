@@ -3,6 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from 'next/link';
 import { getUserAccessibleProperties } from "@/lib/permissions";
+import { PageTracker } from "@/components/PageTracker";
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
@@ -25,6 +26,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
+      <PageTracker pageName="Dashboard" />
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-brand-blue">Your Properties</h1>
         <Link href="/property/new" className="bg-brand-accent hover:bg-brand-accent-dark text-white font-bold py-2 px-4 rounded transition-colors duration-300">

@@ -221,6 +221,7 @@ model User {
   VerificationToken                                 VerificationToken[]
   PropertyShare_SharedWith                          PropertyShare[]     @relation("PropertyShare_userId")
   PropertyShare_SharedBy                            PropertyShare[]     @relation("PropertyShare_sharedById")
+  UserActivity                                      UserActivity[]
 }
 
 model VerificationToken {
@@ -311,10 +312,39 @@ model RentRollSnapshot {
   uploadDate        DateTime            @default(now())
   filename          String?
   isActive          Boolean             @default(true)
-  
+
   property          Property            @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   rentRolls         RentRoll[]
-  
+
   @@index([propertyId])
   @@index([uploadDate])
+}
+
+enum ActivityType {
+  LOGIN
+  LOGOUT
+  PAGE_VIEW
+  PROPERTY_VIEW
+  SNAPSHOT_UPLOAD
+  DOCUMENT_UPLOAD
+  USER_CREATED
+  PROPERTY_CREATED
+  ADMIN_ACTION
+}
+
+model UserActivity {
+  id            String       @id @default(cuid())
+  userId        String
+  activityType  ActivityType
+  description   String?
+  metadata      Json?        // Store additional data like IP, user agent, etc.
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime     @default(now())
+
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([activityType])
+  @@index([createdAt])
 }

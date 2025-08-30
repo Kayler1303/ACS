@@ -37,6 +37,24 @@ export const authOptions: AuthOptions = {
           return null;
         }
 
+        // Log successful login
+        try {
+          await prisma.userActivity.create({
+            data: {
+              userId: user.id,
+              activityType: 'LOGIN',
+              description: 'User logged in successfully',
+              metadata: {
+                loginMethod: 'credentials',
+                userAgent: 'web-app'
+              }
+            }
+          });
+        } catch (error) {
+          console.error('Failed to log login activity:', error);
+          // Don't fail the login if activity logging fails
+        }
+
         return {
           id: user.id,
           email: user.email,
