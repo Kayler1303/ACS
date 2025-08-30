@@ -181,6 +181,19 @@ export async function GET(
         // Log details of each preserved lease found
         preservedFutureLeases.forEach((lease, index) => {
           console.log(`[FUTURE LEASE API] 📋 Preserved lease ${index + 1}: "${lease.name}" in unit ${lease.Unit.unitNumber}, created at ${lease.createdAt.toISOString()}`);
+          
+          // Special debug for Unit 0505
+          if (lease.Unit?.unitNumber === '0505' || lease.Unit?.unitNumber === '505') {
+            console.log(`[UNIT 0505 PRESERVED DEBUG] Found Unit 0505 preserved lease:`, {
+              leaseId: lease.id,
+              leaseName: lease.name,
+              unitNumber: lease.Unit?.unitNumber,
+              createdAt: lease.createdAt,
+              totalResidents: lease.Resident?.length || 0,
+              totalVerifications: lease.IncomeVerification?.length || 0,
+              verificationStatuses: lease.IncomeVerification?.map(v => v.status) || []
+            });
+          }
         });
       } else {
         console.log(`[FUTURE LEASE API] ❌ No snapshot found for rent roll date ${targetRentRoll.uploadDate}`);
