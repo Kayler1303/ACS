@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     ]);
 
     // Get login activity
-    let loginActivities = [];
+    let loginActivities: any[] = [];
     try {
       loginActivities = await prisma.userActivity.findMany({
         where: {
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
     const activeUsers = activeUserIds.length;
 
     // Get activity breakdown by type
-    let activityStats = [];
+    let activityStats: any = [];
     try {
       activityStats = await prisma.userActivity.groupBy({
         by: ['activityType'],
@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Get top active users
-    let topActiveUsers = [];
+    let topActiveUsers: any = [];
     try {
       topActiveUsers = await prisma.userActivity.groupBy({
         by: ['userId'],
@@ -78,10 +78,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Get user details for top active users
-    let topUsersWithDetails = [];
+    let topUsersWithDetails: any = [];
     try {
       topUsersWithDetails = await Promise.all(
-        topActiveUsers.map(async (userActivity) => {
+        topActiveUsers.map(async (userActivity: any) => {
           try {
             const user = await prisma.user.findUnique({
               where: { id: userActivity.userId },
@@ -110,14 +110,14 @@ export async function GET(request: NextRequest) {
       );
 
       // Filter out null values from failed user lookups
-      topUsersWithDetails = topUsersWithDetails.filter(user => user !== null);
+      topUsersWithDetails = topUsersWithDetails.filter((user: any) => user !== null);
     } catch (detailsError) {
       console.warn('Failed to fetch user details:', detailsError);
       topUsersWithDetails = [];
     }
 
     // Get daily activity breakdown
-    let dailyActivity = [];
+    let dailyActivity: any = [];
     try {
       dailyActivity = await prisma.$queryRaw`
         SELECT
@@ -165,7 +165,7 @@ export async function GET(request: NextRequest) {
         endDate: new Date()
       },
       engagement: userEngagement,
-      activityBreakdown: activityStats.map(stat => ({
+      activityBreakdown: activityStats.map((stat: any) => ({
         type: stat.activityType,
         count: stat._count.activityType
       })),
