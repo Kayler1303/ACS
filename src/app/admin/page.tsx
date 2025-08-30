@@ -62,16 +62,119 @@ interface Property {
   address?: string;
 }
 
+interface User {
+  id: string;
+  email: string;
+  name?: string;
+  company: string;
+  role: 'USER' | 'ADMIN';
+  createdAt: string;
+  emailVerified?: string;
+  stats: {
+    totalProperties: number;
+    ownedProperties: number;
+    sharedProperties: number;
+    pendingRequests: number;
+    totalRequests: number;
+  };
+}
+
+interface EnhancedProperty extends Property {
+  createdAt: string;
+  updatedAt: string;
+  placedInServiceDate?: string;
+  complianceOption?: string;
+  ownerId: string;
+  county: string;
+  state: string;
+  numberOfUnits: number | null;
+  User: {
+    id: string;
+    name?: string;
+    email: string;
+    company: string;
+  };
+  stats: {
+    totalSnapshots: number;
+    totalUnits: number;
+    totalLeases: number;
+    pendingRequests: number;
+    totalRequests: number;
+  };
+  recentSnapshots: Array<{
+    id: string;
+    uploadDate: string;
+    filename?: string;
+    isActive: boolean;
+  }>;
+}
+
+interface SystemStats {
+  overview: {
+    totalUsers: number;
+    totalProperties: number;
+    totalUnits: number;
+    totalLeases: number;
+    totalSnapshots: number;
+    totalDocuments: number;
+    totalOverrideRequests: number;
+    pendingRequests: number;
+  };
+  recentActivity: {
+    newUsers: number;
+    newProperties: number;
+    newSnapshots: number;
+  };
+  distributions: {
+    userRoles: Record<string, number>;
+    documentStatuses: Record<string, number>;
+  };
+  activityFeed: Array<{
+    id: string;
+    uploadDate: string;
+    filename?: string;
+    property: {
+      name: string;
+      User: {
+        name?: string;
+        company: string;
+      };
+    };
+  }>;
+  activeProperties: Array<{
+    id: string;
+    name: string;
+    updatedAt: string;
+    User: {
+      name?: string;
+      company: string;
+    };
+    _count: {
+      RentRollSnapshot: number;
+      Unit: number;
+      OverrideRequest: number;
+    };
+  }>;
+}
+
 export default function AdminDashboard() {
   const { data: session, status } = useSession();
+  const [activeTab, setActiveTab] = useState<'overview' | 'requests' | 'users' | 'properties'>('overview');
+
+  // Override requests state (existing)
   const [overrideRequests, setOverrideRequests] = useState<OverrideRequest[]>([]);
-  const [stats, setStats] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [overrideStats, setOverrideStats] = useState<any>(null);
   const [statusFilter, setStatusFilter] = useState<string>('PENDING');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [propertyFilter, setPropertyFilter] = useState<string>('all');
   const [properties, setProperties] = useState<Property[]>([]);
-  
+
+  // New admin data state
+  const [users, setUsers] = useState<User[]>([]);
+  const [enhancedProperties, setEnhancedProperties] = useState<EnhancedProperty[]>([]);
+  const [systemStats, setSystemStats] = useState<SystemStats | null>(null);
+  const [loading, setLoading] = useState(true);
+
   // Message modal state
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<OverrideRequest | null>(null);
@@ -89,28 +192,56 @@ export default function AdminDashboard() {
     }
   }, [status, session]);
 
-  // Fetch properties for filter dropdown
+  // Fetch all admin data
   useEffect(() => {
-    const fetchProperties = async () => {
+    const fetchAllData = async () => {
       try {
-        const response = await fetch('/api/properties');
-        if (response.ok) {
-          const data = await response.json();
-          setProperties(data);
-        } else {
-          console.error('Failed to fetch properties');
+        // Fetch system stats
+        const statsResponse = await fetch('/api/admin/stats');
+        if (statsResponse.ok) {
+          const statsData = await statsResponse.json();
+          setSystemStats(statsData);
+        }
+
+        // Fetch users
+        const usersResponse = await fetch('/api/admin/users');
+        if (usersResponse.ok) {
+          const usersData = await usersResponse.json();
+          setUsers(usersData.users);
+        }
+
+        // Fetch enhanced properties
+        const propertiesResponse = await fetch('/api/properties');
+        if (propertiesResponse.ok) {
+          const propertiesData = await propertiesResponse.json();
+          setProperties(propertiesData.properties.map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            address: p.address
+          })));
+          setEnhancedProperties(propertiesData.properties);
+        }
+
+        // Fetch override requests (existing functionality)
+        const requestsResponse = await fetch('/api/admin/override-requests');
+        if (requestsResponse.ok) {
+          const requestsData = await requestsResponse.json();
+          setOverrideRequests(requestsData.requests);
+          setOverrideStats(requestsData.stats);
         }
       } catch (error) {
-        console.error('Error fetching properties:', error);
+        console.error('Error fetching admin data:', error);
+      } finally {
+        setLoading(false);
       }
     };
 
     if (status === 'authenticated' && session?.user?.role === 'ADMIN') {
-      fetchProperties();
+      fetchAllData();
     }
   }, [status, session]);
 
-  // Fetch override requests
+  // Refetch override requests when property filter changes
   useEffect(() => {
     const fetchRequests = async () => {
       try {
@@ -118,26 +249,22 @@ export default function AdminDashboard() {
         if (propertyFilter !== 'all') {
           url.searchParams.set('propertyId', propertyFilter);
         }
-        
+
         const response = await fetch(url);
         if (response.ok) {
           const data = await response.json();
           setOverrideRequests(data.requests);
-          setStats(data.stats);
-        } else {
-          console.error('Failed to fetch override requests');
+          setOverrideStats(data.stats);
         }
       } catch (error) {
         console.error('Error fetching override requests:', error);
-      } finally {
-        setLoading(false);
       }
     };
 
-    if (status === 'authenticated' && session?.user?.role === 'ADMIN') {
+    if (status === 'authenticated' && session?.user?.role === 'ADMIN' && activeTab === 'requests') {
       fetchRequests();
     }
-  }, [status, session, propertyFilter]);
+  }, [status, session, propertyFilter, activeTab]);
 
   const filteredRequests = overrideRequests.filter(request => {
     // Status filter
@@ -230,7 +357,7 @@ export default function AdminDashboard() {
         if (refreshResponse.ok) {
           const data = await refreshResponse.json();
           setOverrideRequests(data.requests);
-          setStats(data.stats);
+          setOverrideStats(data.stats);
         }
       } else {
         console.error('Failed to update override request');
@@ -362,7 +489,7 @@ export default function AdminDashboard() {
             <h2 className="text-2xl font-bold leading-7 text-gray-900 sm:text-3xl sm:truncate">
               Admin Dashboard
             </h2>
-            <p className="text-gray-600">Manage override requests and system administration</p>
+            <p className="text-gray-600">Comprehensive system management and oversight</p>
           </div>
           <div className="mt-4 flex md:mt-0 md:ml-4">
             <Link
@@ -374,188 +501,83 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-6">
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <div className="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center">
-                    <span className="text-white font-bold text-sm">{stats?.pending || 0}</span>
-                  </div>
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">Pending Requests</dt>
-                    <dd className="text-lg font-medium text-gray-900">{stats?.pending || 0}</dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-                    <span className="text-white font-bold text-sm">{stats?.approved || 0}</span>
-                  </div>
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">Approved</dt>
-                    <dd className="text-lg font-medium text-gray-900">{stats?.approved || 0}</dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center">
-                    <span className="text-white font-bold text-sm">{stats?.denied || 0}</span>
-                  </div>
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">Denied</dt>
-                    <dd className="text-lg font-medium text-gray-900">{stats?.denied || 0}</dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white overflow-hidden shadow rounded-lg">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
-                    <span className="text-white font-bold text-sm">{stats?.total || 0}</span>
-                  </div>
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-gray-500 truncate">Total Requests</dt>
-                    <dd className="text-lg font-medium text-gray-900">{stats?.total || 0}</dd>
-                  </dl>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Filters */}
-        <div className="mb-6 space-y-4">
-          {/* Status Tabs */}
-          <div className="border-b border-gray-200">
-            <nav className="-mb-px flex space-x-8">
-              <button
-                onClick={() => setStatusFilter('all')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  statusFilter === 'all'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                All Requests ({stats?.total || 0})
-              </button>
-              <button
-                onClick={() => setStatusFilter('PENDING')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  statusFilter === 'PENDING'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Pending Requests ({stats?.pending || 0})
-              </button>
-              <button
-                onClick={() => setStatusFilter('APPROVED')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  statusFilter === 'APPROVED'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Approved ({stats?.approved || 0})
-              </button>
-              <button
-                onClick={() => setStatusFilter('DENIED')}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  statusFilter === 'DENIED'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                Denied ({stats?.denied || 0})
-              </button>
-            </nav>
-          </div>
-
-          {/* Property Filter */}
-          <div className="flex items-center space-x-4">
-            <label htmlFor="property-filter" className="text-sm font-medium text-gray-700">
-              Filter by Property:
-            </label>
-            <select
-              id="property-filter"
-              value={propertyFilter}
-              onChange={(e) => setPropertyFilter(e.target.value)}
-              className="block w-64 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+        {/* Navigation Tabs */}
+        <div className="mb-6">
+          <nav className="-mb-px flex space-x-8">
+            <button
+              onClick={() => setActiveTab('overview')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'overview'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
             >
-              <option value="all">All Properties</option>
-              {properties.map((property) => (
-                <option key={property.id} value={property.id}>
-                  {property.name}
-                  {property.address && ` (${property.address})`}
-                </option>
-              ))}
-            </select>
-            
-            {propertyFilter !== 'all' && (
-              <button
-                onClick={() => setPropertyFilter('all')}
-                className="inline-flex items-center px-2.5 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                Clear Filter
-              </button>
-            )}
-
-            {/* Results count */}
-            <div className="text-sm text-gray-500">
-              Showing {filteredRequests.length} of {overrideRequests.length} requests
-            </div>
-          </div>
+              Overview
+            </button>
+            <button
+              onClick={() => setActiveTab('requests')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'requests'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Override Requests ({overrideStats?.total || 0})
+            </button>
+            <button
+              onClick={() => setActiveTab('users')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'users'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Users ({users.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('properties')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'properties'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Properties ({enhancedProperties.length})
+            </button>
+          </nav>
         </div>
 
-        {/* Override Requests */}
-        <div className="bg-white shadow overflow-hidden sm:rounded-md">
-          {filteredRequests.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="text-gray-500">
-                {statusFilter === 'PENDING' ? 'No pending override requests' : 'No override requests found'}
-              </div>
-            </div>
-          ) : (
-            <ul className="divide-y divide-gray-200">
-              {filteredRequests.map((request) => (
-                <OverrideRequestItem
-                  key={request.id}
-                  request={request}
-                  onAction={handleRequestAction}
-                  onMessageClick={handleOpenMessageModal}
-                  formatRequestType={formatRequestType}
-                  formatRequestContext={formatRequestContext}
-                />
-              ))}
-            </ul>
-          )}
-        </div>
+        {/* Tab Content */}
+        {activeTab === 'overview' && systemStats && (
+          <OverviewTab systemStats={systemStats} />
+        )}
+
+        {activeTab === 'requests' && (
+          <RequestsTab
+            overrideRequests={overrideRequests}
+            overrideStats={overrideStats}
+            statusFilter={statusFilter}
+            setStatusFilter={setStatusFilter}
+            propertyFilter={propertyFilter}
+            setPropertyFilter={setPropertyFilter}
+            properties={properties}
+            filteredRequests={filteredRequests}
+            onAction={handleRequestAction}
+            onMessageClick={handleOpenMessageModal}
+            formatRequestType={formatRequestType}
+            formatRequestContext={formatRequestContext}
+          />
+        )}
+
+        {activeTab === 'users' && (
+          <UsersTab users={users} />
+        )}
+
+        {activeTab === 'properties' && (
+          <PropertiesTab enhancedProperties={enhancedProperties} />
+        )}
+
+
       </div>
 
       {/* Message Modal */}
@@ -2010,6 +2032,547 @@ function OverrideRequestItem({
           </div>
         </div>
       )}
+    </>
+  );
+}
+
+// Overview Tab Component
+function OverviewTab({ systemStats }: { systemStats: SystemStats }) {
+  return (
+    <>
+      {/* System Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-6">
+        <div className="bg-white overflow-hidden shadow rounded-lg">
+          <div className="p-5">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                  <span className="text-white font-bold text-sm">{systemStats.overview.totalUsers}</span>
+                </div>
+              </div>
+              <div className="ml-5 w-0 flex-1">
+                <dl>
+                  <dt className="text-sm font-medium text-gray-500 truncate">Total Users</dt>
+                  <dd className="text-lg font-medium text-gray-900">{systemStats.overview.totalUsers}</dd>
+                </dl>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white overflow-hidden shadow rounded-lg">
+          <div className="p-5">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                  <span className="text-white font-bold text-sm">{systemStats.overview.totalProperties}</span>
+                </div>
+              </div>
+              <div className="ml-5 w-0 flex-1">
+                <dl>
+                  <dt className="text-sm font-medium text-gray-500 truncate">Total Properties</dt>
+                  <dd className="text-lg font-medium text-gray-900">{systemStats.overview.totalProperties}</dd>
+                </dl>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white overflow-hidden shadow rounded-lg">
+          <div className="p-5">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <div className="w-8 h-8 bg-purple-500 rounded-full flex items-center justify-center">
+                  <span className="text-white font-bold text-sm">{systemStats.overview.totalUnits}</span>
+                </div>
+              </div>
+              <div className="ml-5 w-0 flex-1">
+                <dl>
+                  <dt className="text-sm font-medium text-gray-500 truncate">Total Units</dt>
+                  <dd className="text-lg font-medium text-gray-900">{systemStats.overview.totalUnits}</dd>
+                </dl>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white overflow-hidden shadow rounded-lg">
+          <div className="p-5">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center">
+                  <span className="text-white font-bold text-sm">{systemStats.overview.totalSnapshots}</span>
+                </div>
+              </div>
+              <div className="ml-5 w-0 flex-1">
+                <dl>
+                  <dt className="text-sm font-medium text-gray-500 truncate">Total Snapshots</dt>
+                  <dd className="text-lg font-medium text-gray-900">{systemStats.overview.totalSnapshots}</dd>
+                </dl>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Recent Activity & Active Properties */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Recent Activity Feed */}
+        <div className="bg-white shadow rounded-lg">
+          <div className="px-4 py-5 sm:p-6">
+            <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Recent Activity</h3>
+            <div className="space-y-3">
+              {systemStats.activityFeed.map((activity) => (
+                <div key={activity.id} className="flex items-center space-x-3">
+                  <div className="flex-shrink-0">
+                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                      <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-gray-900">
+                      New snapshot uploaded for <span className="font-medium">{activity.property.name}</span>
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      by {activity.property.User.name || activity.property.User.company} • {new Date(activity.uploadDate).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Active Properties */}
+        <div className="bg-white shadow rounded-lg">
+          <div className="px-4 py-5 sm:p-6">
+            <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Most Active Properties</h3>
+            <div className="space-y-4">
+              {systemStats.activeProperties.map((property) => (
+                <div key={property.id} className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-900">{property.name}</p>
+                    <p className="text-sm text-gray-500">
+                      {property.User.name || property.User.company} • {property._count.Unit} units
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm text-gray-900">{property._count.RentRollSnapshot} snapshots</p>
+                    <p className="text-sm text-gray-500">{property._count.OverrideRequest} requests</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Additional Stats */}
+      <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="bg-white overflow-hidden shadow rounded-lg">
+          <div className="p-5">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <div className="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center">
+                  <span className="text-white font-bold text-sm">{systemStats.overview.pendingRequests}</span>
+                </div>
+              </div>
+              <div className="ml-5 w-0 flex-1">
+                <dl>
+                  <dt className="text-sm font-medium text-gray-500 truncate">Pending Requests</dt>
+                  <dd className="text-lg font-medium text-gray-900">{systemStats.overview.pendingRequests}</dd>
+                </dl>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white overflow-hidden shadow rounded-lg">
+          <div className="p-5">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <div className="w-8 h-8 bg-indigo-500 rounded-full flex items-center justify-center">
+                  <span className="text-white font-bold text-sm">{systemStats.overview.totalDocuments}</span>
+                </div>
+              </div>
+              <div className="ml-5 w-0 flex-1">
+                <dl>
+                  <dt className="text-sm font-medium text-gray-500 truncate">Total Documents</dt>
+                  <dd className="text-lg font-medium text-gray-900">{systemStats.overview.totalDocuments}</dd>
+                </dl>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white overflow-hidden shadow rounded-lg">
+          <div className="p-5">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <div className="w-8 h-8 bg-teal-500 rounded-full flex items-center justify-center">
+                  <span className="text-white font-bold text-sm">{systemStats.overview.totalLeases}</span>
+                </div>
+              </div>
+              <div className="ml-5 w-0 flex-1">
+                <dl>
+                  <dt className="text-sm font-medium text-gray-500 truncate">Total Leases</dt>
+                  <dd className="text-lg font-medium text-gray-900">{systemStats.overview.totalLeases}</dd>
+                </dl>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// Users Tab Component
+function UsersTab({ users }: { users: User[] }) {
+  return (
+    <div className="bg-white shadow overflow-hidden sm:rounded-md">
+      <div className="px-4 py-5 sm:px-6">
+        <h3 className="text-lg leading-6 font-medium text-gray-900">Users Management</h3>
+        <p className="mt-1 max-w-2xl text-sm text-gray-500">
+          View and manage all users in the system
+        </p>
+      </div>
+      <ul className="divide-y divide-gray-200">
+        {users.map((user) => (
+          <li key={user.id} className="px-4 py-4 sm:px-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                    user.role === 'ADMIN' ? 'bg-red-100' : 'bg-blue-100'
+                  }`}>
+                    <span className={`text-sm font-medium ${
+                      user.role === 'ADMIN' ? 'text-red-600' : 'text-blue-600'
+                    }`}>
+                      {user.name?.charAt(0) || user.email.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                </div>
+                <div className="ml-4">
+                  <div className="flex items-center">
+                    <h4 className="text-sm font-medium text-gray-900">
+                      {user.name || user.email}
+                    </h4>
+                    <span className={`ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      user.role === 'ADMIN' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
+                    }`}>
+                      {user.role}
+                    </span>
+                    {user.emailVerified && (
+                      <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        Verified
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-500">{user.email}</p>
+                  <p className="text-sm text-gray-500">{user.company}</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-sm text-gray-900">
+                  {user.stats.totalProperties} properties
+                </div>
+                <div className="text-sm text-gray-500">
+                  {user.stats.pendingRequests} pending requests
+                </div>
+                <div className="text-sm text-gray-500">
+                  Joined {new Date(user.createdAt).toLocaleDateString()}
+                </div>
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// Properties Tab Component
+function PropertiesTab({ enhancedProperties }: { enhancedProperties: EnhancedProperty[] }) {
+  return (
+    <div className="bg-white shadow overflow-hidden sm:rounded-md">
+      <div className="px-4 py-5 sm:px-6">
+        <h3 className="text-lg leading-6 font-medium text-gray-900">Properties Overview</h3>
+        <p className="mt-1 max-w-2xl text-sm text-gray-500">
+          View all properties with snapshot information and statistics
+        </p>
+      </div>
+      <ul className="divide-y divide-gray-200">
+        {enhancedProperties.map((property) => (
+          <li key={property.id} className="px-4 py-4 sm:px-6">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-900">{property.name}</h4>
+                    <p className="text-sm text-gray-500">{property.address}</p>
+                    <p className="text-sm text-gray-500">
+                      {property.county}, {property.state} • {property.numberOfUnits} units
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      Owner: {property.User.name || property.User.company}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm text-gray-900">
+                      {property.stats.totalSnapshots} snapshots
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {property.stats.totalLeases} leases
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {property.stats.pendingRequests} pending requests
+                    </div>
+                  </div>
+                </div>
+
+                {/* Recent Snapshots */}
+                {property.recentSnapshots.length > 0 && (
+                  <div className="mt-3">
+                    <h5 className="text-xs font-medium text-gray-700 mb-2">Recent Snapshots:</h5>
+                    <div className="flex flex-wrap gap-2">
+                      {property.recentSnapshots.map((snapshot) => (
+                        <span
+                          key={snapshot.id}
+                          className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                            snapshot.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                          }`}
+                        >
+                          {new Date(snapshot.uploadDate).toLocaleDateString()}
+                          {snapshot.filename && ` - ${snapshot.filename}`}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// Requests Tab Component (existing functionality)
+function RequestsTab({
+  overrideRequests,
+  overrideStats,
+  statusFilter,
+  setStatusFilter,
+  propertyFilter,
+  setPropertyFilter,
+  properties,
+  filteredRequests,
+  onAction,
+  onMessageClick,
+  formatRequestType,
+  formatRequestContext
+}: {
+  overrideRequests: OverrideRequest[];
+  overrideStats: any;
+  statusFilter: string;
+  setStatusFilter: (filter: string) => void;
+  propertyFilter: string;
+  setPropertyFilter: (filter: string) => void;
+  properties: Property[];
+  filteredRequests: OverrideRequest[];
+  onAction: (requestId: string, action: 'approve' | 'deny', adminNotes: string) => void;
+  onMessageClick: (request: OverrideRequest) => void;
+  formatRequestType: (type: string) => string;
+  formatRequestContext: (request: OverrideRequest) => string;
+}) {
+  return (
+    <>
+      {/* Stats Cards for Requests */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-6">
+        <div className="bg-white overflow-hidden shadow rounded-lg">
+          <div className="p-5">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <div className="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center">
+                  <span className="text-white font-bold text-sm">{overrideStats?.pending || 0}</span>
+                </div>
+              </div>
+              <div className="ml-5 w-0 flex-1">
+                <dl>
+                  <dt className="text-sm font-medium text-gray-500 truncate">Pending Requests</dt>
+                  <dd className="text-lg font-medium text-gray-900">{overrideStats?.pending || 0}</dd>
+                </dl>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white overflow-hidden shadow rounded-lg">
+          <div className="p-5">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                  <span className="text-white font-bold text-sm">{overrideStats?.approved || 0}</span>
+                </div>
+              </div>
+              <div className="ml-5 w-0 flex-1">
+                <dl>
+                  <dt className="text-sm font-medium text-gray-500 truncate">Approved</dt>
+                  <dd className="text-lg font-medium text-gray-900">{overrideStats?.approved || 0}</dd>
+                </dl>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white overflow-hidden shadow rounded-lg">
+          <div className="p-5">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center">
+                  <span className="text-white font-bold text-sm">{overrideStats?.denied || 0}</span>
+                </div>
+              </div>
+              <div className="ml-5 w-0 flex-1">
+                <dl>
+                  <dt className="text-sm font-medium text-gray-500 truncate">Denied</dt>
+                  <dd className="text-lg font-medium text-gray-900">{overrideStats?.denied || 0}</dd>
+                </dl>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white overflow-hidden shadow rounded-lg">
+          <div className="p-5">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                  <span className="text-white font-bold text-sm">{overrideStats?.total || 0}</span>
+                </div>
+              </div>
+              <div className="ml-5 w-0 flex-1">
+                <dl>
+                  <dt className="text-sm font-medium text-gray-500 truncate">Total Requests</dt>
+                  <dd className="text-lg font-medium text-gray-900">{overrideStats?.total || 0}</dd>
+                </dl>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="mb-6 space-y-4">
+        {/* Status Tabs */}
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8">
+            <button
+              onClick={() => setStatusFilter('all')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                statusFilter === 'all'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              All Requests ({overrideStats?.total || 0})
+            </button>
+            <button
+              onClick={() => setStatusFilter('PENDING')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                statusFilter === 'PENDING'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Pending Requests ({overrideStats?.pending || 0})
+            </button>
+            <button
+              onClick={() => setStatusFilter('APPROVED')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                statusFilter === 'APPROVED'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Approved ({overrideStats?.approved || 0})
+            </button>
+            <button
+              onClick={() => setStatusFilter('DENIED')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                statusFilter === 'DENIED'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Denied ({overrideStats?.denied || 0})
+            </button>
+          </nav>
+        </div>
+
+        {/* Property Filter */}
+        <div className="flex items-center space-x-4">
+          <label htmlFor="property-filter" className="text-sm font-medium text-gray-700">
+            Filter by Property:
+          </label>
+          <select
+            id="property-filter"
+            value={propertyFilter}
+            onChange={(e) => setPropertyFilter(e.target.value)}
+            className="block w-64 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+          >
+            <option value="all">All Properties</option>
+            {properties.map((property) => (
+              <option key={property.id} value={property.id}>
+                {property.name}
+                {property.address && ` (${property.address})`}
+              </option>
+            ))}
+          </select>
+
+          {propertyFilter !== 'all' && (
+            <button
+              onClick={() => setPropertyFilter('all')}
+              className="inline-flex items-center px-2.5 py-1.5 border border-gray-300 shadow-sm text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Clear Filter
+            </button>
+          )}
+
+          {/* Results count */}
+          <div className="text-sm text-gray-500">
+            Showing {filteredRequests.length} of {overrideRequests.length} requests
+          </div>
+        </div>
+      </div>
+
+      {/* Override Requests */}
+      <div className="bg-white shadow overflow-hidden sm:rounded-md">
+        {filteredRequests.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="text-gray-500">
+              {statusFilter === 'PENDING' ? 'No pending override requests' : 'No override requests found'}
+            </div>
+          </div>
+        ) : (
+          <ul className="divide-y divide-gray-200">
+            {filteredRequests.map((request) => (
+              <OverrideRequestItem
+                key={request.id}
+                request={request}
+                onAction={onAction}
+                onMessageClick={onMessageClick}
+                formatRequestType={formatRequestType}
+                formatRequestContext={formatRequestContext}
+              />
+            ))}
+          </ul>
+        )}
+      </div>
     </>
   );
 } 

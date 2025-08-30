@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
-    // Get all properties for admin users
+    // Get all properties for admin users with enhanced data
     const properties = await prisma.property.findMany({
       select: {
         id: true,
@@ -30,14 +30,87 @@ export async function GET(request: NextRequest) {
         address: true,
         county: true,
         state: true,
-        numberOfUnits: true
+        numberOfUnits: true,
+        createdAt: true,
+        updatedAt: true,
+        placedInServiceDate: true,
+        complianceOption: true,
+        ownerId: true,
+        User: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            company: true
+          }
+        },
+        _count: {
+          select: {
+            Unit: true,
+            RentRollSnapshot: true,
+            OverrideRequest: true
+          }
+        }
       },
       orderBy: {
         name: 'asc'
       }
     });
 
-    return NextResponse.json(properties);
+    // Enhance properties with snapshot details and stats
+    const enhancedProperties = await Promise.all(
+      properties.map(async (property) => {
+        // Get recent snapshots
+        const recentSnapshots = await prisma.rentRollSnapshot.findMany({
+          where: { propertyId: property.id },
+          orderBy: { uploadDate: 'desc' },
+          take: 5,
+          select: {
+            id: true,
+            uploadDate: true,
+            filename: true,
+            isActive: true
+          }
+        });
+
+        // Get pending override requests for this property
+        const pendingRequests = await prisma.overrideRequest.count({
+          where: {
+            propertyId: property.id,
+            status: 'PENDING'
+          }
+        });
+
+        // Get total units and leases
+        const totalLeases = await prisma.lease.count({
+          where: {
+            Unit: {
+              propertyId: property.id
+            }
+          }
+        });
+
+        return {
+          ...property,
+          stats: {
+            totalSnapshots: property._count.RentRollSnapshot,
+            totalUnits: property._count.Unit,
+            totalLeases,
+            pendingRequests,
+            totalRequests: property._count.OverrideRequest
+          },
+          recentSnapshots
+        };
+      })
+    );
+
+    return NextResponse.json({
+      properties: enhancedProperties,
+      totalProperties: enhancedProperties.length,
+      totalUnits: enhancedProperties.reduce((sum, prop) => sum + prop.stats.totalUnits, 0),
+      totalSnapshots: enhancedProperties.reduce((sum, prop) => sum + prop.stats.totalSnapshots, 0),
+      pendingRequests: enhancedProperties.reduce((sum, prop) => sum + prop.stats.pendingRequests, 0)
+    });
   } catch (error: any) {
     console.error('Error fetching properties:', error);
     return NextResponse.json(
