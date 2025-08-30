@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { redirect } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { UserPropertiesModal, PropertySnapshotsModal, DeleteUserModal, User } from '@/components/AdminModals';
 
 interface OverrideRequest {
   id: string;
@@ -64,6 +64,23 @@ interface Property {
 }
 
 
+
+interface User {
+  id: string;
+  email: string;
+  name?: string;
+  company: string;
+  role: 'USER' | 'ADMIN';
+  createdAt: string;
+  emailVerified?: string;
+  stats?: {
+    totalProperties: number;
+    ownedProperties: number;
+    sharedProperties: number;
+    pendingRequests: number;
+    totalRequests: number;
+  };
+}
 
 interface EnhancedProperty extends Property {
   createdAt: string;
@@ -145,6 +162,7 @@ interface SystemStats {
 
 export default function AdminDashboard() {
   const { data: session, status } = useSession();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<'overview' | 'requests' | 'users' | 'properties'>('overview');
 
   // Override requests state (existing)
@@ -167,16 +185,6 @@ export default function AdminDashboard() {
   const [messageSubject, setMessageSubject] = useState('');
   const [messageContent, setMessageContent] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
-
-  // User management modal states
-  const [showUserPropertiesModal, setShowUserPropertiesModal] = useState<boolean>(false);
-  const [showPropertySnapshotsModal, setShowPropertySnapshotsModal] = useState<boolean>(false);
-  const [showDeleteUserModal, setShowDeleteUserModal] = useState<boolean>(false);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [userProperties, setUserProperties] = useState<any[]>([]);
-  const [propertySnapshots, setPropertySnapshots] = useState<any>(null);
-  const [userToDelete, setUserToDelete] = useState<User | null>(null);
-  const [deletingUser, setDeletingUser] = useState<boolean>(false);
 
   // Check if user is admin
   useEffect(() => {
@@ -263,55 +271,23 @@ export default function AdminDashboard() {
   }, [status, session, propertyFilter, activeTab]);
 
   // User management functions
-  const handleUserClick = async (user: User) => {
-    try {
-      const response = await fetch(`/api/admin/users/${user.id}/properties`);
-      if (response.ok) {
-        const data = await response.json();
-        setUserProperties(data.properties);
-        setSelectedUser(user);
-        setShowUserPropertiesModal(true);
-      } else {
-        console.error('Failed to fetch user properties');
-        alert('Failed to load user properties');
-      }
-    } catch (error) {
-      console.error('Error fetching user properties:', error);
-      alert('Error loading user properties');
-    }
+  const handleUserClick = (user: any) => {
+    router.push(`/admin/users/${user.id}`);
   };
 
-  const handlePropertyClick = async (property: any) => {
-    try {
-      const response = await fetch(`/api/admin/properties/${property.id}/all-snapshots`);
-      if (response.ok) {
-        const data = await response.json();
-        setPropertySnapshots(data);
-        setShowPropertySnapshotsModal(true);
-      } else {
-        console.error('Failed to fetch property snapshots');
-        alert('Failed to load property snapshots');
-      }
-    } catch (error) {
-      console.error('Error fetching property snapshots:', error);
-      alert('Error loading property snapshots');
+  const handleDeleteUser = async (user: any) => {
+    if (!confirm(`Are you sure you want to delete ${user.name || user.email}? This action cannot be undone.`)) {
+      return;
     }
-  };
 
-  const handleDeleteUser = async () => {
-    if (!userToDelete) return;
-
-    setDeletingUser(true);
     try {
-      const response = await fetch(`/api/admin/users/${userToDelete.id}`, {
+      const response = await fetch(`/api/admin/users/${user.id}`, {
         method: 'DELETE',
       });
 
       if (response.ok) {
         // Remove user from the local state
-        setUsers(users.filter(user => user.id !== userToDelete.id));
-        setShowDeleteUserModal(false);
-        setUserToDelete(null);
+        setUsers(users.filter(u => u.id !== user.id));
         alert('User deleted successfully');
       } else {
         const error = await response.json();
@@ -324,25 +300,7 @@ export default function AdminDashboard() {
     } catch (error) {
       console.error('Error deleting user:', error);
       alert('Error deleting user. Please try again.');
-    } finally {
-      setDeletingUser(false);
     }
-  };
-
-  const openDeleteModal = (user: User) => {
-    setUserToDelete(user);
-    setShowDeleteUserModal(true);
-  };
-
-  const closeUserPropertiesModal = () => {
-    setShowUserPropertiesModal(false);
-    setSelectedUser(null);
-    setUserProperties([]);
-  };
-
-  const closePropertySnapshotsModal = () => {
-    setShowPropertySnapshotsModal(false);
-    setPropertySnapshots(null);
   };
 
   const filteredRequests = overrideRequests.filter(request => {
@@ -652,7 +610,7 @@ export default function AdminDashboard() {
           <UsersTab
             users={users}
             onUserClick={handleUserClick}
-            onDeleteUser={openDeleteModal}
+            onDeleteUser={handleDeleteUser}
           />
         )}
 
