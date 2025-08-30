@@ -26,83 +26,127 @@ export async function GET(request: NextRequest) {
     ]);
 
     // Get login activity
-    const loginActivities = await prisma.userActivity.findMany({
-      where: {
-        activityType: 'LOGIN',
-        createdAt: { gte: startDate }
-      },
-      include: {
-        user: {
-          select: { name: true, email: true, company: true }
-        }
-      },
-      orderBy: { createdAt: 'desc' }
-    });
+    let loginActivities = [];
+    try {
+      loginActivities = await prisma.userActivity.findMany({
+        where: {
+          activityType: 'LOGIN',
+          createdAt: { gte: startDate }
+        },
+        include: {
+          user: {
+            select: { name: true, email: true, company: true }
+          }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+    } catch (loginError) {
+      console.warn('Failed to fetch login activities:', loginError);
+      loginActivities = [];
+    }
 
     // Get unique active users (users who logged in within the period)
     const activeUserIds = [...new Set(loginActivities.map(activity => activity.userId))];
     const activeUsers = activeUserIds.length;
 
     // Get activity breakdown by type
-    const activityStats = await prisma.userActivity.groupBy({
-      by: ['activityType'],
-      where: { createdAt: { gte: startDate } },
-      _count: { activityType: true }
-    });
+    let activityStats = [];
+    try {
+      activityStats = await prisma.userActivity.groupBy({
+        by: ['activityType'],
+        where: { createdAt: { gte: startDate } },
+        _count: { activityType: true }
+      });
+    } catch (statsError) {
+      console.warn('Failed to fetch activity stats:', statsError);
+      activityStats = [];
+    }
 
     // Get top active users
-    const topActiveUsers = await prisma.userActivity.groupBy({
-      by: ['userId'],
-      where: { createdAt: { gte: startDate } },
-      _count: { userId: true },
-      orderBy: { _count: { userId: 'desc' } },
-      take: 10
-    });
+    let topActiveUsers = [];
+    try {
+      topActiveUsers = await prisma.userActivity.groupBy({
+        by: ['userId'],
+        where: { createdAt: { gte: startDate } },
+        _count: { userId: true },
+        orderBy: { _count: { userId: 'desc' } },
+        take: 10
+      });
+    } catch (topUsersError) {
+      console.warn('Failed to fetch top active users:', topUsersError);
+      topActiveUsers = [];
+    }
 
     // Get user details for top active users
-    const topUsersWithDetails = await Promise.all(
-      topActiveUsers.map(async (userActivity) => {
-        const user = await prisma.user.findUnique({
-          where: { id: userActivity.userId },
-          select: { id: true, name: true, email: true, company: true, role: true }
-        });
+    let topUsersWithDetails = [];
+    try {
+      topUsersWithDetails = await Promise.all(
+        topActiveUsers.map(async (userActivity) => {
+          try {
+            const user = await prisma.user.findUnique({
+              where: { id: userActivity.userId },
+              select: { id: true, name: true, email: true, company: true, role: true }
+            });
 
-        const lastLogin = await prisma.userActivity.findFirst({
-          where: {
-            userId: userActivity.userId,
-            activityType: 'LOGIN'
-          },
-          orderBy: { createdAt: 'desc' },
-          select: { createdAt: true }
-        });
+            const lastLogin = await prisma.userActivity.findFirst({
+              where: {
+                userId: userActivity.userId,
+                activityType: 'LOGIN'
+              },
+              orderBy: { createdAt: 'desc' },
+              select: { createdAt: true }
+            });
 
-        return {
-          ...user,
-          activityCount: userActivity._count.userId,
-          lastLogin: lastLogin?.createdAt
-        };
-      })
-    );
+            return {
+              ...user,
+              activityCount: userActivity._count.userId,
+              lastLogin: lastLogin?.createdAt
+            };
+          } catch (userError) {
+            console.warn(`Failed to fetch details for user ${userActivity.userId}:`, userError);
+            return null;
+          }
+        })
+      );
+
+      // Filter out null values from failed user lookups
+      topUsersWithDetails = topUsersWithDetails.filter(user => user !== null);
+    } catch (detailsError) {
+      console.warn('Failed to fetch user details:', detailsError);
+      topUsersWithDetails = [];
+    }
 
     // Get daily activity breakdown
-    const dailyActivity = await prisma.$queryRaw`
-      SELECT
-        DATE(created_at) as date,
-        activity_type,
-        COUNT(*) as count
-      FROM "UserActivity"
-      WHERE created_at >= ${startDate}
-      GROUP BY DATE(created_at), activity_type
-      ORDER BY date DESC
-    `;
+    let dailyActivity = [];
+    try {
+      dailyActivity = await prisma.$queryRaw`
+        SELECT
+          DATE(created_at) as date,
+          activity_type,
+          COUNT(*) as count
+        FROM "UserActivity"
+        WHERE created_at >= ${startDate}
+        GROUP BY DATE(created_at), activity_type
+        ORDER BY date DESC
+      `;
+    } catch (rawQueryError) {
+      console.warn('Raw query failed, using fallback:', rawQueryError);
+      dailyActivity = [];
+    }
 
     // Get page view statistics
-    const pageViews = await prisma.userActivity.count({
-      where: {
-        activityType: 'PAGE_VIEW',
-        createdAt: { gte: startDate }
-      }
-    });
+    let pageViews = 0;
+    try {
+      pageViews = await prisma.userActivity.count({
+        where: {
+          activityType: 'PAGE_VIEW',
+          createdAt: { gte: startDate }
+        }
+      });
+    } catch (pageViewError) {
+      console.warn('Failed to fetch page view stats:', pageViewError);
+      pageViews = 0;
+    }
 
     // Get user engagement metrics
     const userEngagement = {
