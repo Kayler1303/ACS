@@ -254,6 +254,8 @@ model RentRollSnapshot {
   uploadDate DateTime   @default(now())
   filename   String?
   isActive   Boolean    @default(true)
+  hudIncomeLimits Json?     // Store HUD income limits used at snapshot creation time
+  hudDataYear     Int?      // Year of HUD data used
   rentRolls  RentRoll[]
   property   Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 

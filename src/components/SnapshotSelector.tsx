@@ -7,12 +7,14 @@ interface Snapshot {
   uploadDate: string;
   filename?: string;
   isActive: boolean;
+  hudIncomeLimits: any;
+  hudDataYear: number | null;
 }
 
 interface SnapshotSelectorProps {
   propertyId: string;
   selectedSnapshotId?: string;
-  onSnapshotChange: (snapshotId: string) => void;
+  onSnapshotChange: (snapshotId: string, snapshotData?: Snapshot) => void;
 }
 
 export default function SnapshotSelector({ 
@@ -39,7 +41,7 @@ export default function SnapshotSelector({
         // Auto-select the active snapshot if none selected
         if (!selectedSnapshotId && data.snapshots?.length > 0) {
           const activeSnapshot = data.snapshots.find((s: Snapshot) => s.isActive) || data.snapshots[0];
-          onSnapshotChange(activeSnapshot.id);
+          onSnapshotChange(activeSnapshot.id, activeSnapshot);
         }
       } else {
         console.error('Failed to fetch snapshots');
@@ -86,7 +88,10 @@ export default function SnapshotSelector({
       <select
         id="snapshot-selector"
         value={selectedSnapshotId || ''}
-        onChange={(e) => onSnapshotChange(e.target.value)}
+        onChange={(e) => {
+          const selectedSnapshot = snapshots.find(s => s.id === e.target.value);
+          onSnapshotChange(e.target.value, selectedSnapshot);
+        }}
         className="block w-64 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
       >
         {snapshots.map((snapshot) => (

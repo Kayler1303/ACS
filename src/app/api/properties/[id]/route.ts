@@ -29,6 +29,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
             uploadDate: 'desc',
           },
           include: {
+            snapshot: {
+              select: {
+                id: true,
+                hudIncomeLimits: true,
+                hudDataYear: true,
+                uploadDate: true,
+                filename: true,
+                isActive: true,
+              } as any,
+            },
             Tenancy: {
               include: {
                 Lease: {

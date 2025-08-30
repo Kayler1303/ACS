@@ -150,9 +150,24 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
   
   const [selectedSnapshotId, setSelectedSnapshotId] = useState<string | null>(initializeSelectedSnapshotId());
   const [availableSnapshots, setAvailableSnapshots] = useState<{id: string, date: string, createdAt: string}[]>([]);
-  
+
   // Track rent roll count to detect new uploads
   const [previousRentRollCount, setPreviousRentRollCount] = useState(initialProperty.RentRoll.length);
+
+  // Initialize snapshot HUD data on component mount
+  useEffect(() => {
+    if (selectedSnapshotId && initialProperty.RentRoll.length > 0) {
+      const selectedRentRoll = initialProperty.RentRoll.find(rr => rr.snapshotId === selectedSnapshotId);
+      const snapshotData = (selectedRentRoll as any)?.snapshot;
+      if (snapshotData?.hudIncomeLimits) {
+        console.log(`📋 Initializing HUD data from snapshot ${selectedSnapshotId}`);
+        setSnapshotHudData({
+          limits: snapshotData.hudIncomeLimits,
+          year: snapshotData.hudDataYear
+        });
+      }
+    }
+  }, []); // Run only once on mount
   
   // Effect to handle new rent roll uploads
   useEffect(() => {
@@ -164,6 +179,17 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       if (newestSnapshotId) {
         setSelectedSnapshotId(newestSnapshotId);
         sessionStorage.setItem(`selectedSnapshotId_${property.id}`, newestSnapshotId);
+
+        // Set HUD data from the newest snapshot
+        const newestRentRoll = property.RentRoll[0];
+        const snapshotData = (newestRentRoll as any)?.snapshot;
+        if (snapshotData?.hudIncomeLimits) {
+          console.log(`📋 Auto-setting HUD data from newest snapshot ${newestSnapshotId}`);
+          setSnapshotHudData({
+            limits: snapshotData.hudIncomeLimits,
+            year: snapshotData.hudDataYear
+          });
+        }
       }
     }
     
@@ -176,6 +202,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
   const [hudIncomeLimits, setHudIncomeLimits] = useState<HudIncomeLimits | null>(null);
   const [hudIncomeLimitsLoading, setHudIncomeLimitsLoading] = useState(true);
   const [hudIncomeLimitsError, setHudIncomeLimitsError] = useState<string | null>(null);
+  const [snapshotHudData, setSnapshotHudData] = useState<{limits: HudIncomeLimits | null, year: number | null} | null>(null);
   const hudFetchInProgress = useRef(false);
   const futureLeaseFetchInProgress = useRef(false);
   const [lihtcRentData, setLihtcRentData] = useState<Record<string, unknown> | null>(null);
@@ -386,16 +413,30 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
   useEffect(() => {
     const timestamp = Date.now();
     console.log(`🔄 [${timestamp}] Income limits useEffect triggered for property:`, property.id);
-    
-    // Prevent duplicate calls by checking if data already exists or currently fetching
-    if (hudIncomeLimits !== null) {
-      console.log(`⏭️ [${timestamp}] Skipping income limits fetch - data already loaded`);
+    console.log(`🔄 [${timestamp}] Selected snapshot:`, selectedSnapshotId);
+
+    // If viewing a snapshot, use stored HUD data instead of fetching current data
+    if (selectedSnapshotId && snapshotHudData) {
+      console.log(`📋 [${timestamp}] Using stored HUD data from snapshot ${selectedSnapshotId}`);
+      console.log(`📅 [${timestamp}] Snapshot HUD data year:`, snapshotHudData.year);
+      setHudIncomeLimits(snapshotHudData.limits);
+      setHudIncomeLimitsLoading(false);
+      setHudIncomeLimitsError(null);
       return;
     }
-    
-    if (hudFetchInProgress.current) {
-      console.log(`⏭️ [${timestamp}] Skipping income limits fetch - already in progress`);
-      return;
+
+    // If viewing latest/current data, fetch current HUD data
+    if (!selectedSnapshotId) {
+      // Prevent duplicate calls by checking if data already exists or currently fetching
+      if (hudIncomeLimits !== null) {
+        console.log(`⏭️ [${timestamp}] Skipping income limits fetch - data already loaded`);
+        return;
+      }
+
+      if (hudFetchInProgress.current) {
+        console.log(`⏭️ [${timestamp}] Skipping income limits fetch - already in progress`);
+        return;
+      }
     }
     
     const fetchIncomeLimits = async () => {
@@ -459,12 +500,15 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     fetchIncomeLimits().catch(error => {
       console.error('Background income limits fetch failed:', error);
     });
-  }, [property.id]);
+  }, [property.id, selectedSnapshotId, snapshotHudData]);
+
+
 
   // Debug current state
   useEffect(() => {
     console.log('Current hudIncomeLimits state:', hudIncomeLimits);
-  }, [hudIncomeLimits]);
+    console.log('Current snapshotHudData state:', snapshotHudData);
+  }, [hudIncomeLimits, snapshotHudData]);
 
   // Fetch LIHTC rent data when rent analysis is enabled
   useEffect(() => {
@@ -1721,13 +1765,34 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                       setSelectedSnapshotId(newValue);
                       // Persist the selection in sessionStorage
                       sessionStorage.setItem(`selectedSnapshotId_${property.id}`, newValue);
+
+                      // Set HUD data from the selected snapshot
+                      if (newValue) {
+                        const selectedRentRoll = property.RentRoll.find(rr => rr.snapshotId === newValue);
+                        const snapshotData = (selectedRentRoll as any)?.snapshot;
+                        if (snapshotData?.hudIncomeLimits) {
+                          console.log(`📋 Setting HUD data from snapshot ${newValue}:`, {
+                            hasHudData: !!snapshotData.hudIncomeLimits,
+                            hudDataYear: snapshotData.hudDataYear
+                          });
+                          setSnapshotHudData({
+                            limits: snapshotData.hudIncomeLimits,
+                            year: snapshotData.hudDataYear
+                          });
+                        } else {
+                          console.log(`⚠️ No HUD data found in snapshot ${newValue}`);
+                          setSnapshotHudData(null);
+                        }
+                      } else {
+                        setSnapshotHudData(null);
+                      }
                     }}
                     className="w-full pl-3 pr-10 py-2.5 text-sm border-gray-300 focus:outline-none focus:ring-brand-blue focus:border-brand-blue rounded-md shadow-sm bg-white"
                                               >
                     {/* Group rent rolls by snapshot and show unique snapshots */}
                     {Array.from(new Map(property.RentRoll.map((rentRoll: FullRentRoll) => [
-                      rentRoll.snapshotId, 
-                      { snapshotId: rentRoll.snapshotId, uploadDate: rentRoll.uploadDate }
+                      rentRoll.snapshotId,
+                      { snapshotId: rentRoll.snapshotId, uploadDate: rentRoll.uploadDate, snapshot: (rentRoll as any).snapshot }
                     ])).values()).map((snapshot: any) => (
                       <option key={snapshot.snapshotId} value={snapshot.snapshotId}>
                         {new Date(snapshot.uploadDate).toLocaleDateString('en-US', { timeZone: 'UTC' })}

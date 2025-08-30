@@ -33,8 +33,10 @@ export async function GET(
         id: true,
         uploadDate: true,
         filename: true,
-        isActive: true
-      }
+        isActive: true,
+        hudIncomeLimits: true,
+        hudDataYear: true
+      } as any
     });
 
     return NextResponse.json({

@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
+import { getHudIncomeLimits } from '@/services/hud';
 
 interface LeaseData {
   unitId: string;
@@ -40,6 +41,35 @@ export async function POST(
     console.log(`🚀 [COMPLIANCE UPDATE] Rent roll date: ${rentRollDate}`);
 
     const reportDate = rentRollDate ? new Date(rentRollDate) : new Date();
+
+    // First, get property data for HUD income limits
+    const property = await prisma.property.findUnique({
+      where: { id: propertyId },
+      select: {
+        county: true,
+        state: true,
+        placedInServiceDate: true,
+        ownerId: true
+      }
+    });
+
+    if (!property || property.ownerId !== session.user.id) {
+      return NextResponse.json({ error: 'Property not found or access denied' }, { status: 404 });
+    }
+
+    // Fetch HUD income limits that will be used for this snapshot
+    let hudIncomeLimits = null;
+    let hudDataYear = new Date().getFullYear();
+
+    try {
+      console.log(`[COMPLIANCE UPDATE] 📊 Fetching HUD income limits for snapshot creation`);
+      const hudData = await getHudIncomeLimits(property.county, property.state, hudDataYear, property.placedInServiceDate || undefined);
+      hudIncomeLimits = hudData;
+      console.log(`[COMPLIANCE UPDATE] ✅ Retrieved HUD data for year ${hudDataYear}`);
+    } catch (hudError) {
+      console.error(`[COMPLIANCE UPDATE] ❌ Failed to fetch HUD income limits:`, hudError);
+      // Continue with snapshot creation even if HUD data fails - we'll store null
+    }
 
     const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // STEP 1: Get ALL existing future leases for snapshot preservation
@@ -81,8 +111,10 @@ export async function POST(
           propertyId,
           filename: filename || `Upload ${reportDate.toLocaleDateString()}`,
           uploadDate: reportDate,
-          isActive: true
-        }
+          isActive: true,
+          hudIncomeLimits: hudIncomeLimits,
+          hudDataYear: hudDataYear
+        } as any
       });
 
       console.log(`[COMPLIANCE UPDATE] ✅ Created snapshot ${snapshot.id}`);

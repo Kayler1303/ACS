@@ -1,4 +1,4 @@
-import { Property, Unit, RentRoll, Tenancy, Resident, Lease } from '@prisma/client';
+import { Property, Unit, RentRoll, Tenancy, Resident, Lease, RentRollSnapshot } from '@prisma/client';
 
 export type { Unit };
 
@@ -10,6 +10,7 @@ export type FullTenancy = Tenancy & {
 };
 
 export type FullRentRoll = RentRoll & {
+  snapshot?: RentRollSnapshot | null;
   Tenancy: FullTenancy[];
 };
 
