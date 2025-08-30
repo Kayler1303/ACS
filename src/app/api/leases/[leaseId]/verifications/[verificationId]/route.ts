@@ -62,6 +62,13 @@ export async function PATCH(
       
       totalVerifiedIncome += residentVerifiedIncome;
 
+      console.log(`[VERIFICATION FINALIZATION DEBUG] Updating resident ${resident.id} (${resident.name}):`, {
+        verifiedIncome: residentVerifiedIncome,
+        incomeFinalized: true,
+        finalizedAt: new Date(),
+        calculatedAnnualizedIncome: residentVerifiedIncome
+      });
+      
       await prisma.resident.update({
         where: { id: resident.id },
         data: {
@@ -71,6 +78,8 @@ export async function PATCH(
           calculatedAnnualizedIncome: residentVerifiedIncome
         },
       });
+      
+      console.log(`[VERIFICATION FINALIZATION DEBUG] Successfully updated resident ${resident.id} with incomeFinalized=true`);
     }
 
     const updatedVerification = await prisma.incomeVerification.update({
