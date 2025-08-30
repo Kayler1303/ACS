@@ -191,7 +191,7 @@ export async function GET(
               createdAt: lease.createdAt,
               totalResidents: lease.Resident?.length || 0,
               totalVerifications: lease.IncomeVerification?.length || 0,
-              verificationStatuses: lease.IncomeVerification?.map(v => v.status) || []
+              verificationStatuses: lease.IncomeVerification?.map((v: any) => v.status) || []
             });
           }
         });
