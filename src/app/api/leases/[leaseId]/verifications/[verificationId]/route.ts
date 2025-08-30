@@ -66,6 +66,9 @@ export async function PATCH(
         where: { id: resident.id },
         data: {
           verifiedIncome: residentVerifiedIncome,
+          incomeFinalized: true,
+          finalizedAt: new Date(),
+          calculatedAnnualizedIncome: residentVerifiedIncome
         },
       });
     }
