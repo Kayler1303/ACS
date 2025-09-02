@@ -713,7 +713,7 @@ export default function ResidentDetailPage() {
   const handleStartVerification = async (leaseId: string, overrideResidents?: Array<{ id: string; name: string }>) => {
     if (!tenancyData) return;
     
-    const lease = tenancyData.unit.Lease.find(l => l.id === leaseId);
+    const lease = tenancyData.unit?.Lease?.find(l => l.id === leaseId);
     
     try {
         const res = await fetch(`/api/leases/${leaseId}/verifications`, {
@@ -1301,7 +1301,7 @@ export default function ResidentDetailPage() {
     if (!tenancyData || discrepancyModalCooldown) return;
 
     // Check each lease for income discrepancies using the new individual resident approach
-    tenancyData.unit.Lease.forEach(lease => {
+    tenancyData.unit?.Lease?.forEach(lease => {
       const verification = lease.IncomeVerification.find(v => v.status === 'IN_PROGRESS') || 
                          lease.IncomeVerification.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
       
@@ -1426,7 +1426,7 @@ export default function ResidentDetailPage() {
     // This could involve a UI where the user can select a provisional lease to link to a new tenancy.
 
     // Filter out duplicate leases based on key lease information
-    const uniqueLeases = tenancyData.unit.Lease.filter((lease, index, allLeases) => {
+    const uniqueLeases = (tenancyData.unit?.Lease || []).filter((lease, index, allLeases) => {
       // Find the first lease with matching key information
       const firstMatchingIndex = allLeases.findIndex(otherLease => {
         const sameStartDate = lease.leaseStartDate === otherLease.leaseStartDate;
