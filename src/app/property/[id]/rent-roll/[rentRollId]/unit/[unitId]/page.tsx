@@ -2531,7 +2531,7 @@ export default function ResidentDetailPage() {
           onAddSelected={handleCopyResidents}
           leaseName={selectedLeaseForResident.name}
           currentResidents={
-            tenancyData.unit.Lease.find(l => l.Tenancy && l.leaseStartDate)
+            tenancyData?.unit?.Lease?.find(l => l.Tenancy && l.leaseStartDate)
               ?.Resident || []
           }
         />
@@ -2551,7 +2551,7 @@ export default function ResidentDetailPage() {
           }}
           residents={uploadDialogData.residents}
           allCurrentLeaseResidents={
-            tenancyData?.unit.Lease.find(l => l.Tenancy && l.leaseStartDate)
+            tenancyData?.unit?.Lease?.find(l => l.Tenancy && l.leaseStartDate)
               ?.Resident || []
           }
           hasExistingDocuments={uploadDialogData.hasExistingDocuments}
