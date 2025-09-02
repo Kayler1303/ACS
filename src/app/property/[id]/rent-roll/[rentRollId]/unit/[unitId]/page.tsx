@@ -663,7 +663,7 @@ export default function ResidentDetailPage() {
         // Get current residents for the lease
         const res = await fetch(`/api/properties/${propertyId}/rent-roll/${rentRollId}/unit/${unitId}`);
         const freshData = await res.json();
-        const currentLease = freshData.unit.leases.find((l: any) => l.id === selectedLeaseForResident.id);
+        const currentLease = freshData?.unit?.leases?.find((l: any) => l.id === selectedLeaseForResident.id);
         const currentResidents = currentLease?.residents?.map((r: any) => ({ id: r.id, name: r.name })) || [];
         
         setTimeout(() => {
