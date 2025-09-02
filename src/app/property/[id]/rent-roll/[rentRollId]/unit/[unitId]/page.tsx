@@ -1073,7 +1073,7 @@ export default function ResidentDetailPage() {
 
   // Track processing document count to prevent unnecessary polling
   const processingDocCount = useMemo(() => {
-    if (!tenancyData) return 0;
+    if (!tenancyData?.lease?.IncomeVerification) return 0;
     return tenancyData.lease.IncomeVerification.reduce((count, v) => 
       count + v.IncomeDocument.filter(d => d.status === 'PROCESSING').length, 0
     );
@@ -1081,7 +1081,7 @@ export default function ResidentDetailPage() {
 
   // DEBUG: Log all document statuses for troubleshooting
   useEffect(() => {
-    if (tenancyData) {
+    if (tenancyData?.lease?.IncomeVerification) {
       const allDocuments = tenancyData.lease.IncomeVerification.flatMap(v => v.IncomeDocument);
       const statusCounts = allDocuments.reduce((acc, doc) => {
         acc[doc.status] = (acc[doc.status] || 0) + 1;
@@ -1574,31 +1574,31 @@ export default function ResidentDetailPage() {
         >
           ← Back to Property
         </Link>
-        <h1 className="text-4xl font-bold text-brand-blue">Unit {formatUnitNumber(tenancyData.unit.unitNumber)} - Resident Details</h1>
+        <h1 className="text-4xl font-bold text-brand-blue">Unit {formatUnitNumber(tenancyData?.unit?.unitNumber || '')} - Resident Details</h1>
         
         <div className="bg-white p-6 rounded-lg shadow-md mb-8">
         <h2 className="text-2xl font-semibold text-brand-blue mb-4">Unit Information</h2>
          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <p className="text-sm font-medium text-gray-500">Unit Number</p>
-            <p className="text-lg font-semibold text-gray-900">{formatUnitNumber(tenancyData.unit.unitNumber)}</p>
+            <p className="text-lg font-semibold text-gray-900">{formatUnitNumber(tenancyData?.unit?.unitNumber || '')}</p>
           </div>
           <div>
             <p className="text-sm font-medium text-gray-500">Square Footage</p>
             <p className="text-lg font-semibold text-gray-900">
-              {tenancyData.unit.squareFootage ? tenancyData.unit.squareFootage.toLocaleString() : 'N/A'}
+              {tenancyData?.unit?.squareFootage ? tenancyData.unit.squareFootage.toLocaleString() : 'N/A'}
             </p>
           </div>
           <div>
             <p className="text-sm font-medium text-gray-500">Bedrooms</p>
             <p className="text-lg font-semibold text-gray-900">
-              {tenancyData.unit.bedroomCount ?? 'N/A'}
+              {tenancyData?.unit?.bedroomCount ?? 'N/A'}
             </p>
           </div>
           <div>
             <p className="text-sm font-medium text-gray-500">Lease Rent</p>
             <p className="text-lg font-semibold text-gray-900">
-              {tenancyData.lease.leaseRent 
+              {tenancyData?.lease?.leaseRent 
                 ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(parseFloat(tenancyData.lease.leaseRent))
                 : 'N/A'
               }
