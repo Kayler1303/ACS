@@ -1,5 +1,4 @@
 'use client';
-import { useState } from 'react';
 
 interface DateDiscrepancyModalProps {
   isOpen: boolean;
@@ -10,6 +9,7 @@ interface DateDiscrepancyModalProps {
   onCreateNewLease: () => void;
   reason?: string; // New prop to distinguish between different scenarios
   message?: string; // Custom message from API
+  isProcessing?: boolean; // Processing state controlled by parent
 }
 
 export default function DateDiscrepancyModal({
@@ -20,9 +20,9 @@ export default function DateDiscrepancyModal({
   onConfirmCurrentLease,
   onCreateNewLease,
   reason,
-  message
+  message,
+  isProcessing = false
 }: DateDiscrepancyModalProps) {
-  const [isProcessing, setIsProcessing] = useState(false);
 
   if (!isOpen) {
     return null;
@@ -40,13 +40,11 @@ export default function DateDiscrepancyModal({
   const isDateDiscrepancy = !reason || reason === 'date_discrepancy';
   const isProcessingIssue = reason === 'azure_failed' || reason === 'validation_failed' || reason === 'no_date_found';
 
-  const handleConfirmCurrentLease = async () => {
-    setIsProcessing(true);
+  const handleConfirmCurrentLease = () => {
     onConfirmCurrentLease();
   };
 
-  const handleCreateNewLease = async () => {
-    setIsProcessing(true);
+  const handleCreateNewLease = () => {
     onCreateNewLease();
   };
 

@@ -794,6 +794,7 @@ export default function IncomeVerificationDocumentUploadForm({
       onCreateNewLease={handleCreateNewLease}
       reason={dateDiscrepancyModal.data?.reason}
       message={dateDiscrepancyModal.data?.message}
+      isProcessing={isSubmitting}
     />
     
     {/* Lease Creation Dialog */}
