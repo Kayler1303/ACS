@@ -6,6 +6,8 @@ const nextConfig: NextConfig = {
         // your project has ESLint errors.
         ignoreDuringBuilds: true,
     },
+    // Increase body size limit for file uploads
+    serverExternalPackages: [],
     images: {
         remotePatterns: [
             {

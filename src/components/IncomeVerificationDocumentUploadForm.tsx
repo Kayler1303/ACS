@@ -504,6 +504,22 @@ export default function IncomeVerificationDocumentUploadForm({
       return;
     }
 
+    // Check file sizes (individual files should be under 5MB, total under 8MB)
+    const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB per file
+    const MAX_TOTAL_SIZE = 8 * 1024 * 1024; // 8MB total
+    
+    const oversizedFiles = selectedFiles.filter(f => f.file.size > MAX_FILE_SIZE);
+    if (oversizedFiles.length > 0) {
+      setError(`Some files are too large. Maximum file size is 5MB. Large files: ${oversizedFiles.map(f => f.file.name).join(', ')}`);
+      return;
+    }
+
+    const totalSize = selectedFiles.reduce((sum, f) => sum + f.file.size, 0);
+    if (totalSize > MAX_TOTAL_SIZE) {
+      setError(`Total file size is too large (${(totalSize / 1024 / 1024).toFixed(1)}MB). Please upload fewer files or smaller files. Maximum total size is 8MB.`);
+      return;
+    }
+
     setIsSubmitting(true);
     setError(null);
     // setSuccess(null); // This line is removed
@@ -578,7 +594,27 @@ export default function IncomeVerificationDocumentUploadForm({
           console.log(`📡 [FRONTEND] Parsed response data:`, data);
         } catch (parseError) {
           console.error(`❌ [FRONTEND] Failed to parse response as JSON:`, parseError);
-          throw new Error('Invalid response format from server');
+          console.error(`❌ [FRONTEND] Response status: ${response.status}`);
+          console.error(`❌ [FRONTEND] Response headers:`, Object.fromEntries(response.headers.entries()));
+          
+          // Try to get the response text to see what the server actually returned
+          try {
+            const responseText = await response.text();
+            console.error(`❌ [FRONTEND] Response text:`, responseText);
+            
+            // Handle common server errors
+            if (response.status === 413) {
+              throw new Error('File size too large. Please try uploading smaller files or fewer files at once.');
+            } else if (response.status === 504) {
+              throw new Error('Upload timeout. Please try uploading fewer files at once.');
+            } else if (responseText.includes('Request Entity Too Large')) {
+              throw new Error('Files are too large. Please try uploading smaller files or fewer files at once.');
+            } else {
+              throw new Error(`Server error (${response.status}): ${responseText.substring(0, 100)}...`);
+            }
+          } catch (textError) {
+            throw new Error(`Server error (${response.status}). Please try uploading fewer files at once.`);
+          }
         }
 
         if (!response.ok) {

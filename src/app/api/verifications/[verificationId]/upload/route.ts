@@ -10,6 +10,10 @@ import { DocumentType, DocumentStatus } from '@prisma/client';
 import { isWithinInterval, subMonths, getYear, addMonths } from 'date-fns';
 import { randomUUID } from 'crypto';
 
+// Configure route for larger file uploads
+export const runtime = 'nodejs';
+export const maxDuration = 60; // 60 seconds timeout
+
 // Helper function to detect duplicate documents
 async function checkForDuplicateDocument(
   residentId: string, 
