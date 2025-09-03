@@ -539,12 +539,27 @@ export default function IncomeVerificationDocumentUploadForm({
         body: checkFormData,
       });
 
-      if (!checkResponse.ok) {
-        const data = await checkResponse.json();
-        throw new Error(data.error || 'Date check failed');
+      // Parse response with proper error handling
+      let checkResult;
+      try {
+        checkResult = await checkResponse.json();
+      } catch (parseError) {
+        console.error(`❌ [FRONTEND] Failed to parse check-dates response as JSON:`, parseError);
+        console.error(`❌ [FRONTEND] Check-dates response status: ${checkResponse.status}`);
+        
+        // Handle common server errors for check-dates
+        if (checkResponse.status === 413) {
+          throw new Error('Files are too large for date checking. Please try uploading smaller files or fewer files at once.');
+        } else if (checkResponse.status === 504) {
+          throw new Error('Date check timeout. Please try uploading fewer files at once.');
+        } else {
+          throw new Error(`Date check failed (${checkResponse.status}). Please try uploading fewer files at once.`);
+        }
       }
-      
-      const checkResult = await checkResponse.json();
+
+      if (!checkResponse.ok) {
+        throw new Error(checkResult.error || 'Date check failed');
+      }
       
       // If date confirmation is required, show modal WITHOUT uploading anything
       if (checkResult.requiresDateConfirmation) {

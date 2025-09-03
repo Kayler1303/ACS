@@ -7,6 +7,10 @@ import { validatePaystubExtraction, validateW2Extraction, PaystubValidationResul
 import { addMonths } from 'date-fns';
 import { DocumentType } from '@prisma/client';
 
+// Configure route for larger file uploads
+export const runtime = 'nodejs';
+export const maxDuration = 60; // 60 seconds timeout
+
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ verificationId: string }> }
