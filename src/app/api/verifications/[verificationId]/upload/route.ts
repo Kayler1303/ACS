@@ -936,11 +936,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // eslint-disable-next-line prefer-const
         let updateData: any = {
           status: DocumentStatus.COMPLETED,
-          box1_wages: extractedData.box1_wages,
-          box3_ss_wages: extractedData.box3_ss_wages,
-          box5_med_wages: extractedData.box5_med_wages,
-          employeeName: extractedData.employeeName,
-          employerName: extractedData.employerName,
+          box1_wages: extractedData.box1_wages ?? null,
+          box3_ss_wages: extractedData.box3_ss_wages ?? null,
+          box5_med_wages: extractedData.box5_med_wages ?? null,
+          employeeName: extractedData.employeeName ?? null,
+          employerName: extractedData.employerName ?? null,
         };
 
         if (amounts.length > 0) {
@@ -1067,19 +1067,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           status: DocumentStatus.NEEDS_REVIEW,
           // Still save the extracted data for admin review
           ...(documentType === DocumentType.W2 ? {
-            box1_wages: (validationResult as W2ValidationResult).extractedData.box1_wages,
-            box3_ss_wages: (validationResult as W2ValidationResult).extractedData.box3_ss_wages,
-            box5_med_wages: (validationResult as W2ValidationResult).extractedData.box5_med_wages,
-            employeeName: (validationResult as W2ValidationResult).extractedData.employeeName,
-            employerName: (validationResult as W2ValidationResult).extractedData.employerName,
+            box1_wages: (validationResult as W2ValidationResult).extractedData.box1_wages ?? null,
+            box3_ss_wages: (validationResult as W2ValidationResult).extractedData.box3_ss_wages ?? null,
+            box5_med_wages: (validationResult as W2ValidationResult).extractedData.box5_med_wages ?? null,
+            employeeName: (validationResult as W2ValidationResult).extractedData.employeeName ?? null,
+            employerName: (validationResult as W2ValidationResult).extractedData.employerName ?? null,
             taxYear: (validationResult as W2ValidationResult).extractedData.taxYear ? 
               parseInt((validationResult as W2ValidationResult).extractedData.taxYear!, 10) : null
           } : {
-            payPeriodStartDate: (validationResult as PaystubValidationResult).extractedData.payPeriodStartDate,
-            payPeriodEndDate: (validationResult as PaystubValidationResult).extractedData.payPeriodEndDate,
-            grossPayAmount: (validationResult as PaystubValidationResult).extractedData.grossPayAmount,
-            employeeName: (validationResult as PaystubValidationResult).extractedData.employeeName,
-            employerName: (validationResult as PaystubValidationResult).extractedData.employerName
+            payPeriodStartDate: (validationResult as PaystubValidationResult).extractedData.payPeriodStartDate ?? null,
+            payPeriodEndDate: (validationResult as PaystubValidationResult).extractedData.payPeriodEndDate ?? null,
+            grossPayAmount: (validationResult as PaystubValidationResult).extractedData.grossPayAmount ?? null,
+            employeeName: (validationResult as PaystubValidationResult).extractedData.employeeName ?? null,
+            employerName: (validationResult as PaystubValidationResult).extractedData.employerName ?? null
           })
         }
       });
@@ -1136,11 +1136,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           where: { id: document.id },
           data: {
             status: DocumentStatus.COMPLETED,
-            box1_wages: extractedData.box1_wages,
-            box3_ss_wages: extractedData.box3_ss_wages,
-            box5_med_wages: extractedData.box5_med_wages,
-            employeeName: extractedData.employeeName,
-            employerName: extractedData.employerName,
+            box1_wages: extractedData.box1_wages ?? null,
+            box3_ss_wages: extractedData.box3_ss_wages ?? null,
+            box5_med_wages: extractedData.box5_med_wages ?? null,
+            employeeName: extractedData.employeeName ?? null,
+            employerName: extractedData.employerName ?? null,
             taxYear: extractedData.taxYear ? parseInt(extractedData.taxYear, 10) : null,
             calculatedAnnualizedIncome: highestAmount
           }
@@ -1168,11 +1168,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           where: { id: document.id },
           data: {
             status: DocumentStatus.COMPLETED,
-            payPeriodStartDate: extractedData.payPeriodStartDate,
-            payPeriodEndDate: extractedData.payPeriodEndDate,
-            grossPayAmount: extractedData.grossPayAmount,
-            employeeName: extractedData.employeeName,
-            employerName: extractedData.employerName,
+            payPeriodStartDate: extractedData.payPeriodStartDate ?? null,
+            payPeriodEndDate: extractedData.payPeriodEndDate ?? null,
+            grossPayAmount: extractedData.grossPayAmount ?? null,
+            employeeName: extractedData.employeeName ?? null,
+            employerName: extractedData.employerName ?? null,
             payFrequency: payFrequency,
           } as any,
         });
