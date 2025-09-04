@@ -755,14 +755,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             // Auto-verify with extracted data
             console.log(`${documentType} document auto-verified with extracted data`);
             
-            const annualizedIncome = autoExtractedData.monthlyBenefit * 12;
+            const annualizedIncome = (autoExtractedData.monthlyBenefit ?? 0) * 12;
             
             document = await prisma.incomeDocument.update({
               where: { id: document.id },
               data: {
                 status: DocumentStatus.COMPLETED,
-                employeeName: autoExtractedData.beneficiaryName,
-                grossPayAmount: autoExtractedData.monthlyBenefit,
+                employeeName: autoExtractedData.beneficiaryName ?? null,
+                grossPayAmount: autoExtractedData.monthlyBenefit ?? null,
                 payFrequency: 'MONTHLY',
                 calculatedAnnualizedIncome: annualizedIncome,
                 documentDate: autoExtractedData.letterDate || new Date(),
