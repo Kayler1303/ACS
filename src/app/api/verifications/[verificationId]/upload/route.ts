@@ -645,6 +645,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
               }
             }
             
+            console.log('[SSA-1099] Final extraction check:', {
+              beneficiaryName: !!beneficiaryName,
+              beneficiaryNameValue: beneficiaryName,
+              annualBenefits: !!annualBenefits,
+              annualBenefitsValue: annualBenefits,
+              taxYear: taxYear
+            });
+            
             if (beneficiaryName && annualBenefits) {
               // Remove currency formatting from the benefits amount
               const cleanBenefits = annualBenefits.replace(/[$,]/g, '');
@@ -655,22 +663,43 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
               console.log(`[SSA-1099] Extracted: ${beneficiaryName}, Annual: $${annualBenefits}, Monthly: $${monthlyBenefit}`);
               
               // Apply the extracted data immediately
+              let documentDate = new Date(); // Default to current date
+              if (taxYear) {
+                try {
+                  // Validate taxYear is a 4-digit number
+                  const yearNum = parseInt(taxYear.toString());
+                  if (!isNaN(yearNum) && yearNum >= 1900 && yearNum <= 2100) {
+                    documentDate = new Date(`${yearNum}-12-31`);
+                  } else {
+                    console.log(`[SSA-1099] Invalid taxYear format: ${taxYear}, using current date`);
+                  }
+                } catch (error) {
+                  console.log(`[SSA-1099] Error parsing taxYear: ${taxYear}, using current date:`, error);
+                }
+              }
+              
               const updateData: any = {
                 employeeName: beneficiaryName ?? null,
                 grossPayAmount: monthlyBenefit ?? null,
                 payFrequency: 'MONTHLY',
                 calculatedAnnualizedIncome: annualizedIncome ?? null,
                 status: DocumentStatus.COMPLETED,
-                documentDate: taxYear ? new Date(`${taxYear}-12-31`) : new Date()
+                documentDate: documentDate
               };
 
-              document = await prisma.incomeDocument.update({
-                where: { id: document.id },
-                data: updateData
-              });
+              try {
+                document = await prisma.incomeDocument.update({
+                  where: { id: document.id },
+                  data: updateData
+                });
 
-              console.log(`[SSA-1099] Document ${document.id} successfully processed and marked as COMPLETED`);
-              return NextResponse.json(document, { status: 201 });
+                console.log(`[SSA-1099] Document ${document.id} successfully processed and marked as COMPLETED`);
+                return NextResponse.json(document, { status: 201 });
+              } catch (prismaError: any) {
+                console.error(`[SSA-1099] Prisma update error for document ${document.id}:`, prismaError);
+                console.error(`[SSA-1099] UpdateData that caused error:`, JSON.stringify(updateData, null, 2));
+                throw new Error(`Database update failed: ${prismaError?.message || 'Unknown database error'}`);
+              }
             } else {
               console.log('[SSA-1099] Could not extract required fields, marking for review');
               
