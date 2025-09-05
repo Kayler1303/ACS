@@ -648,17 +648,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             if (beneficiaryName && annualBenefits) {
               // Remove currency formatting from the benefits amount
               const cleanBenefits = annualBenefits.replace(/[$,]/g, '');
-              const monthlyBenefit = parseFloat(cleanBenefits) / 12;
-              const annualizedIncome = parseFloat(cleanBenefits);
+              const parsedAmount = parseFloat(cleanBenefits);
+              const monthlyBenefit = !isNaN(parsedAmount) ? parsedAmount / 12 : null;
+              const annualizedIncome = !isNaN(parsedAmount) ? parsedAmount : null;
               
               console.log(`[SSA-1099] Extracted: ${beneficiaryName}, Annual: $${annualBenefits}, Monthly: $${monthlyBenefit}`);
               
               // Apply the extracted data immediately
               const updateData: any = {
-                employeeName: beneficiaryName,
-                grossPayAmount: monthlyBenefit,
+                employeeName: beneficiaryName ?? null,
+                grossPayAmount: monthlyBenefit ?? null,
                 payFrequency: 'MONTHLY',
-                calculatedAnnualizedIncome: annualizedIncome,
+                calculatedAnnualizedIncome: annualizedIncome ?? null,
                 status: DocumentStatus.COMPLETED
               };
               
