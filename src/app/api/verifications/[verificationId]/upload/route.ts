@@ -660,12 +660,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 grossPayAmount: monthlyBenefit ?? null,
                 payFrequency: 'MONTHLY',
                 calculatedAnnualizedIncome: annualizedIncome ?? null,
-                status: DocumentStatus.COMPLETED
+                status: DocumentStatus.COMPLETED,
+                documentDate: taxYear ? new Date(`${taxYear}-12-31`) : new Date()
               };
-              
-              if (taxYear) {
-                updateData.documentDate = new Date(`${taxYear}-12-31`);
-              }
 
               document = await prisma.incomeDocument.update({
                 where: { id: document.id },
