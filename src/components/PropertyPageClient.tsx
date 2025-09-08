@@ -1673,6 +1673,15 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
               >
                 🏠 AMI Check
               </button>
+              <button
+                onClick={() => {
+                  const url = `/api/properties/${property.id}/export-discrepancies`;
+                  window.open(url, '_blank');
+                }}
+                className="inline-flex items-center px-4 py-2 text-base font-bold text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-blue transition-colors"
+              >
+                📊 Export Income Discrepancies
+              </button>
             </div>
             <div className="text-sm text-gray-500">
               Upload new resident & rent roll data to refresh analysis

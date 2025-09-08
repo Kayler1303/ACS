@@ -308,12 +308,28 @@ export default function ReconciliationPage() {
           ) : (
             <>
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <h3 className="text-lg font-semibold text-yellow-800 mb-2">
-                  {incomeDiscrepancies.length} Income Discrepanc{incomeDiscrepancies.length === 1 ? 'y' : 'ies'} Detected
-                  {futureToCurrentTransitions.length > 0 && (
-                    <span> & {futureToCurrentTransitions.length} Future Lease Transition{futureToCurrentTransitions.length === 1 ? '' : 's'}</span>
+                <div className="flex justify-between items-start mb-2">
+                  <h3 className="text-lg font-semibold text-yellow-800">
+                    {incomeDiscrepancies.length} Income Discrepanc{incomeDiscrepancies.length === 1 ? 'y' : 'ies'} Detected
+                    {futureToCurrentTransitions.length > 0 && (
+                      <span> & {futureToCurrentTransitions.length} Future Lease Transition{futureToCurrentTransitions.length === 1 ? '' : 's'}</span>
+                    )}
+                  </h3>
+                  {incomeDiscrepancies.length > 0 && (
+                    <button
+                      onClick={() => {
+                        const url = `/api/properties/${propertyId}/income-discrepancies/export?rentRollId=${rentRollId}`;
+                        window.open(url, '_blank');
+                      }}
+                      className="inline-flex items-center px-3 py-2 border border-yellow-300 shadow-sm text-sm leading-4 font-medium rounded-md text-yellow-800 bg-yellow-100 hover:bg-yellow-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
+                    >
+                      <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Export CSV
+                    </button>
                   )}
-                </h3>
+                </div>
                 <p className="text-yellow-700">
                   For each discrepancy below, choose whether to keep the verified income from documents or accept the new rent roll income.
                   {futureToCurrentTransitions.length > 0 && (
