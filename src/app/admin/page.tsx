@@ -824,9 +824,29 @@ function OverrideRequestItem({
           window.location.reload();
           return; // Exit early to avoid calling onAction
         } else {
-          const errorData = await response.text();
-          console.error('Failed to process document review:', response.status, errorData);
-          alert(`Failed to process document review: ${response.status} - ${errorData}`);
+          let errorMessage = `Failed to process document review (${response.status})`;
+          
+          try {
+            const errorData = await response.json();
+            console.error('Failed to process document review:', response.status, errorData);
+            
+            // Handle specific error cases with better messaging
+            if (response.status === 409 && errorData.alreadyProcessed) {
+              // Document already processed - show friendly message
+              alert(`✅ ${errorData.error}\n\nThis document has already been processed. The page will refresh to show the current status.`);
+              window.location.reload();
+              return;
+            } else if (errorData.error) {
+              errorMessage = errorData.error;
+            }
+          } catch (parseError) {
+            // Fallback to text if JSON parsing fails
+            const errorText = await response.text();
+            console.error('Failed to parse error response as JSON:', parseError);
+            errorMessage = errorText || errorMessage;
+          }
+          
+          alert(errorMessage);
         }
       } catch (error) {
         console.error('Error processing document review:', error);

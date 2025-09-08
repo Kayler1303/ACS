@@ -1305,6 +1305,33 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             status: DocumentStatus.NEEDS_REVIEW  // Mark for admin review rather than leaving stuck
           }
         });
+
+        // Create override request for the error recovery case
+        // Note: We need to get session again since it's not in scope in the catch block
+        try {
+          const errorSession = await getServerSession(authOptions);
+          if (errorSession?.user?.id) {
+            await prisma.overrideRequest.create({
+              data: {
+                id: randomUUID(),
+                type: 'DOCUMENT_REVIEW',
+                status: 'PENDING',
+                userExplanation: `Document processing encountered an error and requires manual review. Error: ${error instanceof Error ? error.message : 'Unknown processing error'}`,
+                documentId: document.id,
+                verificationId: document.verificationId,
+                residentId: document.residentId,
+                requesterId: errorSession.user.id,
+                propertyId: null, // We don't have access to verification object in error scope
+                updatedAt: new Date(),
+              }
+            });
+            console.log(`✅ [RECOVERY] Created override request for document ${document.id}`);
+          } else {
+            console.log(`⚠️ [RECOVERY] Could not create override request - no session available`);
+          }
+        } catch (overrideError) {
+          console.error(`❌ [RECOVERY] Failed to create override request for document ${document.id}:`, overrideError);
+        }
         
         console.log(`✅ [RECOVERY] Document ${document.id} marked as NEEDS_REVIEW to prevent stuck state`);
       } catch (recoveryError) {

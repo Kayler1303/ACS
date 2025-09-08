@@ -57,17 +57,37 @@ export async function POST(
       return NextResponse.json({ error: 'Document not found' }, { status: 404 });
     }
 
-    // Find associated override request
-    const overrideRequest = await prisma.overrideRequest.findFirst({
+    // Find associated override request - check for any status first
+    const existingOverrideRequest = await prisma.overrideRequest.findFirst({
       where: {
-        documentId: documentId,
-        status: 'PENDING'
+        documentId: documentId
+      },
+      orderBy: {
+        createdAt: 'desc'
       }
     });
 
-    if (!overrideRequest) {
-      return NextResponse.json({ error: 'No pending override request found for this document' }, { status: 404 });
+    if (!existingOverrideRequest) {
+      return NextResponse.json({ error: 'No override request found for this document' }, { status: 404 });
     }
+
+    // Check if already processed
+    if (existingOverrideRequest.status !== 'PENDING') {
+      const statusMessage = existingOverrideRequest.status === 'APPROVED' 
+        ? 'This document has already been approved'
+        : existingOverrideRequest.status === 'DENIED'
+        ? 'This document has already been denied'
+        : `This document has already been processed (status: ${existingOverrideRequest.status})`;
+        
+      return NextResponse.json({ 
+        error: statusMessage,
+        alreadyProcessed: true,
+        currentStatus: existingOverrideRequest.status,
+        reviewedAt: existingOverrideRequest.reviewedAt
+      }, { status: 409 }); // 409 Conflict
+    }
+
+    const overrideRequest = existingOverrideRequest;
 
     if (action === 'approve') {
       // Admin approves the document - mark as completed with optional corrections
