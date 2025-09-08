@@ -190,6 +190,7 @@ export async function POST(
               name: resident.name,
               verifiedIncome: resident.verifiedIncome,
               annualizedIncome: resident.annualizedIncome,
+              originalRentRollIncome: resident.originalRentRollIncome, // Preserve original rent roll income
               calculatedAnnualizedIncome: resident.calculatedAnnualizedIncome,
               incomeFinalized: hasFinalized ? true : resident.incomeFinalized, // Fix: Set to true if verification is finalized
               hasNoIncome: resident.hasNoIncome,

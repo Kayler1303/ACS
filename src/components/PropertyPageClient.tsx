@@ -1680,7 +1680,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                 }}
                 className="inline-flex items-center px-4 py-2 text-base font-bold text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-blue transition-colors"
               >
-                📊 Export Income Discrepancies
+                📊 Export Property Management System Updates
               </button>
             </div>
             <div className="text-sm text-gray-500">

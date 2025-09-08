@@ -162,6 +162,7 @@ model Resident {
   updatedAt                  DateTime
   verifiedIncome             Decimal?          @db.Decimal(10, 2)
   annualizedIncome           Decimal?          @db.Decimal(10, 2)
+  originalRentRollIncome     Decimal?          @db.Decimal(10, 2) // Original income from rent roll upload (never updated)
   leaseId                    String
   calculatedAnnualizedIncome Decimal?          @db.Decimal(10, 2)
   finalizedAt                DateTime?
@@ -350,3 +351,4 @@ enum ActivityType {
   ACCOUNT_SUSPENDED
   ACCOUNT_UNSUSPENDED
 }
+

@@ -83,51 +83,22 @@ export async function GET(
       const unit = tenancy.Lease.Unit;
       const newResidents = tenancy.Lease.Resident;
       
-      // Get the most recent CURRENT lease for this unit that has verified income (not the new lease)
-      const existingLeases = await prisma.lease.findMany({
-        where: {
-          unitId: unit.id,
-          id: { not: tenancy.Lease.id }, // Exclude the new lease
-          Tenancy: { isNot: null }, // Only current leases (with Tenancy), not future leases
-          Resident: {
-            some: {
-              AND: [
-                { incomeFinalized: true },
-                { calculatedAnnualizedIncome: { not: null } }
-              ]
-            }
-          }
-        },
-        include: {
-          Resident: {
-            where: {
-              AND: [
-                { incomeFinalized: true },
-                { calculatedAnnualizedIncome: { not: null } }
-              ]
-            }
-          }
-        },
-        orderBy: {
-          createdAt: 'desc'
-        },
-        take: 1
-      });
       
-      // First, check for discrepancies within the current lease itself (after inheritance)
+      // Check for residents who need property management system updates
+      // These are residents where verified income differs from original rent roll income
       for (const currentResident of newResidents) {
-        if (currentResident.incomeFinalized && currentResident.calculatedAnnualizedIncome) {
+        if (currentResident.incomeFinalized && currentResident.calculatedAnnualizedIncome && currentResident.originalRentRollIncome) {
           const verifiedIncome = Number(currentResident.calculatedAnnualizedIncome || 0);
-          const rentRollIncome = Number(currentResident.annualizedIncome || 0);
-          const discrepancy = Math.abs(verifiedIncome - rentRollIncome);
-          const discrepancyPercentage = rentRollIncome > 0 ? (discrepancy / rentRollIncome) * 100 : 0;
+          const originalRentRollIncome = Number(currentResident.originalRentRollIncome || 0);
+          const discrepancy = Math.abs(verifiedIncome - originalRentRollIncome);
+          const discrepancyPercentage = originalRentRollIncome > 0 ? (discrepancy / originalRentRollIncome) * 100 : 0;
           
           if (discrepancy > 1.00) {
             discrepancies.push({
               unitNumber: unit.unitNumber,
               residentName: currentResident.name,
               verifiedIncome: verifiedIncome,
-              newRentRollIncome: rentRollIncome,
+              newRentRollIncome: originalRentRollIncome,
               discrepancy: discrepancy,
               discrepancyPercentage: discrepancyPercentage,
               existingLeaseId: tenancy.Lease.id,
@@ -142,48 +113,6 @@ export async function GET(
           }
         }
       }
-      
-      // Then, check for income discrepancies between new and verified residents from previous leases
-      for (const existingLease of existingLeases) {
-        for (const existingResident of existingLease.Resident) {
-          // Find matching resident by name in new lease
-          const matchingNewResident = newResidents.find(
-            newRes => newRes.name.toLowerCase().trim() === existingResident.name.toLowerCase().trim()
-          );
-
-          if (matchingNewResident) {
-            // Skip if the resident already has verified income in the current lease
-            if (matchingNewResident.incomeFinalized && matchingNewResident.calculatedAnnualizedIncome) {
-              continue;
-            }
-            
-            const verifiedIncome = Number(existingResident.calculatedAnnualizedIncome || 0);
-            const newRentRollIncome = Number(matchingNewResident.annualizedIncome || 0);
-            const discrepancy = Math.abs(verifiedIncome - newRentRollIncome);
-            const discrepancyPercentage = newRentRollIncome > 0 ? (discrepancy / newRentRollIncome) * 100 : 0;
-            
-            // If discrepancy is greater than $1, flag it
-            if (discrepancy > 1.00) {
-              discrepancies.push({
-                unitNumber: unit.unitNumber,
-                residentName: existingResident.name,
-                verifiedIncome: verifiedIncome,
-                newRentRollIncome: newRentRollIncome,
-                discrepancy: discrepancy,
-                discrepancyPercentage: discrepancyPercentage,
-                existingLeaseId: existingLease.id,
-                newLeaseId: tenancy.Lease.id,
-                existingResidentId: existingResident.id,
-                newResidentId: matchingNewResident.id,
-                propertyName: property.name,
-                propertyAddress: property.address || '',
-                leaseStartDate: tenancy.Lease.leaseStartDate?.toISOString().split('T')[0] || '',
-                leaseEndDate: tenancy.Lease.leaseEndDate?.toISOString().split('T')[0] || ''
-              });
-            }
-          }
-        }
-      }
     }
 
     // Generate CSV content
@@ -192,10 +121,10 @@ export async function GET(
       'Property Address', 
       'Unit Number',
       'Resident Name',
-      'Verified Income',
-      'Rent Roll Income',
-      'Discrepancy Amount',
-      'Discrepancy Percentage',
+      'Current Income in Property Management System',
+      'Verified Income (Update To This Amount)',
+      'Difference Amount',
+      'Difference Percentage',
       'Lease Start Date',
       'Lease End Date',
       'Generated Date'
@@ -224,7 +153,7 @@ export async function GET(
     // Generate filename with property name and date
     const sanitizedPropertyName = property.name.replace(/[^a-zA-Z0-9]/g, '_');
     const dateStr = new Date().toISOString().split('T')[0];
-    const filename = `Income_Discrepancies_${sanitizedPropertyName}_${dateStr}.csv`;
+    const filename = `Property_Management_System_Updates_${sanitizedPropertyName}_${dateStr}.csv`;
 
     // Return CSV file
     return new NextResponse(csvContent, {

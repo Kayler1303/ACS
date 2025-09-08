@@ -207,6 +207,7 @@ export async function POST(
               name: residentData.name,
               leaseId: leaseId,
               annualizedIncome: annualizedIncome,
+              originalRentRollIncome: annualizedIncome, // Store original rent roll income
               incomeFinalized: false,
               createdAt: new Date(),
               updatedAt: new Date()

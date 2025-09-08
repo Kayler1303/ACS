@@ -69,21 +69,22 @@ export async function GET(
         const unit = tenancy.Lease.Unit;
         const residents = tenancy.Lease.Resident;
         
-        // Check for discrepancies within each lease
+        // Check for residents who need property management system updates
+        // These are residents where verified income differs from original rent roll income
         for (const resident of residents) {
-          if (resident.incomeFinalized && resident.calculatedAnnualizedIncome && resident.annualizedIncome) {
+          if (resident.incomeFinalized && resident.calculatedAnnualizedIncome && resident.originalRentRollIncome) {
             const verifiedIncome = Number(resident.calculatedAnnualizedIncome || 0);
-            const rentRollIncome = Number(resident.annualizedIncome || 0);
-            const discrepancy = Math.abs(verifiedIncome - rentRollIncome);
-            const discrepancyPercentage = rentRollIncome > 0 ? (discrepancy / rentRollIncome) * 100 : 0;
+            const originalRentRollIncome = Number(resident.originalRentRollIncome || 0);
+            const discrepancy = Math.abs(verifiedIncome - originalRentRollIncome);
+            const discrepancyPercentage = originalRentRollIncome > 0 ? (discrepancy / originalRentRollIncome) * 100 : 0;
             
-            // Only include discrepancies greater than $1
+            // Only include discrepancies greater than $1 (meaning property management system needs update)
             if (discrepancy > 1.00) {
               discrepancies.push({
                 unitNumber: unit.unitNumber,
                 residentName: resident.name,
                 verifiedIncome: verifiedIncome,
-                rentRollIncome: rentRollIncome,
+                rentRollIncome: originalRentRollIncome,
                 discrepancy: discrepancy,
                 discrepancyPercentage: discrepancyPercentage,
                 propertyName: property.name,
@@ -113,10 +114,10 @@ export async function GET(
       'Rent Roll',
       'Unit Number',
       'Resident Name',
-      'Verified Income',
-      'Rent Roll Income',
-      'Discrepancy Amount',
-      'Discrepancy Percentage',
+      'Current Income in Property Management System',
+      'Verified Income (Update To This Amount)',
+      'Difference Amount',
+      'Difference Percentage',
       'Lease Start Date',
       'Lease End Date',
       'Generated Date'
@@ -146,7 +147,7 @@ export async function GET(
     // Generate filename with property name and date
     const sanitizedPropertyName = property.name.replace(/[^a-zA-Z0-9]/g, '_');
     const dateStr = new Date().toISOString().split('T')[0];
-    const filename = `All_Income_Discrepancies_${sanitizedPropertyName}_${dateStr}.csv`;
+    const filename = `Property_Management_System_Updates_${sanitizedPropertyName}_${dateStr}.csv`;
 
     // Return CSV file
     return new NextResponse(csvContent, {
