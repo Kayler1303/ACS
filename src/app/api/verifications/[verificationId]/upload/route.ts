@@ -9,6 +9,7 @@ import { analyzePaystubs } from '@/services/income';
 import { DocumentType, DocumentStatus } from '@prisma/client';
 import { isWithinInterval, subMonths, getYear, addMonths } from 'date-fns';
 import { randomUUID } from 'crypto';
+import { uploadToBlob, generateBlobFileName, isBlobStorageConfigured } from '@/lib/blob-storage';
 
 // Configure route for larger file uploads
 export const runtime = 'nodejs';
@@ -394,16 +395,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Process file directly from memory (Vercel serverless doesn't support file system writes)
+    // Process file from memory and save to Azure Blob Storage
     const buffer = Buffer.from(await file.arrayBuffer());
-    const filename = `${Date.now()}-${file.name}`;
+    const documentId = randomUUID();
+    const filename = generateBlobFileName(file.name, documentId);
     
     console.log(`Processing file: ${filename} for verification ${verificationId}, resident ${residentId}`);
 
     // Create initial document record
     document = await prisma.incomeDocument.create({
       data: {
-        id: randomUUID(),
+        id: documentId,
         documentType,
         documentDate: new Date(), // Required field for document date
         uploadDate: new Date(),
@@ -413,6 +415,43 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         residentId,
       },
     });
+
+    // Save file to Azure Blob Storage
+    let blobUrl: string | null = null;
+    if (isBlobStorageConfigured()) {
+      try {
+        // Determine content type based on file extension
+        const fileExtension = file.name.split('.').pop()?.toLowerCase() || '';
+        let contentType = 'application/octet-stream';
+        
+        if (fileExtension === 'pdf') {
+          contentType = 'application/pdf';
+        } else if (['jpg', 'jpeg'].includes(fileExtension)) {
+          contentType = 'image/jpeg';
+        } else if (fileExtension === 'png') {
+          contentType = 'image/png';
+        }
+
+        console.log(`[BLOB STORAGE] Uploading ${filename} to Azure Blob Storage...`);
+        blobUrl = await uploadToBlob(filename, buffer, contentType);
+        console.log(`[BLOB STORAGE] Successfully uploaded to: ${blobUrl}`);
+
+        // Update document record with blob URL
+        await prisma.incomeDocument.update({
+          where: { id: document.id },
+          data: { 
+            filePath: filename, // Keep filename for compatibility
+            // We could add a blobUrl field to the schema later if needed
+          }
+        });
+      } catch (blobError) {
+        console.error(`[BLOB STORAGE] Failed to upload ${filename}:`, blobError);
+        // Continue processing even if blob upload fails - we still have the file in memory for analysis
+        console.log(`[BLOB STORAGE] Continuing with document analysis despite blob upload failure`);
+      }
+    } else {
+      console.warn(`[BLOB STORAGE] Azure Blob Storage not configured - file will not be permanently stored`);
+    }
 
     // Analyze the document with Azure Document Intelligence
     let analyzeResult;
