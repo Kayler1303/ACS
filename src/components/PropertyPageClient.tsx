@@ -1880,8 +1880,20 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       {/* Verification Status Summary */}
       {processedTenancies.length > 0 && (
         <div className="mb-6 bg-white rounded-lg shadow-md overflow-hidden">
-          <div className="bg-gradient-to-r from-brand-blue to-brand-accent px-6 py-4">
+          <div className="bg-gradient-to-r from-brand-blue to-brand-accent px-6 py-4 flex justify-between items-center">
             <h2 className="text-lg font-semibold text-white">Verification Status Summary</h2>
+            <button
+              onClick={() => {
+                const url = `/api/properties/${property.id}/export-summary?type=verification`;
+                window.open(url, '_blank');
+              }}
+              className="inline-flex items-center px-3 py-2 border border-white/20 shadow-sm text-sm leading-4 font-medium rounded-md text-white bg-white/10 hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-white"
+            >
+              <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Export CSV
+            </button>
           </div>
           
           <div className="p-6">
@@ -1972,8 +1984,20 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       {/* Compliance Summary */}
       {processedTenancies.length > 0 && (
         <div className="mb-8 bg-white rounded-lg shadow-md overflow-hidden">
-          <div className="bg-gradient-to-r from-brand-blue to-brand-accent px-6 py-4">
+          <div className="bg-gradient-to-r from-brand-blue to-brand-accent px-6 py-4 flex justify-between items-center">
             <h2 className="text-lg font-semibold text-white">Compliance Summary</h2>
+            <button
+              onClick={() => {
+                const url = `/api/properties/${property.id}/export-summary?type=compliance`;
+                window.open(url, '_blank');
+              }}
+              className="inline-flex items-center px-3 py-2 border border-white/20 shadow-sm text-sm leading-4 font-medium rounded-md text-white bg-white/10 hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-white"
+            >
+              <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Export CSV
+            </button>
           </div>
           
           <div className="p-6">
@@ -2178,9 +2202,23 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       {/* Property Data */}
       {processedTenancies.length > 0 && (
         <div className="mb-8 bg-white rounded-lg shadow-md overflow-hidden">
-          <div className="bg-gradient-to-r from-brand-blue to-brand-accent px-6 py-4">
-            <h2 className="text-lg font-semibold text-white">Property Data</h2>
-            <p className="text-blue-100 text-sm mt-1">Unit-by-unit compliance analysis</p>
+          <div className="bg-gradient-to-r from-brand-blue to-brand-accent px-6 py-4 flex justify-between items-start">
+            <div>
+              <h2 className="text-lg font-semibold text-white">Property Data</h2>
+              <p className="text-blue-100 text-sm mt-1">Unit-by-unit compliance analysis</p>
+            </div>
+            <button
+              onClick={() => {
+                const url = `/api/properties/${property.id}/export-summary?type=units`;
+                window.open(url, '_blank');
+              }}
+              className="inline-flex items-center px-3 py-2 border border-white/20 shadow-sm text-sm leading-4 font-medium rounded-md text-white bg-white/10 hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-white"
+            >
+              <svg className="mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              Export CSV
+            </button>
           </div>
           
           <div className="overflow-x-auto">
