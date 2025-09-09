@@ -17,6 +17,7 @@ export default function DocumentAssignmentDialog({
 }: DocumentAssignmentDialogProps) {
   const [selectedResidentId, setSelectedResidentId] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -25,9 +26,11 @@ export default function DocumentAssignmentDialog({
     
     try {
       setIsSubmitting(true);
+      setError(null); // Clear any previous errors
       await onAssignDocuments(selectedResidentId);
     } catch (error) {
       console.error('Error assigning documents:', error);
+      setError(error instanceof Error ? error.message : 'Failed to assign documents');
     } finally {
       setIsSubmitting(false);
     }
@@ -55,6 +58,24 @@ export default function DocumentAssignmentDialog({
                     New lease created successfully! Now choose which resident these uploaded documents belong to:
                   </p>
 
+                  {/* Error Display */}
+                  {error && (
+                    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                      <div className="flex">
+                        <div className="flex-shrink-0">
+                          <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L10 11.414l2.707-2.707a1 1 0 111.414 1.414L11.414 13l2.707 2.707a1 1 0 01-1.414 1.414L10 14.414l-2.707 2.707a1 1 0 01-1.414-1.414L8.586 13 5.879 10.293a1 1 0 011.414-1.414L10 11.414z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm font-medium text-red-800">
+                            {error}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {pendingFiles && pendingFiles.length > 0 && (
                     <div className="mb-4 p-3 bg-gray-50 rounded-md">
                       <p className="text-sm font-medium text-gray-700 mb-2">Documents to assign:</p>
@@ -81,7 +102,10 @@ export default function DocumentAssignmentDialog({
                           type="radio"
                           value={resident.id}
                           checked={selectedResidentId === resident.id}
-                          onChange={(e) => setSelectedResidentId(e.target.value)}
+                          onChange={(e) => {
+                            setSelectedResidentId(e.target.value);
+                            setError(null); // Clear error when selection changes
+                          }}
                           className="h-4 w-4 border-gray-300 text-brand-blue focus:ring-brand-blue"
                         />
                         <label htmlFor={`resident-${resident.id}`} className="ml-2 block text-sm text-gray-900">
@@ -109,7 +133,10 @@ export default function DocumentAssignmentDialog({
             </button>
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => {
+                setError(null); // Clear error when closing
+                onClose();
+              }}
               disabled={isSubmitting}
               className="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:mt-0 sm:w-auto"
             >

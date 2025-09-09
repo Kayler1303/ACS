@@ -394,12 +394,12 @@ export default function IncomeVerificationDocumentUploadForm({
     
     if (!newLeaseId || !newVerificationId || !pendingFileUpload) {
       console.error('[ASSIGN DOCUMENTS] Missing required data - cannot proceed');
-      return;
+      throw new Error('Missing required data - cannot proceed with document assignment');
     }
 
+    setIsSubmitting(true);
+    
     try {
-      setIsSubmitting(true);
-      
       // Upload ALL the documents with forceUpload to bypass date check
       const allFiles = pendingFileUpload.allSelectedFiles || [pendingFileUpload.fileData];
 
@@ -428,14 +428,14 @@ export default function IncomeVerificationDocumentUploadForm({
         }
       }
 
+      // Success - close dialog and clean up
       setDocumentAssignmentDialogOpen(false);
-      // showSuccessMessage('New lease created successfully with documents uploaded!'); // Removed
       onUploadComplete('New lease created successfully with documents uploaded!');
       
-      // Clean up state first  
-      setIsSubmitting(false); // Clear the original form's submitting state
-      setSelectedFiles([]); // Clear the selected files
-      setDateDiscrepancyModal({ isOpen: false, data: null }); // Clear modal state
+      // Clean up state
+      setIsSubmitting(false);
+      setSelectedFiles([]);
+      setDateDiscrepancyModal({ isOpen: false, data: null });
       setPendingFileUpload(null);
       setNewLeaseId(null);
       setNewVerificationId(null);
@@ -453,8 +453,9 @@ export default function IncomeVerificationDocumentUploadForm({
       }, 1000); // 1 second delay to allow backend processing
       
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to upload documents');
       setIsSubmitting(false);
+      // Re-throw the error so the DocumentAssignmentDialog can handle it
+      throw err;
     }
   };
 
