@@ -80,6 +80,14 @@ async function checkForDuplicateDocument(
           const sameEmployer = existingEmployer && newEmployer && 
                               existingEmployer.toLowerCase().trim() === newEmployer.toLowerCase().trim();
 
+          // Enhanced debugging for duplicate detection
+          console.log(`🔍 [DUPLICATE CHECK DETAILS] Comparing documents for resident ${residentId}:`);
+          console.log(`  Existing document: Pay period ${existingPayPeriodStart.toLocaleDateString()} - ${existingPayPeriodEnd.toLocaleDateString()}, Employer: "${existingEmployer}", Gross Pay: $${existingGrossPay}`);
+          console.log(`  New document: Pay period ${newPayPeriodStart.toLocaleDateString()} - ${newPayPeriodEnd.toLocaleDateString()}, Employer: "${newEmployer}", Gross Pay: $${newGrossPay}`);
+          console.log(`  Comparison results: samePayPeriod=${samePayPeriod}, sameGrossPay=${sameGrossPay}, sameEmployer=${sameEmployer}`);
+          console.log(`  Pay period timestamps: existing=${existingPayPeriodStart.getTime()}, new=${newPayPeriodStart.getTime()}`);
+          console.log(`  Gross pay difference: $${Math.abs(Number(existingGrossPay) - Number(newGrossPay))}`);
+
           if (samePayPeriod && sameGrossPay && sameEmployer) {
             isDuplicateMatch = true;
             reason = `Duplicate paystub detected: same pay period (${newPayPeriodStart.toLocaleDateString()} - ${newPayPeriodEnd.toLocaleDateString()}), employer (${newEmployer}), and gross pay ($${newGrossPay}). If you believe this is not a duplicate, please request an admin override.`;
