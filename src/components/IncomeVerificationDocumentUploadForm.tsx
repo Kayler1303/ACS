@@ -114,7 +114,7 @@ export default function IncomeVerificationDocumentUploadForm({
   // Handle admin override request for duplicate detection
   const handleDuplicateOverride = async () => {
     try {
-      const response = await fetch('/api/admin/override-requests', {
+      const response = await fetch('/api/override-requests', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

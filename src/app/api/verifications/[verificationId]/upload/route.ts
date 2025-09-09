@@ -82,7 +82,7 @@ async function checkForDuplicateDocument(
 
           if (samePayPeriod && sameGrossPay && sameEmployer) {
             isDuplicateMatch = true;
-            reason = `Duplicate paystub detected: same pay period (${newPayPeriodStart.toLocaleDateString()} - ${newPayPeriodEnd.toLocaleDateString()}), employer (${newEmployer}), and gross pay ($${newGrossPay})`;
+            reason = `Duplicate paystub detected: same pay period (${newPayPeriodStart.toLocaleDateString()} - ${newPayPeriodEnd.toLocaleDateString()}), employer (${newEmployer}), and gross pay ($${newGrossPay}). If you believe this is not a duplicate, please request an admin override.`;
           }
         }
       } else if (documentType === DocumentType.W2) {
