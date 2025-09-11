@@ -237,11 +237,11 @@ export async function PATCH(
           incomeFinalized: true
         },
         _sum: {
-          calculatedAnnualizedIncome: true
+          verifiedIncome: true
         }
       });
       
-      const totalVerifiedIncome = totalVerifiedIncomeResult._sum.calculatedAnnualizedIncome?.toNumber() || 0;
+      const totalVerifiedIncome = totalVerifiedIncomeResult._sum.verifiedIncome?.toNumber() || 0;
 
       // NOTE: Automatic income discrepancy checking removed - this should only happen
       // when user explicitly chooses "Submit for Admin Review" in the frontend modal
