@@ -423,7 +423,7 @@ export default function ResidentDetailPage() {
 
   // Handler for marking a resident as having no income
   const handleMarkNoIncome = async (leaseId: string, verificationId: string, residentId: string, residentName: string) => {
-    if (!window.confirm(`Mark ${residentName} as having no income? This will finalize their verification with $0 income.`)) {
+    if (!window.confirm(`Mark ${residentName} as having no income? This will set their verified income to $0.`)) {
       return;
     }
 
@@ -443,8 +443,10 @@ export default function ResidentDetailPage() {
         throw new Error(errorData.error || 'Failed to mark resident as no income');
       }
 
-      // Refresh data with proper timing after finalization
-      await refreshDataAfterFinalization();
+      // Refresh data to show updated resident status
+      // The frontend will then detect any discrepancies and show appropriate modals
+      await fetchTenancyData(false);
+      await fetchUnitVerificationStatus();
     } catch (error) {
       console.error('Error marking resident as no income:', error);
       alert(error instanceof Error ? error.message : 'Failed to mark resident as no income');

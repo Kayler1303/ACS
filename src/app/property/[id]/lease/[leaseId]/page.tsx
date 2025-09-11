@@ -123,6 +123,7 @@ export default function LeaseDetailPage() {
       }
 
       // Refresh the lease data to show updated status
+      // The frontend will detect discrepancies and show appropriate modals
       handleRefresh();
     } catch (error) {
       console.error('Error marking resident as no income:', error);

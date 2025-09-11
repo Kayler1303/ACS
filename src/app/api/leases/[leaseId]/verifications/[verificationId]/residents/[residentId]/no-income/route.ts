@@ -48,51 +48,20 @@ export async function PATCH(
       return NextResponse.json({ error: 'Resident not found in this lease' }, { status: 404 });
     }
 
-    // Mark resident as having no income and finalize them
+    // Mark resident as having no income but DO NOT finalize yet
+    // Let the frontend handle discrepancy detection and finalization
     await prisma.$executeRaw`
       UPDATE "Resident" 
       SET 
         "hasNoIncome" = true,
-        "incomeFinalized" = true,
-        "finalizedAt" = NOW(),
         "calculatedAnnualizedIncome" = 0::numeric,
         "verifiedIncome" = 0::numeric
       WHERE "id" = ${residentId}
     `;
 
-    // Check if all residents in the lease are now finalized
-    const allResidents = await prisma.$queryRaw<Array<{ count: number }>>`
-      SELECT COUNT(*) as count 
-      FROM "Resident" 
-      WHERE "leaseId" = ${leaseId} AND "incomeFinalized" = true
-    `;
-
-    const totalResidents = verification.Lease.Resident.length;
-    const finalizedCount = Number(allResidents[0]?.count || 0);
-
-    if (finalizedCount === totalResidents) {
-      // All residents are finalized, finalize the verification
-      // Calculate total verified income using raw SQL
-      const totalIncomeResult = await prisma.$queryRaw<Array<{ total: number }>>`
-        SELECT COALESCE(SUM("verifiedIncome"), 0) as total
-        FROM "Resident"
-        WHERE "leaseId" = ${leaseId} AND "incomeFinalized" = true
-      `;
-      const totalVerifiedIncome = Number(totalIncomeResult[0]?.total || 0);
-
-      await prisma.incomeVerification.update({
-        where: { id: verificationId },
-        data: {
-          status: 'FINALIZED',
-          finalizedAt: new Date(),
-          calculatedVerifiedIncome: totalVerifiedIncome
-        }
-      });
-    }
-
     return NextResponse.json({ 
       success: true, 
-      message: `${resident.name} marked as having no income and finalized` 
+      message: `${resident.name} marked as having no income. Please resolve any income discrepancies to complete verification.` 
     });
 
   } catch (error) {
