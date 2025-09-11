@@ -1322,11 +1322,12 @@ export default function ResidentDetailPage() {
 
       // Check if all residents are finalized
       const allResidents = lease.Resident;
-      const finalizedResidents = allResidents.filter(resident => resident.incomeFinalized);
+      const finalizedResidents = allResidents.filter(resident => resident.incomeFinalized || resident.hasNoIncome);
       const allResidentsFinalized = allResidents.length > 0 && finalizedResidents.length === allResidents.length;
 
-      // Only show discrepancy modal if all residents are finalized and there are individual discrepancies
-      if (allResidentsFinalized && verification.status === 'FINALIZED') {
+      // Only show discrepancy modal if all residents are finalized (or marked as no income) and there are individual discrepancies
+      // Check for discrepancies when all residents are ready (either finalized OR marked as no income), even if verification is still IN_PROGRESS
+      if (allResidentsFinalized && (verification.status === 'FINALIZED' || verification.status === 'IN_PROGRESS')) {
         console.log(`[AUTO DISCREPANCY CHECK] Starting automatic discrepancy check for lease ${lease.id}`);
         console.log(`[AUTO DISCREPANCY CHECK] Lease name: ${lease.name}`);
         console.log(`[AUTO DISCREPANCY CHECK] All residents finalized: ${allResidentsFinalized}`);
@@ -1358,7 +1359,8 @@ export default function ResidentDetailPage() {
         // When "Accept Verified Income" is used, it updates annualizedIncome to match calculatedAnnualizedIncome
         const residentsWithDiscrepancies = allResidents.filter(resident => {
           const rentRollIncome = resident.annualizedIncome || 0;
-          const verifiedIncome = resident.calculatedAnnualizedIncome || 0;
+          // Use verifiedIncome for residents with hasNoIncome=true, otherwise use calculatedAnnualizedIncome
+          const verifiedIncome = resident.hasNoIncome ? (resident.verifiedIncome || 0) : (resident.calculatedAnnualizedIncome || 0);
           const discrepancy = Math.abs(rentRollIncome - verifiedIncome);
           const hasDiscrepancy = discrepancy > 1.00;
           
@@ -1771,7 +1773,7 @@ export default function ResidentDetailPage() {
                             {(() => {
                               // Check if ALL residents are finalized (not just some)
                               const allResidents = period.Resident;
-                              const finalizedResidents = allResidents.filter(resident => resident.incomeFinalized);
+                              const finalizedResidents = allResidents.filter(resident => resident.incomeFinalized || resident.hasNoIncome);
                               const allResidentsFinalized = allResidents.length > 0 && finalizedResidents.length === allResidents.length;
                               
                               if (!allResidentsFinalized) {
@@ -1801,7 +1803,7 @@ export default function ResidentDetailPage() {
                           {/* Lease-Level Finalize Income Button - Show when all residents finalized but status is "Needs Investigation" */}
                           {(() => {
                             const allResidents = period.Resident;
-                            const finalizedResidents = allResidents.filter(resident => resident.incomeFinalized);
+                            const finalizedResidents = allResidents.filter(resident => resident.incomeFinalized || resident.hasNoIncome);
                             const allResidentsFinalized = allResidents.length > 0 && finalizedResidents.length === allResidents.length;
                             const hasIncomeDiscrepancy = currentVerificationStatus === 'Needs Investigation';
                             
@@ -1825,7 +1827,8 @@ export default function ResidentDetailPage() {
                               // Find residents with income discrepancies (rent roll vs verified income)
                               const residentsWithDiscrepancies = allResidents.filter(resident => {
                                 const rentRollIncome = resident.annualizedIncome || 0;
-                                const verifiedIncome = resident.calculatedAnnualizedIncome || 0;
+                                // Use verifiedIncome for residents with hasNoIncome=true, otherwise use calculatedAnnualizedIncome
+                                const verifiedIncome = resident.hasNoIncome ? (resident.verifiedIncome || 0) : (resident.calculatedAnnualizedIncome || 0);
                                 const discrepancy = Math.abs(rentRollIncome - verifiedIncome);
                                 const hasDiscrepancy = discrepancy > 1.00;
                                 
