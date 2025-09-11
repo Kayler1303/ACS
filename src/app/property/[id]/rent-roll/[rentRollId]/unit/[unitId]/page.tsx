@@ -1912,7 +1912,7 @@ export default function ResidentDetailPage() {
                           residentVerifiedIncome = resident.calculatedAnnualizedIncome ? Number(resident.calculatedAnnualizedIncome) : 0;
                         }
 
-                        const isResidentFinalized = resident.incomeFinalized || false;
+                        const isResidentFinalized = resident.incomeFinalized || resident.hasNoIncome || false;
                         const hasCompletedDocuments = completedResidentDocuments.length > 0;
                         
                         // Show documents if ANY documents exist (not just completed ones with calculated income)
