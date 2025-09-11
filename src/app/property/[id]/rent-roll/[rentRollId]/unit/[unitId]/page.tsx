@@ -1768,12 +1768,12 @@ export default function ResidentDetailPage() {
                               }
                               
                               // Calculate verified income only when all residents are finalized
-                              // Use the approved amounts that users have already accepted
+                              // Use the verified income that users have actually accepted
                               const leaseVerifiedIncome = finalizedResidents.reduce((total, resident) => {
-                                // For finalized residents, use their approved income amount
-                                // Prioritize calculatedAnnualizedIncome (the approved amount) over annualizedIncome (rent roll)
-                                const approvedIncome = resident.calculatedAnnualizedIncome || resident.annualizedIncome || 0;
-                                return total + Number(approvedIncome);
+                                // For finalized residents, use their verified income (the actual approved amount)
+                                // This correctly shows $0 for "No Income" residents
+                                const verifiedIncome = resident.verifiedIncome || 0;
+                                return total + Number(verifiedIncome);
                               }, 0);
                               
                               return leaseVerifiedIncome > 0 
@@ -1889,13 +1889,13 @@ export default function ResidentDetailPage() {
                           doc => doc.status === 'COMPLETED'
                         );
                         
-                        // Calculate resident verified income from their approved amount (not real-time calculation)
-                        // For finalized residents, use the approved income that was accepted by the user
+                        // Calculate resident verified income from their actual verified amount
+                        // For finalized residents, use the verifiedIncome field (what they actually accepted)
                         let residentVerifiedIncome = 0;
                         if (resident.incomeFinalized) {
-                          // For finalized residents, show the calculatedAnnualizedIncome (the approved amount)
-                          // This is what they actually finalized with, not the original rent roll amount
-                          residentVerifiedIncome = resident.calculatedAnnualizedIncome || resident.annualizedIncome || 0;
+                          // For finalized residents, show the verifiedIncome (the actual approved amount)
+                          // This correctly shows $0 for "No Income" residents
+                          residentVerifiedIncome = resident.verifiedIncome || 0;
                         } else {
                           // For non-finalized residents, show real-time calculation as preview
                           residentVerifiedIncome = resident.calculatedAnnualizedIncome ? Number(resident.calculatedAnnualizedIncome) : 0;

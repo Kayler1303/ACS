@@ -11,6 +11,7 @@ interface Resident {
   id: string;
   name: string;
   annualizedIncome: number;
+  verifiedIncome: number | null;
   calculatedAnnualizedIncome?: number;
   incomeFinalized: boolean;
   finalizedAt?: string;
@@ -526,9 +527,9 @@ export default function LeaseDetailPage() {
                     ) : (
                       <p className="text-xs text-gray-500 mt-1">Original Income: $0.00</p>
                     )}
-                    {resident.calculatedAnnualizedIncome ? (
+                    {resident.incomeFinalized ? (
                       <p className="text-xs text-gray-600 mt-1">
-                        Verified Income: ${Number(resident.calculatedAnnualizedIncome).toLocaleString()}
+                        Verified Income: ${Number(resident.verifiedIncome || 0).toLocaleString()}
                       </p>
                     ) : (
                       <p className="text-xs text-gray-400 mt-1">Verified Income: Not Finalized</p>
