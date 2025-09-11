@@ -48,6 +48,9 @@ export async function PATCH(
       return NextResponse.json({ error: 'Resident not found in this lease' }, { status: 404 });
     }
 
+    console.log(`[NO INCOME API] Marking resident ${resident.name} (${residentId}) as having no income`);
+    console.log(`[NO INCOME API] Before update - hasNoIncome: ${resident.hasNoIncome}, verifiedIncome: ${resident.verifiedIncome}`);
+
     // Mark resident as having no income but DO NOT finalize yet
     // Let the frontend handle discrepancy detection and finalization
     await prisma.$executeRaw`
@@ -55,13 +58,24 @@ export async function PATCH(
       SET 
         "hasNoIncome" = true,
         "calculatedAnnualizedIncome" = 0::numeric,
-        "verifiedIncome" = 0::numeric
+        "verifiedIncome" = 0::numeric,
+        "updatedAt" = NOW()
       WHERE "id" = ${residentId}
     `;
 
+    console.log(`[NO INCOME API] Successfully updated resident ${residentId}`);
+
+    // Verify the update worked
+    const updatedResident = await prisma.resident.findUnique({
+      where: { id: residentId },
+      select: { hasNoIncome: true, verifiedIncome: true, calculatedAnnualizedIncome: true }
+    });
+    console.log(`[NO INCOME API] After update - resident data:`, updatedResident);
+
     return NextResponse.json({ 
       success: true, 
-      message: `${resident.name} marked as having no income. Please resolve any income discrepancies to complete verification.` 
+      message: `${resident.name} marked as having no income. Please resolve any income discrepancies to complete verification.`,
+      updatedResident
     });
 
   } catch (error) {

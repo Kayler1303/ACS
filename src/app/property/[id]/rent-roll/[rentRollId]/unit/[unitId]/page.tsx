@@ -427,6 +427,9 @@ export default function ResidentDetailPage() {
       return;
     }
 
+    console.log(`[NO INCOME DEBUG] Starting No Income process for ${residentName} (${residentId})`);
+    console.log(`[NO INCOME DEBUG] LeaseId: ${leaseId}, VerificationId: ${verificationId}`);
+
     try {
       const response = await fetch(
         `/api/leases/${leaseId}/verifications/${verificationId}/residents/${residentId}/no-income`,
@@ -438,15 +441,23 @@ export default function ResidentDetailPage() {
         }
       );
 
+      console.log(`[NO INCOME DEBUG] API response status: ${response.status}`);
+
       if (!response.ok) {
         const errorData = await response.json();
+        console.error(`[NO INCOME DEBUG] API error:`, errorData);
         throw new Error(errorData.error || 'Failed to mark resident as no income');
       }
 
+      const responseData = await response.json();
+      console.log(`[NO INCOME DEBUG] API success response:`, responseData);
+
       // Refresh data to show updated resident status
       // The frontend will then detect any discrepancies and show appropriate modals
+      console.log(`[NO INCOME DEBUG] Refreshing data...`);
       await fetchTenancyData(false);
       await fetchUnitVerificationStatus();
+      console.log(`[NO INCOME DEBUG] Data refresh completed`);
     } catch (error) {
       console.error('Error marking resident as no income:', error);
       alert(error instanceof Error ? error.message : 'Failed to mark resident as no income');
