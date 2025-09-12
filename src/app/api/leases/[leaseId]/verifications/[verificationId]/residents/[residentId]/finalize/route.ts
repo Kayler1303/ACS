@@ -220,7 +220,7 @@ export async function PATCH(
     const residentsWithFinalizedIncomeCount = await prisma.$queryRaw<{count: number}[]>`
       SELECT COUNT(*) as count 
       FROM "Resident" 
-      WHERE "leaseId" = ${leaseId} AND "incomeFinalized" = true
+      WHERE "leaseId" = ${leaseId} AND ("incomeFinalized" = true OR "hasNoIncome" = true)
     `;
 
     const finalizedCount = Number(residentsWithFinalizedIncomeCount[0]?.count || 0);

@@ -232,7 +232,10 @@ export async function PATCH(
         const finalizedResidentsCount = await prisma.resident.count({
           where: {
             leaseId: leaseId,
-            incomeFinalized: true
+            OR: [
+              { incomeFinalized: true },
+              { hasNoIncome: true }
+            ]
           }
         });
 
@@ -246,14 +249,17 @@ export async function PATCH(
           const totalVerifiedIncomeResult = await prisma.resident.aggregate({
             where: {
               leaseId: leaseId,
-              incomeFinalized: true
+              OR: [
+                { incomeFinalized: true },
+                { hasNoIncome: true }
+              ]
             },
             _sum: {
-              calculatedAnnualizedIncome: true
+              verifiedIncome: true
             }
           });
           
-          const totalVerifiedIncome = totalVerifiedIncomeResult._sum.calculatedAnnualizedIncome?.toNumber() || 0;
+          const totalVerifiedIncome = totalVerifiedIncomeResult._sum.verifiedIncome?.toNumber() || 0;
 
           // Finalize the verification
           await prisma.incomeVerification.update({

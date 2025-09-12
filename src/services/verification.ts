@@ -46,7 +46,7 @@ export function getLeaseVerificationStatus(lease: ExtendedLease): VerificationSt
     return "Vacant";
   }
 
-  const finalizedResidents = allResidents.filter((r: ExtendedResident) => r.incomeFinalized);
+  const finalizedResidents = allResidents.filter((r: ExtendedResident) => r.incomeFinalized || r.hasNoIncome);
   
   console.log(`[LEASE VERIFICATION DEBUG] Lease ${lease.id}: ${finalizedResidents.length}/${allResidents.length} residents finalized`);
 
@@ -158,7 +158,7 @@ export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Da
     }
     
     // Check if there are unfinalized residents with completed documents ready to finalize
-    const unfinalizedResidents = allResidents.filter(r => !r.incomeFinalized);
+    const unfinalizedResidents = allResidents.filter(r => !r.incomeFinalized && !r.hasNoIncome);
     if (unfinalizedResidents.length > 0) {
       const hasCompletedDocumentsReadyToFinalize = unfinalizedResidents.some(resident => {
         const residentDocs = (resident.IncomeDocument || []).filter(doc => doc.status === 'COMPLETED');
@@ -180,7 +180,7 @@ export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Da
   // 3. Residents who have been manually finalized by an admin (incomeFinalized = true)
   
   const verifiedDocuments = allDocuments.filter(d => d && d.status === 'COMPLETED');
-  const residentsWithFinalizedIncome = allResidents.filter(r => r.incomeFinalized);
+  const residentsWithFinalizedIncome = allResidents.filter(r => r.incomeFinalized || r.hasNoIncome);
   
   const totalResidentsWithVerifiedIncome = residentsWithFinalizedIncome.length;
 
@@ -230,7 +230,7 @@ export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Da
   // If not all residents have verified income, check if there are completed documents ready for finalization
   if (totalResidentsWithVerifiedIncome < allResidents.length) {
     // Check if unfinalized residents have completed documents that are ready to finalize
-    const unfinalizedResidents = allResidents.filter(r => !r.incomeFinalized);
+    const unfinalizedResidents = allResidents.filter(r => !r.incomeFinalized && !r.hasNoIncome);
     const hasCompletedDocumentsReadyToFinalize = unfinalizedResidents.some(resident => {
       const residentDocs = (resident.IncomeDocument || []).filter(doc => doc.status === 'COMPLETED');
       return residentDocs.length > 0;
