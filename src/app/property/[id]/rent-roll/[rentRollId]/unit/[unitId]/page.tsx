@@ -1407,6 +1407,31 @@ export default function ResidentDetailPage() {
           });
         } else {
           console.log(`[AUTO DISCREPANCY CHECK] ✅ No discrepancies found - modal not triggered`);
+          
+          // If all residents are finalized and there are no discrepancies, auto-finalize the verification
+          if (verification.status === 'IN_PROGRESS') {
+            console.log(`[AUTO DISCREPANCY CHECK] 🚀 Auto-finalizing verification ${verification.id} - all residents complete, no discrepancies`);
+            
+            try {
+              const response = await fetch(`/api/leases/${lease.id}/verifications/${verification.id}/finalize-verification`, {
+                method: 'PATCH',
+                headers: {
+                  'Content-Type': 'application/json',
+                }
+              });
+
+              if (response.ok) {
+                console.log(`[AUTO DISCREPANCY CHECK] ✅ Verification ${verification.id} auto-finalized successfully`);
+                // Refresh data to show updated status
+                await fetchTenancyData(false);
+                await fetchUnitVerificationStatus();
+              } else {
+                console.error(`[AUTO DISCREPANCY CHECK] ❌ Failed to auto-finalize verification:`, await response.text());
+              }
+            } catch (error) {
+              console.error(`[AUTO DISCREPANCY CHECK] ❌ Error auto-finalizing verification:`, error);
+            }
+          }
         }
       } else {
         console.log(`[AUTO DISCREPANCY CHECK] Conditions not met:`, {
