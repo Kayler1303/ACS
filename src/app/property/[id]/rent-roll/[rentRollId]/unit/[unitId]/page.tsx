@@ -1310,11 +1310,12 @@ export default function ResidentDetailPage() {
   };
 
   // Income discrepancy detection and resolution functions (UPDATED to use new individual resident modal)
-  const checkForIncomeDiscrepancy = useCallback(() => {
+  const checkForIncomeDiscrepancy = useCallback(async () => {
     if (!tenancyData || discrepancyModalCooldown) return;
 
     // Check each lease for income discrepancies using the new individual resident approach
-    tenancyData.unit?.Lease?.forEach(lease => {
+    const leases = tenancyData.unit?.Lease || [];
+    for (const lease of leases) {
       const verification = lease.IncomeVerification.find(v => v.status === 'IN_PROGRESS') || 
                          lease.IncomeVerification.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
       
@@ -1441,7 +1442,7 @@ export default function ResidentDetailPage() {
           leaseName: lease.name
         });
       }
-    });
+    }
   }, [tenancyData, discrepancyModalCooldown]);
 
   // Run discrepancy check when tenancy data changes
