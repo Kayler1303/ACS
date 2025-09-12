@@ -333,9 +333,9 @@ export async function GET(
       let residentsWithInProgressVerification = 0;
 
       const residentDetails = residents.map((resident: any) => {
-        const hasVerifiedIncome = resident.incomeFinalized && resident.calculatedAnnualizedIncome !== null;
+        const hasVerifiedIncome = (resident.incomeFinalized && resident.calculatedAnnualizedIncome !== null) || resident.hasNoIncome;
         const documentsCount = resident.IncomeDocument.length;
-        const hasDocumentsButNotFinalized = documentsCount > 0 && !resident.incomeFinalized;
+        const hasDocumentsButNotFinalized = documentsCount > 0 && !resident.incomeFinalized && !resident.hasNoIncome;
         
         // Enhanced debugging for status determination
         const residentDebug = {

@@ -1263,7 +1263,7 @@ export default function ResidentDetailPage() {
             setUnitVerificationStatus('Waiting for Admin Review');
           } else {
             // Check if all residents have finalized income (like the verification service does)
-            const finalizedResidents = allResidents.filter((resident: any) => resident.incomeFinalized);
+            const finalizedResidents = allResidents.filter((resident: any) => resident.incomeFinalized || resident.hasNoIncome);
             console.log(`[CURRENT LEASE STATUS] All residents: ${allResidents.length}, Finalized: ${finalizedResidents.length}`);
             
             if (allResidents.length > 0 && finalizedResidents.length === allResidents.length) {
