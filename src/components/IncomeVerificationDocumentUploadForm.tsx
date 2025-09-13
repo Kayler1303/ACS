@@ -489,8 +489,13 @@ export default function IncomeVerificationDocumentUploadForm({
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     console.log(`🚀 [FRONTEND] handleSubmit called with ${selectedFiles.length} files for resident ${selectedResident}`);
+    console.log(`🔍 [VALIDATION DEBUG] selectedFiles:`, selectedFiles);
+    console.log(`🔍 [VALIDATION DEBUG] selectedResident:`, selectedResident);
+    console.log(`🔍 [VALIDATION DEBUG] selectedResident type:`, typeof selectedResident);
+    console.log(`🔍 [VALIDATION DEBUG] selectedResident truthy:`, !!selectedResident);
 
     if (selectedFiles.length === 0 || !selectedResident) {
+      console.log(`❌ [VALIDATION DEBUG] Validation failed - selectedFiles.length: ${selectedFiles.length}, selectedResident: "${selectedResident}"`);
       setError('Please select at least one file and choose a resident.');
       return;
     }
