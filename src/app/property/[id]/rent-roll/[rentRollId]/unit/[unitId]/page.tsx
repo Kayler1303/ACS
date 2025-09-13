@@ -1244,7 +1244,7 @@ export default function ResidentDetailPage() {
         // For current leases, check if any verification is finalized AND all residents are actually finalized
         const latestVerification = currentLease.IncomeVerification?.[0];
         const allResidents = currentLease.Resident || [];
-        const finalizedResidents = allResidents.filter((resident: any) => resident.incomeFinalized);
+        const finalizedResidents = allResidents.filter((resident: any) => resident.incomeFinalized || resident.hasNoIncome);
         
         if (latestVerification?.status === 'FINALIZED' && 
             allResidents.length > 0 && 
@@ -1279,7 +1279,7 @@ export default function ResidentDetailPage() {
         // No current lease with Tenancy - this means we're viewing a future/provisional lease
         console.log(`[FUTURE LEASE STATUS] No current lease found, calculating status for provisional lease`);
         const allResidents = tenancyData.lease?.Resident || [];
-        const finalizedResidents = allResidents.filter((r: any) => r.incomeFinalized);
+        const finalizedResidents = allResidents.filter((r: any) => r.incomeFinalized || r.hasNoIncome);
         
         console.log(`[FUTURE LEASE STATUS] All residents: ${allResidents.length}, Finalized: ${finalizedResidents.length}`);
         
