@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import PropertyPageClient from '@/components/PropertyPageClient';
 import Link from 'next/link';
 import type { FullProperty } from '@/types/property';
+import { usePropertyScrollRestoration } from '@/hooks/useScrollRestoration';
 
 // A new, dedicated API route will be needed to fetch the full property data
 // Let's assume it will be at /api/properties/[id]/full-details
@@ -16,6 +17,9 @@ export default function PropertyPage() {
   const [property, setProperty] = useState<FullProperty | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Enable scroll restoration for this property page
+  usePropertyScrollRestoration(id);
 
   useEffect(() => {
     if (id) {

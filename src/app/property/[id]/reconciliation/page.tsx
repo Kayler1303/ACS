@@ -3,6 +3,7 @@
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import BackToPropertyLink from '@/components/BackToPropertyLink';
 
 interface IncomeDiscrepancy {
   unitNumber: string | number;
@@ -269,9 +270,10 @@ export default function ReconciliationPage() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-6">
-        <Link href={`/property/${propertyId}`} className="text-brand-blue hover:underline mb-4 inline-block">
-          ← Back to Property
-        </Link>
+        <BackToPropertyLink 
+          propertyId={propertyId as string} 
+          className="text-brand-blue hover:underline mb-4 inline-block"
+        />
         
         {isIncomeDiscrepancyMode ? (
           <>

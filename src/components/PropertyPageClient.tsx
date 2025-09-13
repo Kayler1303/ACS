@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import { PropertyVerificationSummary, VerificationStatus } from '@/services/verification';
 import { getActualAmiBucket } from '@/services/income';
 import PropertyShareManager from './PropertyShareManager';
+import { usePropertyScrollRestoration } from '@/hooks/useScrollRestoration';
 
 interface PropertyPageClientProps {
   initialProperty: FullProperty;
@@ -133,6 +134,9 @@ const EditableCell: React.FC<EditableCellProps> = ({ value, onSave, className })
 
 export default function PropertyPageClient({ initialProperty }: PropertyPageClientProps) {
   const [property, setProperty] = useState(initialProperty);
+  
+  // Enable scroll restoration for navigation to unit details
+  const { saveScrollPosition } = usePropertyScrollRestoration(initialProperty.id);
   
   // Initialize selectedSnapshotId with persistence logic
   const initializeSelectedSnapshotId = () => {
@@ -2264,6 +2268,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                       <Link
                         href={`/property/${property.id}/rent-roll/${property.RentRoll.find((rr: FullRentRoll) => rr.snapshotId === selectedSnapshotId)?.id}/unit/${unit.id}`}
                         className="text-brand-blue hover:text-brand-blue-dark underline cursor-pointer font-medium"
+                        onClick={saveScrollPosition}
                       >
                         {unit.residentCount}
                       </Link>
@@ -2287,6 +2292,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                            <Link
                              href={`/property/${property.id}/rent-roll/${property.RentRoll.find((rr: FullRentRoll) => rr.snapshotId === selectedSnapshotId)?.id}/unit/${unit.id}`}
                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 border border-red-200 hover:bg-red-200 cursor-pointer transition-colors`}
+                             onClick={saveScrollPosition}
                            >
                              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
@@ -2297,6 +2303,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                            <Link
                              href={`/property/${property.id}/rent-roll/${property.RentRoll.find((rr: FullRentRoll) => rr.snapshotId === selectedSnapshotId)?.id}/unit/${unit.id}`}
                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200 hover:bg-blue-200 cursor-pointer transition-colors`}
+                             onClick={saveScrollPosition}
                            >
                              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
@@ -2338,9 +2345,10 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                        {unit.futureLease ? (
                          <div className="flex flex-col items-center space-y-1">
                                                      <Link
-                            href={`/property/${property.id}/lease/${unit.futureLease.id}`}
-                            className="text-sm text-gray-900 font-medium text-brand-blue hover:text-brand-accent underline cursor-pointer"
-                          >
+                           href={`/property/${property.id}/lease/${unit.futureLease.id}`}
+                           className="text-sm text-gray-900 font-medium text-brand-blue hover:text-brand-accent underline cursor-pointer"
+                           onClick={saveScrollPosition}
+                         >
                              {unit.futureLease.leaseName}
                            </Link>
                            <div className="flex items-center space-x-1">

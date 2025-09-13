@@ -6,6 +6,7 @@ import Link from 'next/link';
 import IncomeVerificationUploadDialog from '@/components/IncomeVerificationUploadDialog';
 import VerificationFinalizationDialog from '@/components/VerificationFinalizationDialog';
 import ResidentFinalizationDialog from '@/components/ResidentFinalizationDialog';
+import BackToPropertyLink from '@/components/BackToPropertyLink';
 
 interface Resident {
   id: string;
@@ -285,12 +286,10 @@ export default function LeaseDetailPage() {
           <h1 className="text-lg font-semibold text-red-800 mb-2">Error Loading Lease</h1>
           <p className="text-red-600">{error || 'Lease not found'}</p>
           <div className="mt-4">
-            <Link
-              href={`/property/${propertyId}`}
+            <BackToPropertyLink 
+              propertyId={propertyId as string}
               className="text-blue-600 hover:text-blue-700 underline"
-            >
-              ← Back to Property
-            </Link>
+            />
           </div>
         </div>
       </div>
@@ -883,12 +882,12 @@ export default function LeaseDetailPage() {
         <p className="text-blue-700 mb-3">
           This is a future lease that can be managed independently. You can add residents and verify their income now, and add it to a rent roll later when ready.
         </p>
-        <Link
-          href={`/property/${propertyId}`}
+        <BackToPropertyLink
+          propertyId={propertyId as string}
           className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
         >
           Back to Property Overview
-        </Link>
+        </BackToPropertyLink>
       </div>
 
       {/* Upload Dialog */}

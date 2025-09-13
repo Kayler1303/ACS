@@ -11,6 +11,7 @@ import AddResidentDialog from '@/components/AddResidentDialog';
 import RenewalDialog from '@/components/RenewalDialog';
 import InitialAddResidentDialog from '@/components/InitialAddResidentDialog';
 import ResidentFinalizationDialog from '@/components/ResidentFinalizationDialog';
+import BackToPropertyLink from '@/components/BackToPropertyLink';
 
 import VerificationConflictModal from '@/components/VerificationConflictModal';
 import LeaseDiscrepancyResolutionModal from '@/components/LeaseDiscrepancyResolutionModal';
@@ -1571,9 +1572,10 @@ export default function ResidentDetailPage() {
          <div className="bg-red-50 border border-red-200 rounded-md p-4">
           <h2 className="text-lg font-semibold text-red-800 mb-2">Error Loading Data</h2>
           <p className="text-red-600">{error}</p>
-          <Link href={`/property/${propertyId}`} className="inline-block mt-4 text-brand-blue hover:underline">
-            ← Back to Property
-          </Link>
+          <BackToPropertyLink 
+            propertyId={propertyId as string} 
+            className="inline-block mt-4 text-brand-blue hover:underline"
+          />
         </div>
       </div>
     );
@@ -1585,9 +1587,10 @@ export default function ResidentDetailPage() {
         <div className="text-center">
           <h2 className="text-2xl font-semibold text-gray-800 mb-4">No Data Found</h2>
           <p className="text-gray-600 mb-4">No tenancy data found for this unit and rent roll.</p>
-          <Link href={`/property/${propertyId}`} className="text-brand-blue hover:underline">
-            ← Back to Property
-          </Link>
+          <BackToPropertyLink 
+            propertyId={propertyId as string} 
+            className="text-brand-blue hover:underline"
+          />
         </div>
       </div>
     );
@@ -1609,12 +1612,10 @@ export default function ResidentDetailPage() {
         pauseOnHover
       />
       <div className="container mx-auto px-4 py-8">
-        <Link
-          href={`/property/${propertyId}`}
+        <BackToPropertyLink 
+          propertyId={propertyId as string}
           className="text-brand-blue hover:underline mb-4 inline-block"
-        >
-          ← Back to Property
-        </Link>
+        />
         <h1 className="text-4xl font-bold text-brand-blue">Unit {formatUnitNumber(tenancyData?.unit?.unitNumber || '')} - Resident Details</h1>
         
         <div className="bg-white p-6 rounded-lg shadow-md mb-8">
