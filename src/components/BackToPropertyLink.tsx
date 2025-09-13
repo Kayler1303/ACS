@@ -19,7 +19,10 @@ export default function BackToPropertyLink({
 }: BackToPropertyLinkProps) {
   
   const handleClick = () => {
-    console.log(`[NAVIGATION] Navigating back to property ${propertyId} - scroll position will be restored`);
+    console.log(`🔙 [BACK TO PROPERTY] Navigating back to property ${propertyId}`);
+    console.log(`🔙 [BACK TO PROPERTY] Current sessionStorage keys:`, Object.keys(sessionStorage));
+    console.log(`🔙 [BACK TO PROPERTY] Looking for key: property-${propertyId}-scroll`);
+    console.log(`🔙 [BACK TO PROPERTY] Stored value:`, sessionStorage.getItem(`property-${propertyId}-scroll`));
   };
   
   return (

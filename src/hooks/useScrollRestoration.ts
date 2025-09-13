@@ -16,26 +16,49 @@ export function useScrollRestoration(key?: string) {
   const saveScrollPosition = useCallback(() => {
     const scrollY = window.scrollY;
     sessionStorage.setItem(scrollKey, scrollY.toString());
-    console.log(`[SCROLL] Saved scroll position: ${scrollY} for key: ${scrollKey}`);
+    console.log(`🔄 [SCROLL SAVE] Saved scroll position: ${scrollY} for key: ${scrollKey}`);
+    console.log(`🔄 [SCROLL SAVE] sessionStorage now contains:`, sessionStorage.getItem(scrollKey));
   }, [scrollKey]);
   
   // Restore scroll position from sessionStorage
   const restoreScrollPosition = useCallback(() => {
+    console.log(`🔍 [SCROLL RESTORE] Checking for saved scroll position with key: ${scrollKey}`);
     const savedScrollY = sessionStorage.getItem(scrollKey);
+    console.log(`🔍 [SCROLL RESTORE] Found saved position:`, savedScrollY);
+    
     if (savedScrollY) {
       const scrollPosition = parseInt(savedScrollY, 10);
-      console.log(`[SCROLL] Restoring scroll position: ${scrollPosition} for key: ${scrollKey}`);
+      console.log(`🚀 [SCROLL RESTORE] Restoring scroll position: ${scrollPosition} for key: ${scrollKey}`);
       
-      // Use requestAnimationFrame to ensure DOM is ready
-      requestAnimationFrame(() => {
+      // Use multiple approaches to ensure scroll restoration works
+      const doScroll = () => {
+        console.log(`📍 [SCROLL RESTORE] Actually scrolling to: ${scrollPosition}`);
         window.scrollTo({
           top: scrollPosition,
           behavior: 'instant' // Instant scroll, no animation
         });
-      });
+        
+        // Verify the scroll worked
+        setTimeout(() => {
+          const currentScroll = window.scrollY;
+          console.log(`✅ [SCROLL RESTORE] Current scroll after restoration: ${currentScroll} (target was ${scrollPosition})`);
+        }, 100);
+      };
+      
+      // Try immediate scroll
+      doScroll();
+      
+      // Also try with requestAnimationFrame
+      requestAnimationFrame(doScroll);
+      
+      // And try with a small delay to ensure DOM is fully ready
+      setTimeout(doScroll, 50);
       
       // Clean up the stored position after restoring
       sessionStorage.removeItem(scrollKey);
+      console.log(`🧹 [SCROLL RESTORE] Cleaned up stored position for key: ${scrollKey}`);
+    } else {
+      console.log(`❌ [SCROLL RESTORE] No saved scroll position found for key: ${scrollKey}`);
     }
   }, [scrollKey]);
   
