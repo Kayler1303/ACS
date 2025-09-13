@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { requirePermission } from '@/lib/permissions';
 import Papa from 'papaparse';
 import * as xlsx from 'node-xlsx';
 
@@ -65,14 +66,9 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const property = await prisma.property.findUnique({
-    where: {
-      id: propertyId,
-      ownerId: session.user.id,
-    },
-  });
-
-  if (!property) {
+  // Check if user has edit permission for this property (uploading units requires edit)
+  const canEdit = await requirePermission(propertyId, session.user.id, 'edit');
+  if (!canEdit) {
     return NextResponse.json({ error: 'Property not found' }, { status: 404 });
   }
 

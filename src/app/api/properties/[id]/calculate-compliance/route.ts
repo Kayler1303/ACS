@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
+import { checkPropertyAccess } from '@/lib/permissions';
 
 // Define a type for our unit with residents for easier handling
 type UnitWithResidents = Prisma.UnitGetPayload<{
@@ -40,9 +41,15 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  // Check if user has access to this property (owner or shared)
+  const access = await checkPropertyAccess(propertyId, session.user.id);
+  if (!access.hasAccess) {
+    return NextResponse.json({ error: 'Property not found' }, { status: 404 });
+  }
+
   // --- 1. Fetch all necessary data in parallel ---
-  const propertyPromise = prisma.property.findFirst({
-    where: { id: propertyId, ownerId: session.user.id },
+  const propertyPromise = prisma.property.findUnique({
+    where: { id: propertyId },
     include: {
       Unit: {
         include: { Lease: { include: { Resident: true } } },

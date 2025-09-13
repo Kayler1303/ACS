@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { requirePermission } from '@/lib/permissions';
 import Papa from 'papaparse';
 import { format } from 'date-fns';
 import crypto from 'crypto';
@@ -25,13 +26,19 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const property = await prisma.property.findFirst({
-    where: { id: propertyId, ownerId: session.user.id },
+  // Check if user has edit permission for this property (rent roll upload requires edit)
+  const canEdit = await requirePermission(propertyId, session.user.id, 'edit');
+  if (!canEdit) {
+    return NextResponse.json({ error: 'Property not found or access denied' }, { status: 404 });
+  }
+
+  const property = await prisma.property.findUnique({
+    where: { id: propertyId },
     include: { Unit: true }, // Eager load units to validate against
   });
 
   if (!property) {
-    return NextResponse.json({ error: 'Property not found or access denied' }, { status: 404 });
+    return NextResponse.json({ error: 'Property not found' }, { status: 404 });
   }
 
   if (property.Unit.length === 0) {

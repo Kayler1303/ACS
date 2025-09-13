@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { checkPropertyAccess } from '@/lib/permissions';
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -17,10 +18,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   try {
-    const property = await prisma.property.findFirst({
+    // Check if user has access to this property (owner or shared)
+    const access = await checkPropertyAccess(propertyId, session.user.id);
+    if (!access.hasAccess) {
+      return NextResponse.json({ error: 'Property not found' }, { status: 404 });
+    }
+
+    const property = await prisma.property.findUnique({
       where: { 
-        id: propertyId, 
-        ownerId: session.user.id 
+        id: propertyId
       },
       select: {
         id: true,

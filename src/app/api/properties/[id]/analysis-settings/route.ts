@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { requirePermission } from '@/lib/permissions';
 
 export async function PATCH(
   req: NextRequest,
@@ -23,15 +24,9 @@ export async function PATCH(
       utilityAllowances 
     } = body;
 
-    // Verify property ownership
-    const property = await prisma.property.findFirst({
-      where: {
-        id: propertyId,
-        ownerId: session.user.id,
-      },
-    });
-
-    if (!property) {
+    // Check if user has configure permission for this property
+    const canConfigure = await requirePermission(propertyId, session.user.id, 'configure');
+    if (!canConfigure) {
       return NextResponse.json({ error: 'Property not found' }, { status: 404 });
     }
 
