@@ -1699,10 +1699,30 @@ export default function ResidentDetailPage() {
             isOpen={isCreateLeaseDialogOpen}
             onClose={() => setCreateLeaseDialogOpen(false)}
             unitId={unitId as string}
-            unitNumber={tenancyData?.unit?.unitNumber || ''}
-            onLeaseCreated={() => {
-              setCreateLeaseDialogOpen(false);
-              fetchTenancyData(false); // Refresh data to show the new lease
+            onSubmit={async (leaseData) => {
+              try {
+                const response = await fetch('/api/leases', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    ...leaseData,
+                    unitId: unitId as string,
+                  }),
+                });
+
+                if (!response.ok) {
+                  const errorData = await response.json();
+                  throw new Error(errorData.error || 'Failed to create lease');
+                }
+
+                setCreateLeaseDialogOpen(false);
+                fetchTenancyData(false); // Refresh data to show the new lease
+              } catch (error) {
+                console.error('Error creating lease:', error);
+                alert(error instanceof Error ? error.message : 'Failed to create lease');
+              }
             }}
           />
         )}
