@@ -30,33 +30,43 @@ export function useScrollRestoration(key?: string) {
       const scrollPosition = parseInt(savedScrollY, 10);
       console.log(`🚀 [SCROLL RESTORE] Restoring scroll position: ${scrollPosition} for key: ${scrollKey}`);
       
-      // Use multiple approaches to ensure scroll restoration works
-      const doScroll = () => {
-        console.log(`📍 [SCROLL RESTORE] Actually scrolling to: ${scrollPosition}`);
-        window.scrollTo({
-          top: scrollPosition,
-          behavior: 'instant' // Instant scroll, no animation
-        });
+      // Robust scroll restoration that waits for content to load
+      const attemptScroll = (attempt = 1, maxAttempts = 10) => {
+        const currentDocHeight = document.documentElement.scrollHeight;
+        const viewportHeight = window.innerHeight;
+        const maxScrollPosition = currentDocHeight - viewportHeight;
         
-        // Verify the scroll worked
-        setTimeout(() => {
-          const currentScroll = window.scrollY;
-          console.log(`✅ [SCROLL RESTORE] Current scroll after restoration: ${currentScroll} (target was ${scrollPosition})`);
-        }, 100);
+        console.log(`📏 [SCROLL RESTORE] Attempt ${attempt}: Document height: ${currentDocHeight}, Max scroll: ${maxScrollPosition}, Target: ${scrollPosition}`);
+        
+        // If the document is tall enough for our target scroll position, scroll now
+        if (maxScrollPosition >= scrollPosition || attempt >= maxAttempts) {
+          console.log(`📍 [SCROLL RESTORE] Scrolling to: ${Math.min(scrollPosition, maxScrollPosition)}`);
+          window.scrollTo({
+            top: Math.min(scrollPosition, maxScrollPosition),
+            behavior: 'instant'
+          });
+          
+          // Verify the scroll worked
+          setTimeout(() => {
+            const currentScroll = window.scrollY;
+            console.log(`✅ [SCROLL RESTORE] Final scroll position: ${currentScroll} (target was ${scrollPosition})`);
+            if (Math.abs(currentScroll - scrollPosition) > 50) {
+              console.log(`⚠️ [SCROLL RESTORE] Scroll position differs by more than 50px from target`);
+            }
+          }, 100);
+          
+          // Clean up the stored position after successful restoration
+          sessionStorage.removeItem(scrollKey);
+          console.log(`🧹 [SCROLL RESTORE] Cleaned up stored position for key: ${scrollKey}`);
+        } else {
+          // Document not tall enough yet, wait and try again
+          console.log(`⏳ [SCROLL RESTORE] Document not tall enough yet, waiting... (attempt ${attempt}/${maxAttempts})`);
+          setTimeout(() => attemptScroll(attempt + 1, maxAttempts), 100);
+        }
       };
       
-      // Try immediate scroll
-      doScroll();
-      
-      // Also try with requestAnimationFrame
-      requestAnimationFrame(doScroll);
-      
-      // And try with a small delay to ensure DOM is fully ready
-      setTimeout(doScroll, 50);
-      
-      // Clean up the stored position after restoring
-      sessionStorage.removeItem(scrollKey);
-      console.log(`🧹 [SCROLL RESTORE] Cleaned up stored position for key: ${scrollKey}`);
+      // Start attempting to scroll
+      attemptScroll();
     } else {
       console.log(`❌ [SCROLL RESTORE] No saved scroll position found for key: ${scrollKey}`);
     }
