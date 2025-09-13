@@ -72,6 +72,16 @@ export async function POST(
     return NextResponse.json({ error: 'Property not found' }, { status: 404 });
   }
 
+  // Get property data for response
+  const property = await prisma.property.findUnique({
+    where: { id: propertyId },
+    select: { numberOfUnits: true }
+  });
+
+  if (!property) {
+    return NextResponse.json({ error: 'Property not found' }, { status: 404 });
+  }
+
   try {
     const formData = await req.formData();
     const file = formData.get('file') as File | null;
