@@ -119,10 +119,11 @@ interface Lease {
 }
 
 interface TenancyData {
-  id: string;
-  lease: Lease;
+  id: string | null;
+  lease: Lease | null;
   unit: Unit;
-  rentRoll: RentRoll;
+  rentRoll: RentRoll | null;
+  isVacant?: boolean;
 }
 
 interface NewResident {
@@ -1460,7 +1461,7 @@ export default function ResidentDetailPage() {
 
   // New function to create lease periods based on tenancy data
   const createLeasePeriods = () => {
-    if (!tenancyData) return [];
+    if (!tenancyData || tenancyData.isVacant) return [];
     
     // TODO: Implement rent roll reconciliation logic.
     // This function currently displays all leases for a unit. In the future, we will need to
@@ -1592,6 +1593,119 @@ export default function ResidentDetailPage() {
             className="text-brand-blue hover:underline"
           />
         </div>
+      </div>
+    );
+  }
+
+  // Handle vacant units with a special UI
+  if (tenancyData.isVacant) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="container mx-auto px-4 py-8">
+          <BackToPropertyLink 
+            propertyId={propertyId as string}
+            className="text-brand-blue hover:underline mb-4 inline-block"
+          />
+          
+          <h1 className="text-4xl font-bold text-brand-blue mb-6">
+            Unit {formatUnitNumber(tenancyData?.unit?.unitNumber || '')} - Vacant Unit
+          </h1>
+          
+          {/* Unit Information */}
+          <div className="bg-white p-6 rounded-lg shadow-md mb-8">
+            <h2 className="text-2xl font-semibold text-brand-blue mb-4">Unit Information</h2>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <p className="text-sm font-medium text-gray-500">Unit Number</p>
+                <p className="text-lg font-semibold text-gray-900">{formatUnitNumber(tenancyData?.unit?.unitNumber || '')}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Square Footage</p>
+                <p className="text-lg font-semibold text-gray-900">
+                  {tenancyData?.unit?.squareFootage ? tenancyData.unit.squareFootage.toLocaleString() : 'N/A'}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Bedrooms</p>
+                <p className="text-lg font-semibold text-gray-900">
+                  {tenancyData?.unit?.bedroomCount ?? 'N/A'}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Status</p>
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800">
+                  Vacant
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Vacant Unit Message */}
+          <div className="bg-white p-8 rounded-lg shadow-md mb-8">
+            <div className="text-center">
+              <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-blue-100 mb-4">
+                <svg className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-4m-5 0H9m0 0H5m0 0h2M7 3h10M9 9h6m-6 4h6m-6 4h6" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">No Current or Future Leases</h3>
+              <p className="text-gray-600 mb-6">
+                This unit is currently vacant and has no current lease or future lease associated with this rent roll period.
+              </p>
+              
+              {/* Future Leases Section */}
+              {tenancyData.unit.Lease && tenancyData.unit.Lease.length > 0 && (
+                <div className="mb-6">
+                  <h4 className="text-lg font-medium text-gray-900 mb-3">Future Leases</h4>
+                  <div className="space-y-3">
+                    {tenancyData.unit.Lease.map((lease: any) => (
+                      <div key={lease.id} className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <p className="font-medium text-purple-900">{lease.name}</p>
+                            <p className="text-sm text-purple-700">
+                              {lease.leaseStartDate && lease.leaseEndDate
+                                ? `${new Date(lease.leaseStartDate).toLocaleDateString()} - ${new Date(lease.leaseEndDate).toLocaleDateString()}`
+                                : 'Dates TBD'
+                              }
+                            </p>
+                          </div>
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                            Future Lease
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              <button
+                onClick={() => setCreateLeaseDialogOpen(true)}
+                className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-brand-blue hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                <svg className="mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                Create Future Lease
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Create Lease Dialog */}
+        {isCreateLeaseDialogOpen && (
+          <CreateLeaseDialog
+            isOpen={isCreateLeaseDialogOpen}
+            onClose={() => setCreateLeaseDialogOpen(false)}
+            unitId={unitId as string}
+            unitNumber={tenancyData?.unit?.unitNumber || ''}
+            onLeaseCreated={() => {
+              setCreateLeaseDialogOpen(false);
+              fetchTenancyData(false); // Refresh data to show the new lease
+            }}
+          />
+        )}
       </div>
     );
   }

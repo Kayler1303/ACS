@@ -190,8 +190,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
             rentRoll: tenancyLease.Tenancy?.RentRoll,
         } : null;
 
+        // If no tenancy found, this is a vacant unit - return vacant unit data instead of error
         if (!tenancy) {
-            return NextResponse.json({ error: 'Tenancy for this rent roll not found' }, { status: 404 });
+            // For vacant units, return unit data with empty lease information
+            const vacantUnitData = {
+                id: null, // No tenancy ID for vacant units
+                lease: null, // No current lease
+                unit: unitWithLeases, // Unit information is still available
+                rentRoll: null,
+                isVacant: true // Flag to indicate this is a vacant unit
+            };
+
+            return NextResponse.json(vacantUnitData);
         }
 
         // Explicitly convert Prisma Decimal fields to numbers for proper frontend calculation
