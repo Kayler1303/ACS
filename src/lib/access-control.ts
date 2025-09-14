@@ -55,10 +55,12 @@ export async function checkPropertyAccess(propertyId: string, userId: string): P
 
     const propertyWithPayment = {
       ...property,
+      address: property.address || undefined,
+      numberOfUnits: property.numberOfUnits || undefined,
       PropertySubscription: subscription
     };
 
-    const hasPaymentAccess = hasPropertyAccess(propertyWithPayment);
+    const hasPaymentAccess = hasPropertyAccess(propertyWithPayment as any);
 
     if (!hasPaymentAccess) {
       return {

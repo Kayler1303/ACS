@@ -8,12 +8,12 @@ interface Property {
   address?: string;
   numberOfUnits?: number;
   PropertySubscription?: {
-    id: string;
+    id?: string;
     setupFeePaid: boolean;
     subscriptionStatus: string;
     setupFeeAmount?: number;
     monthlyFeeAmount?: number;
-    isManualPayment: boolean;
+    isManualPayment?: boolean;
     nextPaymentDue?: string;
     manualPayments?: Array<{
       id: string;
@@ -23,6 +23,16 @@ interface Property {
       paidDate: string;
       referenceNumber?: string;
       notes?: string;
+    }>;
+    adminGrant?: Array<{
+      id: string;
+      isActive: boolean;
+      reason?: string;
+      grantedAt: string;
+      grantedBy: {
+        name?: string;
+        email: string;
+      };
     }>;
   } | null;
 }
@@ -50,10 +60,16 @@ export default function AdminManualPayment({ property, onPaymentRecorded }: Admi
 
   const subscription = property.PropertySubscription;
   const isManualPayment = subscription?.isManualPayment || false;
+  const subscriptionId = subscription?.id;
 
   const handleRecordPayment = async () => {
     if (!amount || !paidDate) {
       setError('Amount and paid date are required');
+      return;
+    }
+
+    if (!subscriptionId) {
+      setError('No subscription found for this property');
       return;
     }
 

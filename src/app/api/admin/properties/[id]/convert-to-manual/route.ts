@@ -40,7 +40,7 @@ export async function POST(
     }
 
     // Cancel Stripe subscription if it exists
-    if (subscription.stripeSubscriptionId) {
+    if (subscription.stripeSubscriptionId && stripe) {
       try {
         await stripe.subscriptions.cancel(subscription.stripeSubscriptionId);
         console.log(`Canceled Stripe subscription: ${subscription.stripeSubscriptionId}`);

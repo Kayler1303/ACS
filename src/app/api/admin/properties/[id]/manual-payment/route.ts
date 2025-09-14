@@ -58,7 +58,7 @@ export async function POST(
     // Record the manual payment
     const manualPayment = await (prisma as any).manualPayment.create({
       data: {
-        propertySubscriptionId: subscription.id,
+        propertySubscriptionId: subscription!.id,
         paymentMethod,
         paymentType,
         amount,
@@ -74,7 +74,7 @@ export async function POST(
     // Create corresponding transaction record
     await (prisma as any).paymentTransaction.create({
       data: {
-        propertySubscriptionId: subscription.id,
+        propertySubscriptionId: subscription!.id,
         amount,
         transactionType: paymentType === 'SETUP_FEE' ? 'MANUAL_SETUP_FEE' : 'MANUAL_PAYMENT',
         status: 'SUCCEEDED',
@@ -110,7 +110,7 @@ export async function POST(
     }
 
     await (prisma as any).propertySubscription.update({
-      where: { id: subscription.id },
+      where: { id: subscription!.id },
       data: updateData,
     });
 

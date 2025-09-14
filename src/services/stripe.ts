@@ -1,11 +1,21 @@
 import Stripe from 'stripe';
 
-// Initialize Stripe with secret key
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-06-20',
-});
+// Initialize Stripe with secret key (only if environment variable is available)
+const stripe = process.env.STRIPE_SECRET_KEY 
+  ? new Stripe(process.env.STRIPE_SECRET_KEY, {
+      apiVersion: '2025-08-27.basil',
+    })
+  : null;
 
 export { stripe };
+
+// Helper function to ensure Stripe is initialized
+function ensureStripe() {
+  if (!stripe) {
+    throw new Error('Stripe not initialized - missing STRIPE_SECRET_KEY environment variable');
+  }
+  return stripe;
+}
 
 // Pricing constants based on requirements
 export const PRICING = {
@@ -18,8 +28,10 @@ export const PRICING = {
  * Create a Stripe customer for a user
  */
 export async function createStripeCustomer(email: string, name?: string, company?: string) {
+  const stripeClient = ensureStripe();
+  
   try {
-    const customer = await stripe.customers.create({
+    const customer = await stripeClient.customers.create({
       email,
       name: name || undefined,
       metadata: {
@@ -57,6 +69,31 @@ export async function createSetupFeePaymentIntent(
     return paymentIntent;
   } catch (error) {
     console.error('Error creating setup fee payment intent:', error);
+    throw new Error('Failed to create payment intent');
+  }
+}
+
+/**
+ * Create a payment intent with custom metadata
+ */
+export async function createPaymentIntent(
+  customerId: string,
+  amount: number,
+  description: string,
+  metadata: Record<string, string>
+) {
+  try {
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(amount * 100), // Convert to cents
+      currency: 'usd',
+      customer: customerId,
+      description,
+      metadata,
+    });
+
+    return paymentIntent;
+  } catch (error) {
+    console.error('Error creating payment intent:', error);
     throw new Error('Failed to create payment intent');
   }
 }
@@ -201,7 +238,7 @@ export async function retrySubscriptionPayment(subscriptionId: string) {
     if (subscription.latest_invoice) {
       const invoice = await stripe.invoices.retrieve(subscription.latest_invoice as string);
       
-      if (invoice.status === 'open') {
+      if (invoice.status === 'open' && invoice.id) {
         // Attempt to pay the invoice
         const paidInvoice = await stripe.invoices.pay(invoice.id);
         return paidInvoice;

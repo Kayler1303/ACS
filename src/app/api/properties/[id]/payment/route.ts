@@ -225,8 +225,8 @@ export async function PUT(
       data: {
         stripeSubscriptionId: stripeSubscription.id,
         subscriptionStatus: 'ACTIVE',
-        currentPeriodStart: new Date(stripeSubscription.current_period_start * 1000),
-        currentPeriodEnd: new Date(stripeSubscription.current_period_end * 1000),
+        currentPeriodStart: new Date((stripeSubscription as any).current_period_start * 1000),
+        currentPeriodEnd: new Date((stripeSubscription as any).current_period_end * 1000),
       },
     });
 

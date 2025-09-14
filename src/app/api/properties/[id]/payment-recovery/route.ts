@@ -78,6 +78,10 @@ export async function POST(
     // Attempt to pay the most recent open invoice
     if (invoices.data.length > 0) {
       const latestInvoice = invoices.data[0];
+      if (!latestInvoice?.id) {
+        throw new Error('No valid invoice found');
+      }
+      
       try {
         await stripe.invoices.pay(latestInvoice.id);
         

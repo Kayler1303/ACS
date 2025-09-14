@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { createSetupFeePaymentIntent } from '@/services/stripe';
+import { createPaymentIntent } from '@/services/stripe';
 
 // GET /api/properties/[id]/unit-discrepancy-payment - Get unit discrepancy payment info
 export async function GET(
@@ -116,7 +116,7 @@ export async function POST(
     }
 
     // Create payment intent for the discrepancy amount
-    const paymentIntent = await createSetupFeePaymentIntent(
+    const paymentIntent = await createPaymentIntent(
       subscription.stripeCustomerId,
       Number(discrepancy.paymentDifference),
       `Unit count discrepancy payment for ${property.name}`,
