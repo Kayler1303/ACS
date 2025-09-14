@@ -12,32 +12,55 @@ export const authOptions: AuthOptions = {
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          return null;
-        }
-
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
+        console.log('🔍 [AUTH DEBUG] Authorize called with:', { 
+          email: credentials?.email, 
+          hasPassword: !!credentials?.password 
         });
 
-        if (!user) {
+        if (!credentials?.email || !credentials?.password) {
+          console.log('🚨 [AUTH DEBUG] Missing credentials');
           return null;
         }
 
-        if (!user.emailVerified) {
-          throw new Error('Please verify your email address before logging in.');
+        try {
+          const user = await prisma.user.findUnique({
+            where: { email: credentials.email },
+          });
+
+          console.log('🔍 [AUTH DEBUG] User lookup result:', { 
+            found: !!user, 
+            emailVerified: user?.emailVerified 
+          });
+
+          if (!user) {
+            console.log('🚨 [AUTH DEBUG] User not found');
+            return null;
+          }
+
+          if (!user.emailVerified) {
+            console.log('🚨 [AUTH DEBUG] Email not verified');
+            throw new Error('Please verify your email address before logging in.');
+          }
+        } catch (error) {
+          console.error('🚨 [AUTH DEBUG] Database error:', error);
+          return null;
         }
 
         if (user.suspended) {
+          console.log('🚨 [AUTH DEBUG] User is suspended');
           throw new Error('Your account has been suspended. Please contact support for assistance.');
         }
 
+        console.log('🔍 [AUTH DEBUG] Checking password...');
         const isPasswordValid = await bcrypt.compare(
           credentials.password,
           user.password
         );
 
+        console.log('🔍 [AUTH DEBUG] Password valid:', isPasswordValid);
+
         if (!isPasswordValid) {
+          console.log('🚨 [AUTH DEBUG] Invalid password');
           return null;
         }
 
@@ -58,6 +81,8 @@ export const authOptions: AuthOptions = {
           console.error('Failed to log login activity:', error);
           // Don't fail the login if activity logging fails
         }
+
+        console.log('✅ [AUTH DEBUG] Authentication successful for user:', user.email);
 
         return {
           id: user.id,

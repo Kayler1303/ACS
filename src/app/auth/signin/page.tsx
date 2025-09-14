@@ -22,17 +22,32 @@ export default function SignInPage() {
     e.preventDefault();
     setError('');
 
-    const result = await signIn('credentials', {
-      redirect: false,
-      email,
-      password,
-    });
+    console.log('🔍 [DEBUG] Sign-in attempt started');
+    console.log('🔍 [DEBUG] Email:', email);
+    console.log('🔍 [DEBUG] Password length:', password.length);
 
-    if (result?.error) {
-      setError('Invalid email or password. Please try again.');
-    } else if (result?.ok) {
-      // On successful sign-in, redirect to the dashboard.
-      router.push('/dashboard');
+    try {
+      const result = await signIn('credentials', {
+        redirect: false,
+        email,
+        password,
+      });
+
+      console.log('🔍 [DEBUG] Sign-in result:', result);
+
+      if (result?.error) {
+        console.log('🚨 [DEBUG] Sign-in error:', result.error);
+        setError('Invalid email or password. Please try again.');
+      } else if (result?.ok) {
+        console.log('✅ [DEBUG] Sign-in successful, redirecting to dashboard');
+        router.push('/dashboard');
+      } else {
+        console.log('⚠️ [DEBUG] Unexpected result:', result);
+        setError('Something went wrong. Please try again.');
+      }
+    } catch (error) {
+      console.error('🚨 [DEBUG] Sign-in exception:', error);
+      setError('Network error. Please try again.');
     }
   };
 
