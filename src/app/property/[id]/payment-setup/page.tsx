@@ -236,17 +236,19 @@ function PaymentSetupForm() {
                   </svg>
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">One-Time Setup Fee</h3>
+                <p className="text-sm text-gray-600 mb-3 text-center">Choose one option below:</p>
                 <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Full Service:</span>
-                    <span className="font-bold text-lg text-brand-blue">${calculateSetupFee('FULL_SERVICE', property.numberOfUnits).toFixed(2)}</span>
+                  <div className="flex justify-between items-center p-2 bg-blue-50 rounded">
+                    <span className="text-sm font-medium text-gray-700">Full Service Option:</span>
+                    <span className="font-bold text-lg text-brand-blue">${calculateSetupFee('FULL_SERVICE', property.numberOfUnits).toLocaleString()}</span>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Self Service:</span>
-                    <span className="font-bold text-lg text-green-600">${calculateSetupFee('SELF_SERVICE', property.numberOfUnits).toFixed(2)}</span>
+                  <div className="text-center text-xs text-gray-500 py-1">OR</div>
+                  <div className="flex justify-between items-center p-2 bg-green-50 rounded">
+                    <span className="text-sm font-medium text-gray-700">Self Service Option:</span>
+                    <span className="font-bold text-lg text-green-600">${calculateSetupFee('SELF_SERVICE', property.numberOfUnits).toLocaleString()}</span>
                   </div>
                 </div>
-                <p className="text-xs text-gray-500 mt-2">Choose your setup option below</p>
+                <p className="text-xs text-gray-500 mt-2 text-center">You'll choose your preferred option below</p>
               </div>
             </div>
 
@@ -260,11 +262,11 @@ function PaymentSetupForm() {
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">Monthly Subscription</h3>
                 <div className="text-3xl font-bold text-green-600 mb-1">
-                  ${monthlyFee.toFixed(2)}
+                  ${monthlyFee.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
                 <p className="text-sm text-gray-600">per month</p>
                 <p className="text-xs text-gray-500 mt-2">
-                  ${(monthlyFee * 12).toFixed(2)} annually • Same for both options
+                  ${(monthlyFee * 12).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} annually • Same for both options
                 </p>
               </div>
             </div>
@@ -278,14 +280,14 @@ function PaymentSetupForm() {
                 <div className="text-center">
                   <div className="text-sm text-gray-600">Full Service Option</div>
                   <div className="text-xl font-bold text-brand-blue">
-                    ${(calculateSetupFee('FULL_SERVICE', property.numberOfUnits) + (monthlyFee * 12)).toFixed(2)}
+                    ${(calculateSetupFee('FULL_SERVICE', property.numberOfUnits) + (monthlyFee * 12)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
                   <div className="text-xs text-gray-500">Setup + 12 months</div>
                 </div>
                 <div className="text-center">
                   <div className="text-sm text-gray-600">Self Service Option</div>
                   <div className="text-xl font-bold text-green-600">
-                    ${(calculateSetupFee('SELF_SERVICE', property.numberOfUnits) + (monthlyFee * 12)).toFixed(2)}
+                    ${(calculateSetupFee('SELF_SERVICE', property.numberOfUnits) + (monthlyFee * 12)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
                   <div className="text-xs text-gray-500">Setup + 12 months</div>
                 </div>
@@ -320,7 +322,7 @@ function PaymentSetupForm() {
                     />
                     <div>
                       <h3 className="text-xl font-semibold text-brand-blue">Full Service Setup</h3>
-                      <div className="text-lg font-bold text-brand-blue">${calculateSetupFee('FULL_SERVICE', property.numberOfUnits).toFixed(2)} one-time</div>
+                      <div className="text-lg font-bold text-brand-blue">${calculateSetupFee('FULL_SERVICE', property.numberOfUnits).toLocaleString()} one-time</div>
                     </div>
                   </div>
                   <div className="space-y-2 text-sm text-gray-700">
@@ -374,7 +376,7 @@ function PaymentSetupForm() {
                     />
                     <div>
                       <h3 className="text-xl font-semibold text-brand-blue">Self Service Setup</h3>
-                      <div className="text-lg font-bold text-green-600">${calculateSetupFee('SELF_SERVICE', property.numberOfUnits).toFixed(2)} one-time</div>
+                      <div className="text-lg font-bold text-green-600">${calculateSetupFee('SELF_SERVICE', property.numberOfUnits).toLocaleString()} one-time</div>
                     </div>
                   </div>
                   <div className="space-y-2 text-sm text-gray-700">
@@ -400,7 +402,7 @@ function PaymentSetupForm() {
                       <svg className="w-4 h-4 text-green-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                       </svg>
-                      <span><strong>Lower upfront cost</strong> - Save ${(calculateSetupFee('FULL_SERVICE', property.numberOfUnits) - calculateSetupFee('SELF_SERVICE', property.numberOfUnits)).toFixed(2)} on setup</span>
+                      <span><strong>Lower upfront cost</strong> - Save ${(calculateSetupFee('FULL_SERVICE', property.numberOfUnits) - calculateSetupFee('SELF_SERVICE', property.numberOfUnits)).toLocaleString()} on setup</span>
                     </div>
                   </div>
                   <div className="mt-4 text-center">
@@ -423,20 +425,20 @@ function PaymentSetupForm() {
                 <div>
                   <div className="text-sm text-gray-600">One-Time Setup Fee</div>
                   <div className="font-bold text-2xl text-brand-blue">
-                    ${calculateSetupFee(selectedSetupType, property.numberOfUnits).toFixed(2)}
+                    ${calculateSetupFee(selectedSetupType, property.numberOfUnits).toLocaleString()}
                   </div>
                 </div>
                 <div>
                   <div className="text-sm text-gray-600">Monthly Subscription</div>
                   <div className="font-bold text-2xl text-green-600">
-                    ${monthlyFee.toFixed(2)}
+                    ${monthlyFee.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
                 </div>
               </div>
               <div className="mt-4 pt-4 border-t border-gray-200 text-center">
                 <div className="text-sm text-gray-600">Total First Year Cost</div>
                 <div className="font-bold text-3xl text-gray-900">
-                  ${(calculateSetupFee(selectedSetupType, property.numberOfUnits) + (monthlyFee * 12)).toFixed(2)}
+                  ${(calculateSetupFee(selectedSetupType, property.numberOfUnits) + (monthlyFee * 12)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
                 <div className="text-xs text-gray-500">Setup fee + 12 months subscription</div>
               </div>
@@ -478,12 +480,12 @@ function PaymentSetupForm() {
                 </div>
                 <div className="flex justify-between">
                   <span>One-time Setup Fee:</span>
-                  <span className="font-semibold">${setupFee.toFixed(2)}</span>
+                  <span className="font-semibold">${setupFee.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
                 <hr className="my-2" />
                 <div className="flex justify-between text-sm text-gray-600">
                   <span>Monthly Fee (after setup):</span>
-                  <span>${monthlyFee.toFixed(2)}/month</span>
+                  <span>${monthlyFee.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/month</span>
                 </div>
               </div>
             </div>
@@ -510,7 +512,7 @@ function PaymentSetupForm() {
                 disabled={!stripe || isProcessing}
                 className="w-full bg-brand-blue text-white py-3 px-4 rounded-lg font-semibold hover:bg-brand-blue-dark disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isProcessing ? 'Processing...' : `Pay $${setupFee.toFixed(2)}`}
+                {isProcessing ? 'Processing...' : `Pay $${setupFee.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
               </button>
             </form>
           </div>
@@ -560,7 +562,7 @@ function PaymentSetupForm() {
         )}
 
         <div className="mt-8 text-center text-sm text-gray-600">
-          <p>Monthly billing of ${monthlyFee.toFixed(2)} will begin after setup is complete.</p>
+          <p>Monthly billing of ${monthlyFee.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} will begin after setup is complete.</p>
           <p>You can cancel your subscription at any time.</p>
         </div>
       </div>
