@@ -22,8 +22,9 @@ export const authOptions: AuthOptions = {
           return null;
         }
 
+        let user;
         try {
-          const user = await prisma.user.findUnique({
+          user = await prisma.user.findUnique({
             where: { email: credentials.email },
           });
 
