@@ -215,82 +215,233 @@ function PaymentSetupForm() {
     <div className="container mx-auto px-4 py-8">
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-brand-blue mb-2">Set Up Payment</h1>
-          <p className="text-gray-600">Choose your setup option for <strong>{property.name}</strong></p>
-          <p className="text-sm text-gray-500">{property.numberOfUnits} units</p>
+          <h1 className="text-3xl font-bold text-brand-blue mb-2">Pricing for {property.name}</h1>
+          <p className="text-gray-600">Transparent pricing for your {property.numberOfUnits}-unit property</p>
         </div>
 
-        {!clientSecret ? (
-          // Setup type selection
-          <div className="grid md:grid-cols-2 gap-6 mb-8">
-            {/* Full Service Option */}
-            <div
-              className={`border-2 rounded-lg p-6 cursor-pointer transition-all ${
-                selectedSetupType === 'FULL_SERVICE'
-                  ? 'border-brand-blue bg-blue-50'
-                  : 'border-gray-200 hover:border-gray-300'
-              }`}
-              onClick={() => setSelectedSetupType('FULL_SERVICE')}
-            >
-              <div className="flex items-center mb-4">
-                <input
-                  type="radio"
-                  name="setupType"
-                  value="FULL_SERVICE"
-                  checked={selectedSetupType === 'FULL_SERVICE'}
-                  onChange={() => setSelectedSetupType('FULL_SERVICE')}
-                  className="mr-3"
-                />
-                <h3 className="text-xl font-semibold text-brand-blue">Full Service Setup</h3>
-              </div>
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span>One-time setup fee:</span>
-                  <span className="font-semibold">${calculateSetupFee('FULL_SERVICE', property.numberOfUnits).toFixed(2)}</span>
+        {/* Pricing Overview Section */}
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-8 mb-8">
+          <div className="text-center mb-6">
+            <h2 className="text-2xl font-bold text-brand-blue mb-2">Your Pricing Structure</h2>
+            <p className="text-gray-600">Simple, transparent pricing with no hidden fees</p>
+          </div>
+          
+          <div className="grid md:grid-cols-2 gap-6">
+            {/* One-time Setup Fee */}
+            <div className="bg-white rounded-lg p-6 border border-blue-100">
+              <div className="text-center">
+                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <svg className="w-6 h-6 text-brand-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
+                  </svg>
                 </div>
-                <div className="text-sm text-gray-600">
-                  <p>✓ Complete property setup handled for you</p>
-                  <p>✓ All compliance configurations included</p>
-                  <p>✓ Priority support during setup</p>
-                  <p>✓ Faster time to go live</p>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">One-Time Setup Fee</h3>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Full Service:</span>
+                    <span className="font-bold text-lg text-brand-blue">${calculateSetupFee('FULL_SERVICE', property.numberOfUnits).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Self Service:</span>
+                    <span className="font-bold text-lg text-green-600">${calculateSetupFee('SELF_SERVICE', property.numberOfUnits).toFixed(2)}</span>
+                  </div>
                 </div>
+                <p className="text-xs text-gray-500 mt-2">Choose your setup option below</p>
               </div>
             </div>
 
-            {/* Self Service Option */}
-            <div
-              className={`border-2 rounded-lg p-6 cursor-pointer transition-all ${
-                selectedSetupType === 'SELF_SERVICE'
-                  ? 'border-brand-blue bg-blue-50'
-                  : 'border-gray-200 hover:border-gray-300'
-              }`}
-              onClick={() => setSelectedSetupType('SELF_SERVICE')}
-            >
-              <div className="flex items-center mb-4">
-                <input
-                  type="radio"
-                  name="setupType"
-                  value="SELF_SERVICE"
-                  checked={selectedSetupType === 'SELF_SERVICE'}
-                  onChange={() => setSelectedSetupType('SELF_SERVICE')}
-                  className="mr-3"
-                />
-                <h3 className="text-xl font-semibold text-brand-blue">Self Service Setup</h3>
-              </div>
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span>One-time setup fee:</span>
-                  <span className="font-semibold">${calculateSetupFee('SELF_SERVICE', property.numberOfUnits).toFixed(2)}</span>
+            {/* Ongoing Monthly Fee */}
+            <div className="bg-white rounded-lg p-6 border border-blue-100">
+              <div className="text-center">
+                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
                 </div>
-                <div className="text-sm text-gray-600">
-                  <p>⚠️ Significant time required for setup</p>
-                  <p>⚠️ Setup complexity depends on unit count</p>
-                  <p>⚠️ Documentation requirements vary</p>
-                  <p>✓ Lower upfront cost</p>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Monthly Subscription</h3>
+                <div className="text-3xl font-bold text-green-600 mb-1">
+                  ${monthlyFee.toFixed(2)}
+                </div>
+                <p className="text-sm text-gray-600">per month</p>
+                <p className="text-xs text-gray-500 mt-2">
+                  ${(monthlyFee * 12).toFixed(2)} annually • Same for both options
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Total Cost Preview */}
+          <div className="mt-6 p-4 bg-white/70 rounded-lg border border-blue-100">
+            <div className="text-center">
+              <h4 className="font-semibold text-gray-900 mb-2">Your Total First Year Cost</h4>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="text-center">
+                  <div className="text-sm text-gray-600">Full Service Option</div>
+                  <div className="text-xl font-bold text-brand-blue">
+                    ${(calculateSetupFee('FULL_SERVICE', property.numberOfUnits) + (monthlyFee * 12)).toFixed(2)}
+                  </div>
+                  <div className="text-xs text-gray-500">Setup + 12 months</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-sm text-gray-600">Self Service Option</div>
+                  <div className="text-xl font-bold text-green-600">
+                    ${(calculateSetupFee('SELF_SERVICE', property.numberOfUnits) + (monthlyFee * 12)).toFixed(2)}
+                  </div>
+                  <div className="text-xs text-gray-500">Setup + 12 months</div>
                 </div>
               </div>
             </div>
           </div>
+        </div>
+
+        {!clientSecret ? (
+          <>
+            {/* Setup Type Selection */}
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-center text-gray-900 mb-6">Choose Your Setup Option</h2>
+              <div className="grid md:grid-cols-2 gap-6">
+                {/* Full Service Option */}
+                <div
+                  className={`border-2 rounded-lg p-6 cursor-pointer transition-all ${
+                    selectedSetupType === 'FULL_SERVICE'
+                      ? 'border-brand-blue bg-blue-50 ring-2 ring-brand-blue ring-opacity-20'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                  onClick={() => setSelectedSetupType('FULL_SERVICE')}
+                >
+                  <div className="flex items-center mb-4">
+                    <input
+                      type="radio"
+                      name="setupType"
+                      value="FULL_SERVICE"
+                      checked={selectedSetupType === 'FULL_SERVICE'}
+                      onChange={() => setSelectedSetupType('FULL_SERVICE')}
+                      className="mr-3 text-brand-blue"
+                    />
+                    <div>
+                      <h3 className="text-xl font-semibold text-brand-blue">Full Service Setup</h3>
+                      <div className="text-lg font-bold text-brand-blue">${calculateSetupFee('FULL_SERVICE', property.numberOfUnits).toFixed(2)} one-time</div>
+                    </div>
+                  </div>
+                  <div className="space-y-2 text-sm text-gray-700">
+                    <div className="flex items-start">
+                      <svg className="w-4 h-4 text-green-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      <span><strong>We handle everything</strong> - Complete property setup done for you</span>
+                    </div>
+                    <div className="flex items-start">
+                      <svg className="w-4 h-4 text-green-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      <span><strong>Fast go-live</strong> - Typically ready within 1-2 business days</span>
+                    </div>
+                    <div className="flex items-start">
+                      <svg className="w-4 h-4 text-green-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      <span><strong>Priority support</strong> - Dedicated assistance throughout setup</span>
+                    </div>
+                    <div className="flex items-start">
+                      <svg className="w-4 h-4 text-green-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      <span><strong>All configurations included</strong> - Compliance settings optimized</span>
+                    </div>
+                  </div>
+                  <div className="mt-4 text-center">
+                    <div className="text-xs text-gray-500">Best for: Busy property managers, large properties, quick setup needed</div>
+                  </div>
+                </div>
+
+                {/* Self Service Option */}
+                <div
+                  className={`border-2 rounded-lg p-6 cursor-pointer transition-all ${
+                    selectedSetupType === 'SELF_SERVICE'
+                      ? 'border-brand-blue bg-blue-50 ring-2 ring-brand-blue ring-opacity-20'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                  onClick={() => setSelectedSetupType('SELF_SERVICE')}
+                >
+                  <div className="flex items-center mb-4">
+                    <input
+                      type="radio"
+                      name="setupType"
+                      value="SELF_SERVICE"
+                      checked={selectedSetupType === 'SELF_SERVICE'}
+                      onChange={() => setSelectedSetupType('SELF_SERVICE')}
+                      className="mr-3 text-brand-blue"
+                    />
+                    <div>
+                      <h3 className="text-xl font-semibold text-brand-blue">Self Service Setup</h3>
+                      <div className="text-lg font-bold text-green-600">${calculateSetupFee('SELF_SERVICE', property.numberOfUnits).toFixed(2)} one-time</div>
+                    </div>
+                  </div>
+                  <div className="space-y-2 text-sm text-gray-700">
+                    <div className="flex items-start">
+                      <svg className="w-4 h-4 text-amber-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                      <span><strong>You handle setup</strong> - Significant time investment required</span>
+                    </div>
+                    <div className="flex items-start">
+                      <svg className="w-4 h-4 text-amber-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                      <span><strong>Longer timeline</strong> - Setup time varies by property complexity</span>
+                    </div>
+                    <div className="flex items-start">
+                      <svg className="w-4 h-4 text-amber-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                      <span><strong>Documentation heavy</strong> - Requirements vary by unit count</span>
+                    </div>
+                    <div className="flex items-start">
+                      <svg className="w-4 h-4 text-green-500 mr-2 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      <span><strong>Lower upfront cost</strong> - Save ${(calculateSetupFee('FULL_SERVICE', property.numberOfUnits) - calculateSetupFee('SELF_SERVICE', property.numberOfUnits)).toFixed(2)} on setup</span>
+                    </div>
+                  </div>
+                  <div className="mt-4 text-center">
+                    <div className="text-xs text-gray-500">Best for: Small properties, hands-on managers, budget-conscious</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Selected Option Summary */}
+            <div className="bg-gray-50 border rounded-lg p-6 mb-8">
+              <h3 className="text-lg font-semibold text-center mb-4">Your Selected Plan Summary</h3>
+              <div className="grid md:grid-cols-3 gap-4 text-center">
+                <div>
+                  <div className="text-sm text-gray-600">Setup Option</div>
+                  <div className="font-semibold text-lg">
+                    {selectedSetupType === 'FULL_SERVICE' ? 'Full Service' : 'Self Service'}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-sm text-gray-600">One-Time Setup Fee</div>
+                  <div className="font-bold text-2xl text-brand-blue">
+                    ${calculateSetupFee(selectedSetupType, property.numberOfUnits).toFixed(2)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-sm text-gray-600">Monthly Subscription</div>
+                  <div className="font-bold text-2xl text-green-600">
+                    ${monthlyFee.toFixed(2)}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-4 pt-4 border-t border-gray-200 text-center">
+                <div className="text-sm text-gray-600">Total First Year Cost</div>
+                <div className="font-bold text-3xl text-gray-900">
+                  ${(calculateSetupFee(selectedSetupType, property.numberOfUnits) + (monthlyFee * 12)).toFixed(2)}
+                </div>
+                <div className="text-xs text-gray-500">Setup fee + 12 months subscription</div>
+              </div>
+            </div>
+          </>
 
           {/* Help Section */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
