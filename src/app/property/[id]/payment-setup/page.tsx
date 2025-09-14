@@ -441,10 +441,9 @@ function PaymentSetupForm() {
                 <div className="text-xs text-gray-500">Setup fee + 12 months subscription</div>
               </div>
             </div>
-          </>
 
-          {/* Help Section */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
+            {/* Help Section */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
             <div className="text-center">
               <h3 className="text-lg font-semibold text-brand-blue mb-2">
                 Unsure which to choose? Let us help you decide
@@ -464,6 +463,7 @@ function PaymentSetupForm() {
               </a>
             </div>
           </div>
+          </>
         ) : (
           // Payment form
           <div className="max-w-md mx-auto">
