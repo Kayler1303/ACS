@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ propertyId: string }> }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
 
@@ -24,7 +24,7 @@ export async function GET(
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
 
-    const { propertyId } = await params;
+    const { id: propertyId } = await params;
 
     // Verify property exists and get basic info
     const property = await prisma.property.findUnique({
