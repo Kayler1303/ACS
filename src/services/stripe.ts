@@ -54,8 +54,10 @@ export async function createSetupFeePaymentIntent(
   propertyId: string,
   setupType: 'FULL_SERVICE' | 'SELF_SERVICE'
 ) {
+  const stripeClient = ensureStripe();
+  
   try {
-    const paymentIntent = await stripe.paymentIntents.create({
+    const paymentIntent = await stripeClient.paymentIntents.create({
       amount: Math.round(amount * 100), // Convert to cents
       currency: 'usd',
       customer: customerId,
@@ -82,8 +84,10 @@ export async function createPaymentIntent(
   description: string,
   metadata: Record<string, string>
 ) {
+  const stripeClient = ensureStripe();
+  
   try {
-    const paymentIntent = await stripe.paymentIntents.create({
+    const paymentIntent = await stripeClient.paymentIntents.create({
       amount: Math.round(amount * 100), // Convert to cents
       currency: 'usd',
       customer: customerId,
@@ -107,9 +111,11 @@ export async function createMonthlySubscription(
   units: number,
   propertyId: string
 ) {
+  const stripeClient = ensureStripe();
+  
   try {
     // Create a price for this specific property (since unit count varies)
-    const price = await stripe.prices.create({
+    const price = await stripeClient.prices.create({
       unit_amount: Math.round((pricePerUnit / 12) * 100), // Monthly amount in cents
       currency: 'usd',
       recurring: {
@@ -125,7 +131,7 @@ export async function createMonthlySubscription(
     });
 
     // Create the subscription
-    const subscription = await stripe.subscriptions.create({
+    const subscription = await stripeClient.subscriptions.create({
       customer: customerId,
       items: [
         {
@@ -152,8 +158,10 @@ export async function createMonthlySubscription(
  * Cancel a subscription
  */
 export async function cancelSubscription(subscriptionId: string) {
+  const stripeClient = ensureStripe();
+  
   try {
-    const subscription = await stripe.subscriptions.cancel(subscriptionId);
+    const subscription = await stripeClient.subscriptions.cancel(subscriptionId);
     return subscription;
   } catch (error) {
     console.error('Error canceling subscription:', error);
@@ -165,8 +173,9 @@ export async function cancelSubscription(subscriptionId: string) {
  * Retrieve a payment intent
  */
 export async function retrievePaymentIntent(paymentIntentId: string) {
+  const stripeClient = ensureStripe();
   try {
-    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    const paymentIntent = await stripeClient.paymentIntents.retrieve(paymentIntentId);
     return paymentIntent;
   } catch (error) {
     console.error('Error retrieving payment intent:', error);
@@ -178,8 +187,10 @@ export async function retrievePaymentIntent(paymentIntentId: string) {
  * Retrieve a subscription
  */
 export async function retrieveSubscription(subscriptionId: string) {
+  const stripeClient = ensureStripe();
+  
   try {
-    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    const subscription = await stripeClient.subscriptions.retrieve(subscriptionId);
     return subscription;
   } catch (error) {
     console.error('Error retrieving subscription:', error);
@@ -206,14 +217,16 @@ export function calculateMonthlyFee(units: number): number {
  * Update customer's default payment method
  */
 export async function updateCustomerPaymentMethod(customerId: string, paymentMethodId: string) {
+  const stripeClient = ensureStripe();
+  
   try {
     // Attach the payment method to the customer
-    await stripe.paymentMethods.attach(paymentMethodId, {
+    await stripeClient.paymentMethods.attach(paymentMethodId, {
       customer: customerId,
     });
 
     // Set as default payment method
-    await stripe.customers.update(customerId, {
+    await stripeClient.customers.update(customerId, {
       invoice_settings: {
         default_payment_method: paymentMethodId,
       },
@@ -230,17 +243,19 @@ export async function updateCustomerPaymentMethod(customerId: string, paymentMet
  * Retry payment for a past due subscription
  */
 export async function retrySubscriptionPayment(subscriptionId: string) {
+  const stripeClient = ensureStripe();
+  
   try {
     // Get the subscription
-    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    const subscription = await stripeClient.subscriptions.retrieve(subscriptionId);
     
     // Get the latest invoice
     if (subscription.latest_invoice) {
-      const invoice = await stripe.invoices.retrieve(subscription.latest_invoice as string);
+      const invoice = await stripeClient.invoices.retrieve(subscription.latest_invoice as string);
       
       if (invoice.status === 'open' && invoice.id) {
         // Attempt to pay the invoice
-        const paidInvoice = await stripe.invoices.pay(invoice.id);
+        const paidInvoice = await stripeClient.invoices.pay(invoice.id);
         return paidInvoice;
       }
     }
@@ -256,8 +271,10 @@ export async function retrySubscriptionPayment(subscriptionId: string) {
  * Get outstanding invoices for a customer
  */
 export async function getOutstandingInvoices(customerId: string) {
+  const stripeClient = ensureStripe();
+  
   try {
-    const invoices = await stripe.invoices.list({
+    const invoices = await stripeClient.invoices.list({
       customer: customerId,
       status: 'open',
       limit: 10,
@@ -273,10 +290,11 @@ export async function getOutstandingInvoices(customerId: string) {
  * Verify webhook signature
  */
 export function verifyWebhookSignature(payload: string, signature: string): Stripe.Event {
+  const stripeClient = ensureStripe();
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
   
   try {
-    const event = stripe.webhooks.constructEvent(payload, signature, webhookSecret);
+    const event = stripeClient.webhooks.constructEvent(payload, signature, webhookSecret);
     return event;
   } catch (error) {
     console.error('Webhook signature verification failed:', error);

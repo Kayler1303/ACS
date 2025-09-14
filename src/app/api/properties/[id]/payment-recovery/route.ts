@@ -50,6 +50,10 @@ export async function POST(
       return NextResponse.json({ error: 'Stripe subscription not found' }, { status: 400 });
     }
 
+    if (!stripe) {
+      return NextResponse.json({ error: 'Payment system not available' }, { status: 503 });
+    }
+
     // Attach the new payment method to the customer
     await stripe.paymentMethods.attach(paymentMethodId, {
       customer: subscription.stripeCustomerId,
