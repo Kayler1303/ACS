@@ -121,21 +121,43 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  console.log('🔍 [DEBUG] Property creation API called');
+  
   const session = await getServerSession(authOptions);
+  console.log('🔍 [DEBUG] Session:', { 
+    exists: !!session, 
+    userId: session?.user?.id,
+    userEmail: session?.user?.email 
+  });
 
   if (!session || !session.user?.id) {
+    console.log('🚨 [DEBUG] No session or user ID');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   try {
-    const { name, address, county, state, numberOfUnits, placedInServiceDate } = await request.json();
+    const body = await request.json();
+    console.log('🔍 [DEBUG] Request body:', body);
+    
+    const { name, address, county, state, numberOfUnits, placedInServiceDate } = body;
 
     if (!name || !county || !state) {
+      console.log('🚨 [DEBUG] Missing required fields:', { name: !!name, county: !!county, state: !!state });
       return NextResponse.json(
         { error: 'Name, county, and state are required.' },
         { status: 400 }
       );
     }
+
+    console.log('🔍 [DEBUG] Creating property with data:', {
+      name,
+      address,
+      county,
+      state,
+      numberOfUnits,
+      placedInServiceDate,
+      ownerId: session.user.id
+    });
 
     const newProperty = await prisma.property.create({
       data: {
@@ -152,12 +174,20 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    console.log('✅ [DEBUG] Property created successfully:', newProperty.id);
     return NextResponse.json({ property: newProperty }, { status: 201 });
   } catch (error: any) {
-    console.error('Property creation error:', error);
+    console.error('🚨 [DEBUG] Property creation error:', error);
+    console.error('🚨 [DEBUG] Error details:', {
+      code: error.code,
+      message: error.message,
+      meta: error.meta,
+      stack: error.stack
+    });
     
     // Handle foreign key constraint errors (user doesn't exist)
     if (error.code === 'P2003' && error.meta?.field_name === 'ownerId') {
+      console.log('🚨 [DEBUG] Foreign key constraint error - user does not exist');
       return NextResponse.json(
         { error: 'Your session is invalid. Please log out and log back in.' },
         { status: 401 }
