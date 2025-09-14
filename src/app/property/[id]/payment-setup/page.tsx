@@ -291,6 +291,28 @@ function PaymentSetupForm() {
               </div>
             </div>
           </div>
+
+          {/* Help Section */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
+            <div className="text-center">
+              <h3 className="text-lg font-semibold text-brand-blue mb-2">
+                Unsure which to choose? Let us help you decide
+              </h3>
+              <p className="text-gray-600 mb-4">
+                Our team can help you determine the best setup option based on your property size, 
+                documentation availability, and timeline requirements.
+              </p>
+              <a
+                href={`mailto:contact@apartmentcompliance.com?subject=Payment Setup Help - Property: ${encodeURIComponent(property.name)}&body=Hi, I need help deciding between Full Service and Self Service setup for my property '${encodeURIComponent(property.name)}' with ${property.numberOfUnits} units. Please contact me to discuss the best option.`}
+                className="inline-flex items-center px-6 py-3 bg-brand-blue text-white font-semibold rounded-lg hover:bg-brand-blue-dark transition-colors"
+              >
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                Contact Us
+              </a>
+            </div>
+          </div>
         ) : (
           // Payment form
           <div className="max-w-md mx-auto">
