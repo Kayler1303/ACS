@@ -17,6 +17,22 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     // Check if user has access to this property (owner or shared)
     const access = await checkPropertyAccess(propertyId, session.user.id);
     if (!access.hasAccess) {
+      // If user is owner but doesn't have payment access, return specific error
+      if (access.isOwner) {
+        // Check if this is a past due situation
+        const subscription = await (prisma as any).propertySubscription.findUnique({
+          where: { propertyId }
+        });
+        
+        const isPastDue = subscription?.subscriptionStatus === 'PAST_DUE';
+        
+        return NextResponse.json({ 
+          error: isPastDue ? 'Monthly payment is past due' : 'Payment required for property access',
+          requiresPayment: true,
+          isPastDue,
+          redirectTo: isPastDue ? `/property/${propertyId}/payment-recovery` : `/property/${propertyId}/payment-setup`
+        }, { status: 403 });
+      }
       return NextResponse.json({ error: 'Property not found' }, { status: 404 });
     }
 

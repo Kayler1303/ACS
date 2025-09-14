@@ -29,6 +29,14 @@ export default function PropertyPage() {
           const res = await fetch(`/api/properties/${id}`); // Assuming a new endpoint here
           if (!res.ok) {
             const data = await res.json();
+            
+            // Check if this is a payment access issue
+            if (res.status === 403 && data.requiresPayment) {
+              // Payment required or past due, redirect to appropriate page
+              window.location.href = data.redirectTo || (data.isPastDue ? `/property/${id}/payment-recovery` : `/property/${id}/payment-setup`);
+              return;
+            }
+            
             throw new Error(data.error || 'Failed to fetch property data.');
           }
           const data: FullProperty = await res.json();

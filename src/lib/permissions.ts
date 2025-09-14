@@ -40,6 +40,38 @@ export async function checkPropertyAccess(
     }
 
     if (property.ownerId === userId) {
+      // For property owners, check payment status
+      const subscription = await (prisma as any).propertySubscription.findUnique({
+        where: { propertyId },
+        include: {
+          adminGrant: {
+            where: { isActive: true }
+          }
+        }
+      });
+
+      // Check for unit count discrepancies
+      const discrepancies = await (prisma as any).unitCountDiscrepancy.findMany({
+        where: {
+          propertyId,
+          status: 'PENDING'
+        }
+      });
+
+      const propertyWithPayment = {
+        id: propertyId,
+        PropertySubscription: subscription,
+        UnitCountDiscrepancy: discrepancies
+      };
+
+      // Import payment utils dynamically to avoid circular imports
+      const { hasPropertyAccess } = await import('@/lib/payment-utils');
+      const hasPaymentAccess = hasPropertyAccess(propertyWithPayment as any);
+
+      if (!hasPaymentAccess) {
+        return { hasAccess: false, permission: null, isOwner: true };
+      }
+
       return { hasAccess: true, permission: PermissionLevel.EDIT, isOwner: true };
     }
 
@@ -192,9 +224,61 @@ export async function getUserAccessibleProperties(userId: string) {
     })
   ]);
 
+  // Get subscription data separately to avoid TypeScript issues
+  const allPropertyIds = [
+    ...ownedProperties.map(p => p.id),
+    ...sharedProperties.map(s => s.property.id)
+  ];
+
+  const subscriptions = await (prisma as any).propertySubscription.findMany({
+    where: {
+      propertyId: { in: allPropertyIds }
+    },
+    include: {
+      adminGrant: {
+        where: { isActive: true }
+      }
+    }
+  });
+
+  // Fetch unit count discrepancies
+  const discrepancies = await (prisma as any).unitCountDiscrepancy.findMany({
+    where: {
+      propertyId: { in: allPropertyIds },
+      status: 'PENDING'
+    }
+  });
+
+  const subscriptionMap = new Map(subscriptions.map((s: any) => [s.propertyId, s]));
+  const discrepancyMap = new Map();
+  
+  // Group discrepancies by property ID
+  discrepancies.forEach((d: any) => {
+    if (!discrepancyMap.has(d.propertyId)) {
+      discrepancyMap.set(d.propertyId, []);
+    }
+    discrepancyMap.get(d.propertyId).push(d);
+  });
+
+  // Add subscription and discrepancy data to properties
+  const ownedWithSubscriptions = ownedProperties.map(property => ({
+    ...property,
+    PropertySubscription: subscriptionMap.get(property.id) || null,
+    UnitCountDiscrepancy: discrepancyMap.get(property.id) || []
+  }));
+
+  const sharedWithSubscriptions = sharedProperties.map(share => ({
+    ...share,
+    property: {
+      ...share.property,
+      PropertySubscription: subscriptionMap.get(share.property.id) || null,
+      UnitCountDiscrepancy: discrepancyMap.get(share.property.id) || []
+    }
+  }));
+
   return {
-    owned: ownedProperties,
-    shared: sharedProperties
+    owned: ownedWithSubscriptions,
+    shared: sharedWithSubscriptions
   };
 }
 

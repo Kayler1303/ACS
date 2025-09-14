@@ -5,6 +5,8 @@ import { useSession } from 'next-auth/react';
 import { redirect } from 'next/navigation';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import AdminPaymentGrant from '@/components/AdminPaymentGrant';
+import AdminUnitDiscrepancies from '@/components/AdminUnitDiscrepancies';
 
 interface OverrideRequest {
   id: string;
@@ -163,7 +165,7 @@ interface SystemStats {
 export default function AdminDashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'overview' | 'requests' | 'users' | 'properties'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'requests' | 'users' | 'properties' | 'payments' | 'discrepancies'>('overview');
 
   // Override requests state (existing)
   const [overrideRequests, setOverrideRequests] = useState<OverrideRequest[]>([]);
@@ -198,56 +200,56 @@ export default function AdminDashboard() {
   }, [status, session]);
 
   // Fetch all admin data
-  useEffect(() => {
-    const fetchAllData = async () => {
-      try {
-        // Fetch system stats
-        const statsResponse = await fetch('/api/admin/stats');
-        if (statsResponse.ok) {
-          const statsData = await statsResponse.json();
-          setSystemStats(statsData);
-        }
-
-        // Fetch users
-        const usersResponse = await fetch('/api/admin/users');
-        if (usersResponse.ok) {
-          const usersData = await usersResponse.json();
-          setUsers(usersData.users);
-        }
-
-        // Fetch enhanced properties
-        const propertiesResponse = await fetch('/api/properties');
-        if (propertiesResponse.ok) {
-          const propertiesData = await propertiesResponse.json();
-          setProperties(propertiesData.properties.map((p: any) => ({
-            id: p.id,
-            name: p.name,
-            address: p.address
-          })));
-          setEnhancedProperties(propertiesData.properties);
-        }
-
-        // Fetch override requests (existing functionality)
-        const requestsResponse = await fetch('/api/admin/override-requests');
-        if (requestsResponse.ok) {
-          const requestsData = await requestsResponse.json();
-          setOverrideRequests(requestsData.requests);
-          setOverrideStats(requestsData.stats);
-        }
-
-        // Fetch analytics data
-        const analyticsResponse = await fetch('/api/analytics/summary?days=30');
-        if (analyticsResponse.ok) {
-          const analyticsData = await analyticsResponse.json();
-          setAnalyticsData(analyticsData);
-        }
-      } catch (error) {
-        console.error('Error fetching admin data:', error);
-      } finally {
-        setLoading(false);
+  const fetchAllData = async () => {
+    try {
+      // Fetch system stats
+      const statsResponse = await fetch('/api/admin/stats');
+      if (statsResponse.ok) {
+        const statsData = await statsResponse.json();
+        setSystemStats(statsData);
       }
-    };
 
+      // Fetch users
+      const usersResponse = await fetch('/api/admin/users');
+      if (usersResponse.ok) {
+        const usersData = await usersResponse.json();
+        setUsers(usersData.users);
+      }
+
+      // Fetch enhanced properties
+      const propertiesResponse = await fetch('/api/properties');
+      if (propertiesResponse.ok) {
+        const propertiesData = await propertiesResponse.json();
+        setProperties(propertiesData.properties.map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          address: p.address
+        })));
+        setEnhancedProperties(propertiesData.properties);
+      }
+
+      // Fetch override requests (existing functionality)
+      const requestsResponse = await fetch('/api/admin/override-requests');
+      if (requestsResponse.ok) {
+        const requestsData = await requestsResponse.json();
+        setOverrideRequests(requestsData.requests);
+        setOverrideStats(requestsData.stats);
+      }
+
+      // Fetch analytics data
+      const analyticsResponse = await fetch('/api/analytics/summary?days=30');
+      if (analyticsResponse.ok) {
+        const analyticsData = await analyticsResponse.json();
+        setAnalyticsData(analyticsData);
+      }
+    } catch (error) {
+      console.error('Error fetching admin data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     if (status === 'authenticated' && session?.user?.role === 'ADMIN') {
       fetchAllData();
     }
@@ -589,6 +591,26 @@ export default function AdminDashboard() {
             >
               Properties ({enhancedProperties.length})
             </button>
+            <button
+              onClick={() => setActiveTab('payments')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'payments'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Payments
+            </button>
+            <button
+              onClick={() => setActiveTab('discrepancies')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'discrepancies'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              Unit Discrepancies
+            </button>
             <Link
               href="/admin/analytics"
               className="py-2 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
@@ -632,6 +654,13 @@ export default function AdminDashboard() {
           <PropertiesTab enhancedProperties={enhancedProperties} />
         )}
 
+        {activeTab === 'payments' && (
+          <PaymentsTab enhancedProperties={enhancedProperties} onPaymentUpdated={fetchAllData} />
+        )}
+
+        {activeTab === 'discrepancies' && (
+          <AdminUnitDiscrepancies onDataRefresh={fetchAllData} />
+        )}
 
       </div>
 
@@ -2800,5 +2829,95 @@ function RequestsTab({
         )}
       </div>
     </>
+  );
+}
+
+// Payments Tab Component
+function PaymentsTab({
+  enhancedProperties,
+  onPaymentUpdated
+}: {
+  enhancedProperties: EnhancedProperty[];
+  onPaymentUpdated: () => void;
+}) {
+  const [propertiesWithPayments, setPropertiesWithPayments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchPropertiesWithPayments();
+  }, [enhancedProperties]);
+
+  const fetchPropertiesWithPayments = async () => {
+    setLoading(true);
+    try {
+      // Get payment data for all properties
+      const propertiesWithPaymentData = await Promise.all(
+        enhancedProperties.map(async (property) => {
+          try {
+            const response = await fetch(`/api/properties/${property.id}/payment`);
+            if (response.ok) {
+              const paymentData = await response.json();
+              return {
+                ...property,
+                PropertySubscription: paymentData.subscription,
+                hasAdminGrant: paymentData.hasAdminGrant
+              };
+            }
+          } catch (error) {
+            console.error(`Error fetching payment data for property ${property.id}:`, error);
+          }
+          return property;
+        })
+      );
+      
+      setPropertiesWithPayments(propertiesWithPaymentData);
+    } catch (error) {
+      console.error('Error fetching properties with payments:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePaymentUpdated = () => {
+    fetchPropertiesWithPayments();
+    onPaymentUpdated();
+  };
+
+  if (loading) {
+    return (
+      <div className="text-center py-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+        <p className="mt-2 text-gray-600">Loading payment data...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white shadow overflow-hidden sm:rounded-md">
+        <div className="px-4 py-5 sm:px-6">
+          <h3 className="text-lg leading-6 font-medium text-gray-900">Payment Management</h3>
+          <p className="mt-1 max-w-2xl text-sm text-gray-500">
+            Manage property payment status and grant free access
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-4">
+        {propertiesWithPayments.map((property) => (
+          <AdminPaymentGrant
+            key={property.id}
+            property={property}
+            onGrantUpdated={handlePaymentUpdated}
+          />
+        ))}
+      </div>
+
+      {propertiesWithPayments.length === 0 && (
+        <div className="text-center py-8 bg-gray-50 rounded-lg">
+          <p className="text-gray-600">No properties found.</p>
+        </div>
+      )}
+    </div>
   );
 } 

@@ -16,6 +16,8 @@
     "@heroicons/react": "^2.2.0",
     "@prisma/client": "^6.11.1",
     "@react-email/components": "^0.3.1",
+    "@stripe/react-stripe-js": "^4.0.2",
+    "@stripe/stripe-js": "^7.9.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/exceljs": "^0.5.3",
     "@vercel/analytics": "^1.5.0",
@@ -30,7 +32,8 @@
     "react-dom": "^19.0.0",
     "react-email": "^4.2.8",
     "react-toastify": "^11.0.5",
-    "resend": "^4.6.0"
+    "resend": "^4.6.0",
+    "stripe": "^18.5.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.11",

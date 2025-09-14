@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { randomUUID } from 'crypto';
 import { Prisma } from '@prisma/client';
+import { checkUnitCountDiscrepancy, getUnitCountFromRentRollData } from '@/lib/unit-count-verification';
 
 interface LeaseData {
   unitId: string;
@@ -135,6 +136,28 @@ export async function POST(
       });
 
       console.log(`[DATA IMPORT] Found ${propertyUnits.length} units for property`);
+
+      // Check for unit count discrepancy
+      const actualUnitCount = getUnitCountFromRentRollData(unitGroups);
+      console.log(`[UNIT COUNT CHECK] Declared: ${propertyUnits.length}, Actual in rent roll: ${actualUnitCount}`);
+      
+      const discrepancyCheck = await checkUnitCountDiscrepancy(propertyId, actualUnitCount, newRentRoll.id);
+      
+      if (discrepancyCheck.hasDiscrepancy) {
+        console.log(`🚨 [UNIT COUNT DISCREPANCY] ${discrepancyCheck.message}`);
+        
+        // Return early with discrepancy information
+        return {
+          success: false,
+          hasUnitDiscrepancy: true,
+          discrepancyId: discrepancyCheck.discrepancyId,
+          declaredUnits: propertyUnits.length,
+          actualUnits: actualUnitCount,
+          paymentDifference: discrepancyCheck.paymentDifference,
+          message: discrepancyCheck.message,
+          rentRollId: newRentRoll.id
+        };
+      }
 
       // Process the unit groups and create leases/tenancies/residents
       const leasesData: any[] = [];
