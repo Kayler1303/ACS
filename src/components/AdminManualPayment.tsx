@@ -24,7 +24,7 @@ interface Property {
       referenceNumber?: string;
       notes?: string;
     }>;
-    adminGrant?: Array<{
+    adminGrant?: {
       id: string;
       isActive: boolean;
       reason?: string;
@@ -33,7 +33,7 @@ interface Property {
         name?: string;
         email: string;
       };
-    }>;
+    } | null;
   } | null;
 }
 
