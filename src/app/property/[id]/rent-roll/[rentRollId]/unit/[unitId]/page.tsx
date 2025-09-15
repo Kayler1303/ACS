@@ -2073,7 +2073,7 @@ export default function ResidentDetailPage() {
                         ) || [];
                         
                         // Also get documents directly from resident (in case they're not linked to verification)
-                        const directResidentDocuments = resident.IncomeDocument || [];
+                        const directResidentDocuments = (resident as any).IncomeDocument || [];
                         
                         // Combine and deduplicate documents by ID
                         const allDocuments = [...verificationDocuments, ...directResidentDocuments];
