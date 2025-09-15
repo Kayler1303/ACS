@@ -139,6 +139,22 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         // Add debugging to show unit number for this ID
         console.log(`[UNIT DEBUG] Unit ID ${unitId} corresponds to Unit Number: ${unitWithLeases.unitNumber}`);
         console.log(`[UNIT DEBUG] Found ${unitWithLeases.Lease.length} leases for unit ${unitWithLeases.unitNumber}:`);
+        
+        // DEBUG: Check if this is Unit 204 and log the raw data
+        if (unitWithLeases.unitNumber === '0204') {
+            console.log(`[RAW DATA DEBUG] Unit 0204 - Rent Roll ID being requested: ${rentRollId}`);
+            console.log(`[RAW DATA DEBUG] Unit 0204 leases found:`, unitWithLeases.Lease.map(lease => ({
+                leaseId: lease.id,
+                leaseName: lease.name,
+                hasCurrentTenancy: lease.Tenancy && lease.Tenancy.rentRollId === rentRollId,
+                tenancyRentRollId: lease.Tenancy?.rentRollId,
+                residents: lease.Resident.map(r => ({
+                    name: r.name,
+                    id: r.id,
+                    documentsCount: r.IncomeDocument?.length || 0
+                }))
+            })));
+        }
         unitWithLeases.Lease.forEach(lease => {
             const hasCurrentTenancy = lease.Tenancy && lease.Tenancy.rentRollId === rentRollId;
             const isFutureLease = !lease.Tenancy;
