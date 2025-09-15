@@ -49,6 +49,12 @@ export function getLeaseVerificationStatus(lease: ExtendedLease): VerificationSt
   const finalizedResidents = allResidents.filter((r: ExtendedResident) => r.incomeFinalized || r.hasNoIncome);
   
   console.log(`[LEASE VERIFICATION DEBUG] Lease ${lease.id}: ${finalizedResidents.length}/${allResidents.length} residents finalized`);
+  console.log(`[LEASE VERIFICATION DEBUG] Lease ${lease.id} resident details:`, allResidents.map(r => ({
+    name: r.name,
+    incomeFinalized: r.incomeFinalized,
+    hasNoIncome: r.hasNoIncome,
+    isFinalized: r.incomeFinalized || r.hasNoIncome
+  })));
 
   // Check if any resident has documents that need review
   const hasDocumentsNeedingReview = allResidents.some((resident: ExtendedResident) =>

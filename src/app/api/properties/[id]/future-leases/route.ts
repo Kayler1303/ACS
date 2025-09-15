@@ -300,15 +300,16 @@ export async function GET(
                           // Use the lease-specific verification function
         const { getLeaseVerificationStatus } = await import('../../../../../services/verification');
         
-        // Debug logging for Unit 0505 verification status calculation
-        if (unit.unitNumber === '0505') {
-          console.log(`[UNIT 0505 LEASE DEBUG] Future lease data for verification:`, {
+        // Debug logging for Unit 310 and 0505 verification status calculation
+        if (unit.unitNumber === '0505' || unit.unitNumber === '310') {
+          console.log(`[UNIT ${unit.unitNumber} LEASE DEBUG] Future lease data for verification:`, {
             leaseId: futureLease.id,
             leaseName: futureLease.name,
             totalResidents: (futureLease.Resident || []).length,
             residents: (futureLease.Resident || []).map(r => ({
               name: r.name,
               incomeFinalized: r.incomeFinalized,
+              hasNoIncome: r.hasNoIncome,
               finalizedAt: r.finalizedAt,
               verifiedIncome: r.verifiedIncome,
               calculatedAnnualizedIncome: r.calculatedAnnualizedIncome
