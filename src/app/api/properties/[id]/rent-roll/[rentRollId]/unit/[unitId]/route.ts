@@ -143,6 +143,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
             const hasCurrentTenancy = lease.Tenancy && lease.Tenancy.rentRollId === rentRollId;
             const isFutureLease = !lease.Tenancy;
             console.log(`[UNIT DEBUG] - Lease "${lease.name}": ${hasCurrentTenancy ? 'CURRENT' : isFutureLease ? 'FUTURE' : 'OTHER'} (${lease.leaseStartDate} to ${lease.leaseEndDate})`);
+            
+            // Debug Unit 310 resident data specifically
+            if (unitWithLeases.unitNumber === '310' || unitWithLeases.unitNumber === '0310') {
+                console.log(`[UNIT 310 DEBUG] Lease ${lease.name} residents:`, lease.Resident.map(r => ({
+                    id: r.id,
+                    name: r.name,
+                    hasNoIncome: r.hasNoIncome,
+                    incomeFinalized: r.incomeFinalized,
+                    verifiedIncome: r.verifiedIncome,
+                    calculatedAnnualizedIncome: r.calculatedAnnualizedIncome
+                })));
+            }
         });
 
         // Enhance residents with income finalization data using batched Prisma query
@@ -176,6 +188,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
                         (lease.Resident[i] as any).incomeFinalized = residentData.incomeFinalized;
                         (lease.Resident[i] as any).finalizedAt = residentData.finalizedAt;
                         (lease.Resident[i] as any).hasNoIncome = residentData.hasNoIncome;
+                        
+                        // Debug Unit 310 after enhancement
+                        if (unitWithLeases.unitNumber === '310' || unitWithLeases.unitNumber === '0310') {
+                            console.log(`[UNIT 310 DEBUG] After enhancement - Resident ${lease.Resident[i].name}:`, {
+                                id: lease.Resident[i].id,
+                                hasNoIncome: residentData.hasNoIncome,
+                                incomeFinalized: residentData.incomeFinalized,
+                                calculatedAnnualizedIncome: residentData.calculatedAnnualizedIncome,
+                                verifiedIncome: residentData.verifiedIncome || (lease.Resident[i] as any).verifiedIncome
+                            });
+                        }
                     }
                 }
             }

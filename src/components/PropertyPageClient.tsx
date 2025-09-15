@@ -1100,7 +1100,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
         );
       }
       
-      if (unit.unitNumber === '101' || unit.unitNumber === '102' || unit.unitNumber === '103' || unit.unitNumber === '505' || unit.unitNumber === '0505' || unit.unitNumber === '0692') { // Debug specific units
+      if (unit.unitNumber === '101' || unit.unitNumber === '102' || unit.unitNumber === '103' || unit.unitNumber === '310' || unit.unitNumber === '0310' || unit.unitNumber === '0692') { // Debug specific units
         console.log(`[PROCESSING DEBUG] Unit ${unit.unitNumber}:`, {
           unitId: unit.id,
           tenancy: tenancy ? 'found' : 'none',
@@ -1110,15 +1110,15 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
           finalFutureLeaseValue: unitFutureLease?.futureLease
         });
         
-        // For Unit 0505, check if there's a future lease with matching unit number instead of unitId
-        if (unit.unitNumber === '0505') {
-          const futureLeaseByUnitNumber = futureLeases.find(fl => fl.unitNumber === '0505' || fl.unitNumber === '505');
-          console.log(`[UNIT 0505 DEBUG] Future lease by unit number:`, futureLeaseByUnitNumber);
-          console.log(`[UNIT 0505 DEBUG] unitFutureLease found by unitId:`, unitFutureLease);
+        // For Unit 310, check if there's a future lease with matching unit number instead of unitId
+        if (unit.unitNumber === '310' || unit.unitNumber === '0310') {
+          const futureLeaseByUnitNumber = futureLeases.find(fl => fl.unitNumber === '310' || fl.unitNumber === '0310');
+          console.log(`[UNIT 310 DEBUG] Future lease by unit number:`, futureLeaseByUnitNumber);
+          console.log(`[UNIT 310 DEBUG] unitFutureLease found by unitId:`, unitFutureLease);
           
           // Also show all future lease unitIds to see if any match
           const allFutureLeaseUnitIds = futureLeases.map(fl => ({ unitId: fl.unitId, unitNumber: fl.unitNumber }));
-          console.log(`[UNIT 0505 DEBUG] All future lease unitIds:`, allFutureLeaseUnitIds);
+          console.log(`[UNIT 310 DEBUG] All future lease unitIds:`, allFutureLeaseUnitIds);
         }
       }
 
@@ -1127,22 +1127,22 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       let processedFutureLease = unitFutureLease?.futureLease;
       
       // Debug logging for verification status issues
-      if (unit.unitNumber === '0505' && processedFutureLease) {
-        console.log(`[UNIT 0505 VERIFICATION DEBUG] Future lease verification status:`, {
+      if ((unit.unitNumber === '310' || unit.unitNumber === '0310') && processedFutureLease) {
+        console.log(`[UNIT 310 VERIFICATION DEBUG] Future lease verification status:`, {
           currentStatus: processedFutureLease.verificationStatus,
           leaseId: processedFutureLease.leaseId,
           residentName: processedFutureLease.residentName
         });
       }
       
-      // Additional debug logging for Unit 0505 after processedFutureLease is defined
-      if (unit.unitNumber === '0505') {
-        console.log(`[UNIT 0505 DEBUG] Final processedFutureLease:`, processedFutureLease);
-        console.log(`[UNIT 0505 DEBUG] Unit details:`, {
+      // Additional debug logging for Unit 310 after processedFutureLease is defined
+      if (unit.unitNumber === '310' || unit.unitNumber === '0310') {
+        console.log(`[UNIT 310 DEBUG] Final processedFutureLease:`, processedFutureLease);
+        console.log(`[UNIT 310 DEBUG] Unit details:`, {
           unitId: unit.id,
           unitNumber: unit.unitNumber
         });
-        console.log(`[UNIT 0505 DEBUG] All future leases for debugging:`, futureLeases.map(fl => ({
+        console.log(`[UNIT 310 DEBUG] All future leases for debugging:`, futureLeases.map(fl => ({
           unitId: fl.unitId,
           unitNumber: fl.unitNumber,
           residentName: fl.futureLease?.residentName
