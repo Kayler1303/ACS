@@ -2080,8 +2080,8 @@ export default function ResidentDetailPage() {
                           console.log(`[DOCUMENT DEBUG] Henry Dellaquila document sources:`, {
                             verificationDocuments: verificationDocuments.length,
                             directResidentDocuments: directResidentDocuments.length,
-                            verificationDocsDetails: verificationDocuments.map(d => ({ id: d.id, type: d.documentType, status: d.status })),
-                            directDocsDetails: directResidentDocuments.map(d => ({ id: d.id, type: d.documentType, status: d.status })),
+                            verificationDocsDetails: verificationDocuments.map((d: any) => ({ id: d.id, type: d.documentType, status: d.status })),
+                            directDocsDetails: directResidentDocuments.map((d: any) => ({ id: d.id, type: d.documentType, status: d.status })),
                             residentObject: resident
                           });
                         }
