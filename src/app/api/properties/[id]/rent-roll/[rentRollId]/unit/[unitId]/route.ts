@@ -144,6 +144,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
             const isFutureLease = !lease.Tenancy;
             console.log(`[UNIT DEBUG] - Lease "${lease.name}": ${hasCurrentTenancy ? 'CURRENT' : isFutureLease ? 'FUTURE' : 'OTHER'} (${lease.leaseStartDate} to ${lease.leaseEndDate})`);
             
+            // Debug Unit 204 (Henry Dellaquila) document data specifically
+            if (unitWithLeases.unitNumber === '204' || unitWithLeases.unitNumber === '0204') {
+                console.log(`[UNIT 204 DEBUG] Lease ${lease.name} residents:`, lease.Resident.map(r => ({
+                    id: r.id,
+                    name: r.name,
+                    hasNoIncome: r.hasNoIncome,
+                    incomeFinalized: r.incomeFinalized,
+                    verifiedIncome: r.verifiedIncome,
+                    calculatedAnnualizedIncome: r.calculatedAnnualizedIncome,
+                    documentsCount: r.IncomeDocument?.length || 0,
+                    documents: r.IncomeDocument?.map(d => ({ id: d.id, type: d.documentType, status: d.status })) || []
+                })));
+            }
+            
             // Debug Unit 310 resident data specifically
             if (unitWithLeases.unitNumber === '310' || unitWithLeases.unitNumber === '0310') {
                 console.log(`[UNIT 310 DEBUG] Lease ${lease.name} residents:`, lease.Resident.map(r => ({

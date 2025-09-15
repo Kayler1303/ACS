@@ -2075,6 +2075,17 @@ export default function ResidentDetailPage() {
                         // Also get documents directly from resident (in case they're not linked to verification)
                         const directResidentDocuments = (resident as any).IncomeDocument || [];
                         
+                        // DEBUG: Log document sources for troubleshooting
+                        if (resident.name === 'Henry Dellaquila') {
+                          console.log(`[DOCUMENT DEBUG] Henry Dellaquila document sources:`, {
+                            verificationDocuments: verificationDocuments.length,
+                            directResidentDocuments: directResidentDocuments.length,
+                            verificationDocsDetails: verificationDocuments.map(d => ({ id: d.id, type: d.documentType, status: d.status })),
+                            directDocsDetails: directResidentDocuments.map(d => ({ id: d.id, type: d.documentType, status: d.status })),
+                            residentObject: resident
+                          });
+                        }
+                        
                         // Combine and deduplicate documents by ID
                         const allDocuments = [...verificationDocuments, ...directResidentDocuments];
                         const residentDocuments = allDocuments.filter((doc, index, self) => 
