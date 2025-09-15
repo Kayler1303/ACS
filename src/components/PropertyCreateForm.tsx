@@ -107,7 +107,7 @@ export default function PropertyCreateForm() {
 
       if (response.ok) {
         const { property } = await response.json();
-        router.push(`/property/${property.id}/payment-setup`);
+        router.push(`/property/${property.id}/upload-units`);
       } else {
         const errorData = await response.json();
         setError(errorData.error || 'Failed to create property');

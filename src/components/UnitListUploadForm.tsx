@@ -97,9 +97,7 @@ export default function UnitListUploadForm({ propertyId }: UnitListUploadFormPro
         throw new Error(data.error || 'Failed to create units.');
       }
 
-      router.push(`/property/${propertyId}`);
-      // Refresh the page to ensure new data is loaded
-      router.refresh();
+      router.push(`/property/${propertyId}/payment-setup`);
 
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
