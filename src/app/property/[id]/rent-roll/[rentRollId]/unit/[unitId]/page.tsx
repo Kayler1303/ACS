@@ -1264,9 +1264,22 @@ export default function ResidentDetailPage() {
             console.log(`[CURRENT LEASE STATUS] Documents need admin review - setting to Waiting for Admin Review`);
             setUnitVerificationStatus('Waiting for Admin Review');
           } else {
-            // Check if all residents have finalized income (like the verification service does)
-            const finalizedResidents = allResidents.filter((resident: any) => resident.incomeFinalized || resident.hasNoIncome);
-            console.log(`[CURRENT LEASE STATUS] All residents: ${allResidents.length}, Finalized: ${finalizedResidents.length}`);
+        // Check if all residents have finalized income (like the verification service does)
+        const finalizedResidents = allResidents.filter((resident: any) => resident.incomeFinalized || resident.hasNoIncome);
+        console.log(`[CURRENT LEASE STATUS] All residents: ${allResidents.length}, Finalized: ${finalizedResidents.length}`);
+        
+        // Debug Unit 310 resident data specifically
+        if (tenancyData?.unit?.unitNumber === '310' || tenancyData?.unit?.unitNumber === '0310') {
+          console.log(`[UNIT 310 RESIDENT DEBUG] All residents data:`, allResidents.map(r => ({
+            id: r.id,
+            name: r.name,
+            hasNoIncome: r.hasNoIncome,
+            incomeFinalized: r.incomeFinalized,
+            verifiedIncome: r.verifiedIncome,
+            calculatedAnnualizedIncome: r.calculatedAnnualizedIncome,
+            finalizedAt: r.finalizedAt
+          })));
+        }
             
             if (allResidents.length > 0 && finalizedResidents.length === allResidents.length) {
               console.log(`[CURRENT LEASE STATUS] All residents finalized - setting to Verified`);

@@ -39,6 +39,13 @@ export async function POST(
     const { reason, verificationPeriodStart, verificationPeriodEnd, dueDate, leaseYear } = body;
 
     console.log(`[VERIFICATION] Creating new verification for lease ${leaseId}`);
+    
+    // Debug Unit 310 lease specifically
+    if (leaseId === 'f494ada1-b7c4-445b-98dd-2b9069e9bcbb') {
+      console.log(`[UNIT 310 VERIFICATION DEBUG] Creating verification for Unit 310 lease`);
+      console.log(`[UNIT 310 VERIFICATION DEBUG] Request body:`, body);
+      console.log(`[UNIT 310 VERIFICATION DEBUG] User ID:`, session.user.id);
+    }
 
     // Verify lease exists and user has access
     const lease = await prisma.lease.findFirst({
@@ -63,7 +70,19 @@ export async function POST(
     });
 
     if (!lease) {
+      console.log(`[VERIFICATION] Lease ${leaseId} not found or access denied for user ${session.user.id}`);
       return NextResponse.json({ error: 'Lease not found or access denied' }, { status: 404 });
+    }
+    
+    // Debug Unit 310 lease specifically
+    if (leaseId === 'f494ada1-b7c4-445b-98dd-2b9069e9bcbb') {
+      console.log(`[UNIT 310 VERIFICATION DEBUG] Lease found:`, {
+        leaseId: lease.id,
+        leaseName: lease.name,
+        unitNumber: lease.Unit?.unitNumber,
+        propertyId: lease.Unit?.Property?.id,
+        propertyName: lease.Unit?.Property?.name
+      });
     }
 
     // Create new income verification
