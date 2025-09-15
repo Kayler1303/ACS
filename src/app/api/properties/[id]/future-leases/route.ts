@@ -182,18 +182,6 @@ export async function GET(
         preservedFutureLeases.forEach((lease, index) => {
           console.log(`[FUTURE LEASE API] 📋 Preserved lease ${index + 1}: "${lease.name}" in unit ${lease.Unit.unitNumber}, created at ${lease.createdAt.toISOString()}`);
           
-          // Special debug for Unit 0505
-          if (lease.Unit?.unitNumber === '0505' || lease.Unit?.unitNumber === '505') {
-            console.log(`[UNIT 0505 PRESERVED DEBUG] Found Unit 0505 preserved lease:`, {
-              leaseId: lease.id,
-              leaseName: lease.name,
-              unitNumber: lease.Unit?.unitNumber,
-              createdAt: lease.createdAt,
-              totalResidents: lease.Resident?.length || 0,
-              totalVerifications: lease.IncomeVerification?.length || 0,
-              verificationStatuses: lease.IncomeVerification?.map((v: any) => v.status) || []
-            });
-          }
         });
       } else {
         console.log(`[FUTURE LEASE API] ❌ No snapshot found for rent roll date ${targetRentRoll.uploadDate}`);
@@ -300,8 +288,8 @@ export async function GET(
                           // Use the lease-specific verification function
         const { getLeaseVerificationStatus } = await import('../../../../../services/verification');
         
-        // Debug logging for Unit 310 and 0505 verification status calculation
-        if (unit.unitNumber === '0505' || unit.unitNumber === '310') {
+        // Debug logging for Unit 310 verification status calculation
+        if (unit.unitNumber === '310') {
           console.log(`[UNIT ${unit.unitNumber} LEASE DEBUG] Future lease data for verification:`, {
             leaseId: futureLease.id,
             leaseName: futureLease.name,
@@ -329,8 +317,8 @@ export async function GET(
           verificationStatus = 'Verified';
         }
         
-        if (unit.unitNumber === '0505') {
-          console.log(`[UNIT 0505 LEASE DEBUG] Calculated verification status:`, verificationStatus);
+        if (unit.unitNumber === '310') {
+          console.log(`[UNIT 310 LEASE DEBUG] Calculated verification status:`, verificationStatus);
         }
 
           // Calculate total income - only for verified leases
