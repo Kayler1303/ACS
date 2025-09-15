@@ -158,6 +158,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
                 })));
             }
             
+            // Debug ALL units to see what unit numbers we're actually dealing with
+            console.log(`[ALL UNITS DEBUG] Unit ${unitWithLeases.unitNumber} - Lease ${lease.name} residents:`, lease.Resident.map(r => ({
+                name: r.name,
+                documentsCount: r.IncomeDocument?.length || 0,
+                documents: r.IncomeDocument?.map(d => ({ id: d.id, type: d.documentType, status: d.status })) || []
+            })));
+            
             // Debug Unit 310 resident data specifically
             if (unitWithLeases.unitNumber === '310' || unitWithLeases.unitNumber === '0310') {
                 console.log(`[UNIT 310 DEBUG] Lease ${lease.name} residents:`, lease.Resident.map(r => ({
