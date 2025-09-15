@@ -40,6 +40,13 @@ export default function PropertyPage() {
             throw new Error(data.error || 'Failed to fetch property data.');
           }
           const data: FullProperty = await res.json();
+          
+          // Check if property has no units and redirect to unit upload
+          if (!data.Unit || data.Unit.length === 0) {
+            window.location.href = `/property/${id}/upload-units`;
+            return;
+          }
+          
           setProperty(data);
         } catch (err: unknown) {
           setError(err instanceof Error ? err.message : 'An unexpected error occurred');
