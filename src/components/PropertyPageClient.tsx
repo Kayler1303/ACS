@@ -755,9 +755,17 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
     }
   };
 
-  const getActualBucket = useCallback((totalIncome: number, residentCount: number, hudIncomeLimits: HudIncomeLimits, complianceOption: string): string => {
+  const getActualBucket = useCallback((totalIncome: number, residentCount: number, hudIncomeLimits: HudIncomeLimits, complianceOption: string, isVerified: boolean = false): string => {
     if (residentCount === 0) return 'Vacant';
-    if (residentCount > 0 && (!totalIncome || totalIncome === 0)) return 'No Income Information';
+    
+    // Only show "No Income Information" if residents haven't been verified yet
+    // If they are verified with $0 income, calculate the proper AMI bucket
+    if (residentCount > 0 && (!totalIncome || totalIncome === 0)) {
+      if (!isVerified) {
+        return 'No Income Information';
+      }
+      // For verified $0 income, continue with AMI calculation using $0
+    }
     
     const familySize = Math.min(residentCount, 8); // Cap at 8 per HUD guidelines
 
@@ -2626,13 +2634,14 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                      </div>
                      {(() => {
                        const totalIncome = Object.values(amiCheckIncomes).reduce((sum, val) => sum + (val || 0), 0);
-                       const amiBucket = hudIncomeLimits && totalIncome > 0 
-                         ? getActualAmiBucket(
-                             totalIncome,
-                             amiCheckResidents,
-                             hudIncomeLimits,
-                             complianceOption === 'NC_CUSTOM_80_AMI' ? `${customNCPercentage}% at 80% AMI (NC Custom)` : complianceOption
-                           )
+                      const amiBucket = hudIncomeLimits && totalIncome > 0 
+                        ? getActualAmiBucket(
+                            totalIncome,
+                            amiCheckResidents,
+                            hudIncomeLimits,
+                            complianceOption === 'NC_CUSTOM_80_AMI' ? `${customNCPercentage}% at 80% AMI (NC Custom)` : complianceOption,
+                            true // isVerified = true for manual AMI check
+                          )
                          : 'N/A';
                        
                        return totalIncome > 0 && (

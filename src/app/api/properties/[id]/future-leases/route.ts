@@ -387,7 +387,8 @@ export async function GET(
               totalIncome,
               (futureLease.Resident || []).length,
               hudIncomeLimits,
-              property.complianceOption || "20% at 50% AMI, 55% at 80% AMI"
+              property.complianceOption || "20% at 50% AMI, 55% at 80% AMI",
+              true // isVerified = true for verified future leases
             );
             
             console.log(`[FUTURE LEASE AMI DEBUG] Calculated AMI bucket: ${complianceBucket}`);
