@@ -124,19 +124,10 @@ export function getActualAmiBucket(
   totalIncome: number, 
   residentCount: number, 
   hudIncomeLimits: HudIncomeLimits, 
-  complianceOption: string = "20% at 50% AMI, 55% at 80% AMI",
-  isVerified: boolean = false
+  complianceOption: string = "20% at 50% AMI, 55% at 80% AMI"
 ): string {
   if (residentCount === 0) return 'Vacant';
-  
-  // Only show "No Income Information" if residents haven't been verified yet
-  // If they are verified with $0 income, calculate the proper AMI bucket
-  if (residentCount > 0 && (!totalIncome || totalIncome === 0)) {
-    if (!isVerified) {
-      return 'No Income Information';
-    }
-    // For verified $0 income, continue with AMI calculation using $0
-  }
+  if (residentCount > 0 && (!totalIncome || totalIncome === 0)) return 'No Income Information';
   
   const familySize = Math.min(residentCount, 8); // Cap at 8 per HUD guidelines
 
@@ -293,8 +284,7 @@ export function calculateAmiBucketForLease(
   residents: Resident[],
   incomeDocuments: IncomeDocument[],
   hudIncomeLimits: HudIncomeLimits,
-  complianceOption: string = "20% at 50% AMI, 55% at 80% AMI",
-  isVerified: boolean = true
+  complianceOption: string = "20% at 50% AMI, 55% at 80% AMI"
 ): AmiBucketCalculation {
   const householdSize = residents.length;
   const householdIncome = calculateTotalVerifiedIncome(incomeDocuments);
@@ -303,8 +293,7 @@ export function calculateAmiBucketForLease(
     householdIncome,
     householdSize,
     hudIncomeLimits,
-    complianceOption,
-    isVerified
+    complianceOption
   );
   
   const amiPercentage = calculateAmiPercentage(
