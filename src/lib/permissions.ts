@@ -26,7 +26,8 @@ export interface PropertyPermissions {
  */
 export async function checkPropertyAccess(
   propertyId: string, 
-  userId: string
+  userId: string,
+  allowInitialSetup: boolean = false
 ): Promise<PropertyAccess> {
   try {
     // First check if user is the owner
@@ -65,10 +66,18 @@ export async function checkPropertyAccess(
       };
 
       // Import payment utils dynamically to avoid circular imports
-      const { hasPropertyAccess } = await import('@/lib/payment-utils');
+      const { hasPropertyAccess, getPropertyPaymentStatus } = await import('@/lib/payment-utils');
       const hasPaymentAccess = hasPropertyAccess(propertyWithPayment as any);
 
+      // Allow initial setup operations (like unit upload) even before payment
       if (!hasPaymentAccess) {
+        if (allowInitialSetup) {
+          const paymentStatus = getPropertyPaymentStatus(propertyWithPayment as any);
+          // Allow access for initial setup if payment is just needed (new property)
+          if (paymentStatus === 'PAYMENT_NEEDED') {
+            return { hasAccess: true, permission: PermissionLevel.EDIT, isOwner: true };
+          }
+        }
         return { hasAccess: false, permission: null, isOwner: true };
       }
 
@@ -102,9 +111,10 @@ export async function checkPropertyAccess(
  */
 export async function getPropertyPermissions(
   propertyId: string, 
-  userId: string
+  userId: string,
+  allowInitialSetup: boolean = false
 ): Promise<PropertyPermissions> {
-  const access = await checkPropertyAccess(propertyId, userId);
+  const access = await checkPropertyAccess(propertyId, userId, allowInitialSetup);
 
   if (!access.hasAccess) {
     return {
@@ -169,9 +179,10 @@ export async function getPropertyPermissions(
 export async function requirePermission(
   propertyId: string,
   userId: string,
-  requiredPermission: 'read' | 'configure' | 'edit' | 'share' | 'delete'
+  requiredPermission: 'read' | 'configure' | 'edit' | 'share' | 'delete',
+  allowInitialSetup: boolean = false
 ): Promise<boolean> {
-  const permissions = await getPropertyPermissions(propertyId, userId);
+  const permissions = await getPropertyPermissions(propertyId, userId, allowInitialSetup);
 
   switch (requiredPermission) {
     case 'read':

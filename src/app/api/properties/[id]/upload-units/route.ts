@@ -67,7 +67,8 @@ export async function POST(
   }
 
   // Check if user has edit permission for this property (uploading units requires edit)
-  const canEdit = await requirePermission(propertyId, session.user.id, 'edit');
+  // Allow initial setup for new properties before payment
+  const canEdit = await requirePermission(propertyId, session.user.id, 'edit', true);
   if (!canEdit) {
     return NextResponse.json({ error: 'Property not found' }, { status: 404 });
   }
