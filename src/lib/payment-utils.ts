@@ -21,7 +21,7 @@ export interface PropertyWithPayment {
     subscriptionStatus: string;
     isManualPayment?: boolean;
     nextPaymentDue?: string;
-    adminGrant?: Array<{ isActive: boolean }>;
+    adminGrant?: { isActive: boolean } | null;
   } | null;
   UnitCountDiscrepancy?: Array<{
     status: string;
@@ -43,7 +43,7 @@ export function getPropertyPaymentStatus(property: PropertyWithPayment): Payment
   }
   
   // Check for admin grant
-  if (subscription?.adminGrant && subscription.adminGrant.length > 0 && subscription.adminGrant[0].isActive) {
+  if (subscription?.adminGrant?.isActive) {
     return 'ADMIN_GRANTED';
   }
   

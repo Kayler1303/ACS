@@ -145,10 +145,10 @@ model Property {
 
 model RentRoll {
   id                   String                 @id
-  uploadDate           DateTime               @default(now())
-  filename             String?
   propertyId           String
+  filename             String?
   snapshotId           String?
+  uploadDate           DateTime               @default(now())
   Property             Property               @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   snapshot             RentRollSnapshot?      @relation(fields: [snapshotId], references: [id])
   Tenancy              Tenancy[]
@@ -165,12 +165,12 @@ model Resident {
   updatedAt                  DateTime
   verifiedIncome             Decimal?          @db.Decimal(10, 2)
   annualizedIncome           Decimal?          @db.Decimal(10, 2)
-  originalRentRollIncome     Decimal?          @db.Decimal(10, 2) // Original income from rent roll upload (never updated)
   leaseId                    String
   calculatedAnnualizedIncome Decimal?          @db.Decimal(10, 2)
   finalizedAt                DateTime?
   hasNoIncome                Boolean           @default(false)
   incomeFinalized            Boolean           @default(false)
+  originalRentRollIncome     Decimal?          @db.Decimal(10, 2)
   IncomeDocument             IncomeDocument[]
   OverrideRequest            OverrideRequest[]
   Lease                      Lease             @relation(fields: [leaseId], references: [id], onDelete: Cascade)
@@ -257,27 +257,27 @@ model PropertyShare {
 }
 
 model PropertySubscription {
-  id                    String                    @id @default(cuid())
-  propertyId            String                    @unique
-  setupType             SetupType                 @default(PENDING)
-  setupFeeAmount        Decimal?                  @db.Decimal(10, 2)
-  setupFeePaid          Boolean                   @default(false)
+  id                    String               @id @default(cuid())
+  propertyId            String               @unique
+  setupType             SetupType            @default(PENDING)
+  setupFeeAmount        Decimal?             @db.Decimal(10, 2)
+  setupFeePaid          Boolean              @default(false)
   setupFeeTransactionId String?
-  monthlyFeeAmount      Decimal?                  @db.Decimal(10, 2)
-  subscriptionStatus    SubscriptionStatus        @default(INACTIVE)
+  monthlyFeeAmount      Decimal?             @db.Decimal(10, 2)
+  subscriptionStatus    SubscriptionStatus   @default(INACTIVE)
   stripeCustomerId      String?
   stripeSubscriptionId  String?
   currentPeriodStart    DateTime?
   currentPeriodEnd      DateTime?
-  isManualPayment       Boolean                   @default(false)
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  isManualPayment       Boolean              @default(false)
   manualPaymentNotes    String?
   nextPaymentDue        DateTime?
-  createdAt             DateTime                  @default(now())
-  updatedAt             DateTime                  @updatedAt
-  property              Property                  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  transactions          PaymentTransaction[]
   manualPayments        ManualPayment[]
+  transactions          PaymentTransaction[]
   adminGrant            PropertyAdminGrant?
+  property              Property             @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@index([propertyId])
   @@index([subscriptionStatus])
@@ -311,8 +311,8 @@ model PropertyAdminGrant {
   grantedAt              DateTime             @default(now())
   expiresAt              DateTime?
   isActive               Boolean              @default(true)
-  propertySubscription   PropertySubscription @relation(fields: [propertySubscriptionId], references: [id], onDelete: Cascade)
   grantedBy              User                 @relation("PropertyAdminGrant_grantedById", fields: [grantedById], references: [id])
+  propertySubscription   PropertySubscription @relation(fields: [propertySubscriptionId], references: [id], onDelete: Cascade)
 
   @@index([propertySubscriptionId])
   @@index([grantedById])
@@ -325,13 +325,13 @@ model ManualPayment {
   paymentMethod          ManualPaymentMethod
   amount                 Decimal              @db.Decimal(10, 2)
   paymentType            ManualPaymentType
-  referenceNumber        String?              // Check number, ACH reference, etc.
+  referenceNumber        String?
   notes                  String?
   paidDate               DateTime
   recordedById           String
   recordedAt             DateTime             @default(now())
-  periodStart            DateTime?            // For monthly payments
-  periodEnd              DateTime?            // For monthly payments
+  periodStart            DateTime?
+  periodEnd              DateTime?
   propertySubscription   PropertySubscription @relation(fields: [propertySubscriptionId], references: [id], onDelete: Cascade)
   recordedBy             User                 @relation("ManualPayment_recordedById", fields: [recordedById], references: [id])
 
@@ -341,21 +341,21 @@ model ManualPayment {
 }
 
 model UnitCountDiscrepancy {
-  id                     String                      @id @default(cuid())
-  propertyId             String
-  declaredUnitCount      Int                         // What user said during property creation
-  actualUnitCount        Int                         // What was found in rent roll
-  rentRollId             String?                     // Which rent roll revealed the discrepancy
-  discoveredAt           DateTime                    @default(now())
-  status                 UnitDiscrepancyStatus       @default(PENDING)
-  paymentDifference      Decimal                     @db.Decimal(10, 2) // Amount owed due to discrepancy
-  setupType              SetupType                   // Full service or self service
-  resolvedAt             DateTime?
-  resolvedById           String?
-  resolutionNotes        String?
-  property               Property                    @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  rentRoll               RentRoll?                   @relation(fields: [rentRollId], references: [id])
-  resolvedBy             User?                       @relation("UnitCountDiscrepancy_resolvedById", fields: [resolvedById], references: [id])
+  id                String                @id @default(cuid())
+  propertyId        String
+  declaredUnitCount Int
+  actualUnitCount   Int
+  rentRollId        String?
+  discoveredAt      DateTime              @default(now())
+  status            UnitDiscrepancyStatus @default(PENDING)
+  paymentDifference Decimal               @db.Decimal(10, 2)
+  setupType         SetupType
+  resolvedAt        DateTime?
+  resolvedById      String?
+  resolutionNotes   String?
+  property          Property              @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  rentRoll          RentRoll?             @relation(fields: [rentRollId], references: [id])
+  resolvedBy        User?                 @relation("UnitCountDiscrepancy_resolvedById", fields: [resolvedById], references: [id])
 
   @@index([propertyId])
   @@index([status])
@@ -363,15 +363,15 @@ model UnitCountDiscrepancy {
 }
 
 model RentRollSnapshot {
-  id         String     @id
-  propertyId String
-  uploadDate DateTime   @default(now())
-  filename   String?
-  isActive   Boolean    @default(true)
-  hudIncomeLimits Json?     // Store HUD income limits used at snapshot creation time
-  hudDataYear     Int?      // Year of HUD data used
-  rentRolls  RentRoll[]
-  property   Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  id              String     @id
+  propertyId      String
+  uploadDate      DateTime   @default(now())
+  filename        String?
+  isActive        Boolean    @default(true)
+  hudIncomeLimits Json?
+  hudDataYear     Int?
+  rentRolls       RentRoll[]
+  property        Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@index([propertyId])
   @@index([uploadDate])
@@ -406,8 +406,8 @@ enum DocumentType {
   BANK_STATEMENT
   OFFER_LETTER
   SOCIAL_SECURITY
-  SSA_1099
   OTHER
+  SSA_1099
 }
 
 enum OverrideRequestStatus {
@@ -516,4 +516,3 @@ enum UnitDiscrepancyStatus {
   RESOLVED
   WAIVED
 }
-

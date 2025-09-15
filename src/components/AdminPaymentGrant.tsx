@@ -7,11 +7,19 @@ interface Property {
   id: string;
   name: string;
   address?: string;
+  county?: string;
+  state?: string;
   numberOfUnits?: number;
+  User?: {
+    id: string;
+    name?: string;
+    email: string;
+    company?: string;
+  };
   PropertySubscription?: {
     setupFeePaid: boolean;
     subscriptionStatus: string;
-    adminGrant?: Array<{
+    adminGrant?: {
       id: string;
       isActive: boolean;
       reason?: string;
@@ -20,7 +28,7 @@ interface Property {
         name?: string;
         email: string;
       };
-    }>;
+    } | null;
   } | null;
 }
 
@@ -36,8 +44,8 @@ export default function AdminPaymentGrant({ property, onGrantUpdated }: AdminPay
   const [grantReason, setGrantReason] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const hasActiveGrant = property.PropertySubscription?.adminGrant?.some(grant => grant.isActive);
-  const activeGrant = property.PropertySubscription?.adminGrant?.find(grant => grant.isActive);
+  const hasActiveGrant = property.PropertySubscription?.adminGrant?.isActive;
+  const activeGrant = property.PropertySubscription?.adminGrant;
 
   const handleGrantAccess = async () => {
     setIsGranting(true);
@@ -128,15 +136,49 @@ export default function AdminPaymentGrant({ property, onGrantUpdated }: AdminPay
     <div className="space-y-4">
       {/* Free Access Grant Section */}
       <div className="bg-white border rounded-lg p-4">
-        <div className="flex items-center justify-between mb-4">
-          <div>
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex-1">
             <h3 className="text-lg font-semibold text-gray-900">{property.name}</h3>
-            <p className="text-sm text-gray-600">{property.address}</p>
-            {property.numberOfUnits && (
-              <p className="text-sm text-gray-500">{property.numberOfUnits} units</p>
+            
+            {/* Property Location */}
+            <div className="mt-1 space-y-1">
+              {property.address && (
+                <p className="text-sm text-gray-600">{property.address}</p>
+              )}
+              {(property.county || property.state) && (
+                <p className="text-sm text-gray-500">
+                  {property.county && `${property.county} County`}
+                  {property.county && property.state && ', '}
+                  {property.state}
+                </p>
+              )}
+              {property.numberOfUnits && (
+                <p className="text-sm text-gray-500">{property.numberOfUnits} units</p>
+              )}
+            </div>
+
+            {/* Property Owner Information */}
+            {property.User && (
+              <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                <h4 className="text-sm font-medium text-gray-900 mb-1">Property Owner</h4>
+                <div className="space-y-1">
+                  <p className="text-sm text-gray-700">
+                    <span className="font-medium">Name:</span> {property.User.name || 'Not provided'}
+                  </p>
+                  <p className="text-sm text-gray-700">
+                    <span className="font-medium">Email:</span> {property.User.email}
+                  </p>
+                  {property.User.company && (
+                    <p className="text-sm text-gray-700">
+                      <span className="font-medium">Company:</span> {property.User.company}
+                    </p>
+                  )}
+                </div>
+              </div>
             )}
           </div>
-          <div className={`px-3 py-1 rounded-full text-sm font-medium ${paymentStatus.color} ${paymentStatus.bgColor}`}>
+          
+          <div className={`ml-4 px-3 py-1 rounded-full text-sm font-medium ${paymentStatus.color} ${paymentStatus.bgColor}`}>
             {paymentStatus.status}
           </div>
         </div>
