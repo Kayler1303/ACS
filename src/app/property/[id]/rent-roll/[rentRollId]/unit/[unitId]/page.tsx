@@ -2067,10 +2067,19 @@ export default function ResidentDetailPage() {
                   {period.Resident.length > 0 ? (
                     <div className="divide-y divide-gray-200">
                       {period.Resident.map((resident) => {
-                        // Filter documents for this resident - ONLY FOR THIS SPECIFIC VERIFICATION
-                        const residentDocuments = verification?.IncomeDocument?.filter(
+                        // Filter documents for this resident - BOTH from verification AND from resident directly
+                        const verificationDocuments = verification?.IncomeDocument?.filter(
                           doc => doc.residentId === resident.id
                         ) || [];
+                        
+                        // Also get documents directly from resident (in case they're not linked to verification)
+                        const directResidentDocuments = resident.IncomeDocument || [];
+                        
+                        // Combine and deduplicate documents by ID
+                        const allDocuments = [...verificationDocuments, ...directResidentDocuments];
+                        const residentDocuments = allDocuments.filter((doc, index, self) => 
+                          index === self.findIndex(d => d.id === doc.id)
+                        );
                         
                         // Calculate completed documents (status COMPLETED, regardless of calculated income)
                         const completedResidentDocuments = residentDocuments.filter(
