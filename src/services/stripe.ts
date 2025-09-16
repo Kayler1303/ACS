@@ -61,6 +61,7 @@ export async function createSetupFeePaymentIntent(
       amount: Math.round(amount * 100), // Convert to cents
       currency: 'usd',
       customer: customerId,
+      setup_future_usage: 'off_session', // Save payment method for future use
       metadata: {
         propertyId,
         setupType,
