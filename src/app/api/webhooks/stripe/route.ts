@@ -101,6 +101,36 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
   try {
     console.log('🔄 Updating PropertySubscription for property:', propertyId);
     
+    // Attach the payment method to the customer as default
+    if (paymentIntent.payment_method && paymentIntent.customer) {
+      console.log('💳 Attaching payment method to customer:', {
+        paymentMethod: paymentIntent.payment_method,
+        customer: paymentIntent.customer
+      });
+      
+      try {
+        const { ensureStripe } = await import('@/services/stripe');
+        const stripe = ensureStripe();
+        
+        // Attach the payment method to the customer
+        await stripe.paymentMethods.attach(paymentIntent.payment_method as string, {
+          customer: paymentIntent.customer as string,
+        });
+        
+        // Set it as the default payment method
+        await stripe.customers.update(paymentIntent.customer as string, {
+          invoice_settings: {
+            default_payment_method: paymentIntent.payment_method as string,
+          },
+        });
+        
+        console.log('✅ Payment method attached and set as default');
+      } catch (error) {
+        console.error('⚠️ Error attaching payment method:', error);
+        // Don't fail the whole process if payment method attachment fails
+      }
+    }
+    
     // Update the property subscription
     const subscription = await prisma.propertySubscription.upsert({
       where: { propertyId },

@@ -241,16 +241,42 @@ export async function PUT(
       if (subscription?.setupFeeTransactionId) {
         console.log('🔍 [PUT DEBUG] Found transaction ID, checking Stripe status:', subscription.setupFeeTransactionId);
         try {
-          const { retrievePaymentIntent } = await import('@/services/stripe');
+          const { retrievePaymentIntent, ensureStripe } = await import('@/services/stripe');
           const paymentIntent = await retrievePaymentIntent(subscription.setupFeeTransactionId);
           if (paymentIntent?.status !== 'succeeded') {
             return NextResponse.json({ error: 'Setup fee payment not completed' }, { status: 400 });
           }
+          
           // Payment succeeded but webhook hasn't updated DB yet - update it now
           await prisma.propertySubscription.update({
             where: { id: subscription.id },
             data: { setupFeePaid: true }
           });
+          
+          // Also ensure the payment method is attached to the customer
+          if (paymentIntent.payment_method && paymentIntent.customer) {
+            console.log('💳 [PUT DEBUG] Attaching payment method to customer as fallback');
+            try {
+              const stripe = ensureStripe();
+              
+              // Attach the payment method to the customer
+              await stripe.paymentMethods.attach(paymentIntent.payment_method as string, {
+                customer: paymentIntent.customer as string,
+              });
+              
+              // Set it as the default payment method
+              await stripe.customers.update(paymentIntent.customer as string, {
+                invoice_settings: {
+                  default_payment_method: paymentIntent.payment_method as string,
+                },
+              });
+              
+              console.log('✅ [PUT DEBUG] Payment method attached as fallback');
+            } catch (pmError) {
+              console.error('⚠️ [PUT DEBUG] Error attaching payment method as fallback:', pmError);
+              // Don't fail if payment method is already attached
+            }
+          }
         } catch (error) {
           console.error('❌ [PUT DEBUG] Error checking payment intent status:', error);
           return NextResponse.json({ error: 'Setup fee must be paid first' }, { status: 400 });

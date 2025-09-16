@@ -10,7 +10,7 @@ const stripe = process.env.STRIPE_SECRET_KEY
 export { stripe };
 
 // Helper function to ensure Stripe is initialized
-function ensureStripe() {
+export function ensureStripe() {
   if (!stripe) {
     throw new Error('Stripe not initialized - missing STRIPE_SECRET_KEY environment variable');
   }
