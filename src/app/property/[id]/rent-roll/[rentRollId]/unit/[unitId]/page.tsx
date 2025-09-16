@@ -1284,8 +1284,12 @@ export default function ResidentDetailPage() {
             if (allResidents.length > 0 && finalizedResidents.length === allResidents.length) {
               console.log(`[CURRENT LEASE STATUS] All residents finalized - setting to Verified`);
               setUnitVerificationStatus('Verified');
+            } else if (finalizedResidents.length > 0) {
+              // Some residents are finalized but not all - this matches the property summary logic
+              console.log(`[CURRENT LEASE STATUS] Mixed verification states (${finalizedResidents.length}/${allResidents.length} finalized) - setting to In Progress - Finalize to Process`);
+              setUnitVerificationStatus('In Progress - Finalize to Process');
             } else {
-              console.log(`[CURRENT LEASE STATUS] Setting to default Out of Date Income Documents`);
+              console.log(`[CURRENT LEASE STATUS] No residents finalized - setting to Out of Date Income Documents`);
               setUnitVerificationStatus('Out of Date Income Documents');
             }
           }
@@ -1313,9 +1317,13 @@ export default function ResidentDetailPage() {
           if (hasDocumentsNeedingReview) {
             console.log(`[FUTURE LEASE STATUS] Setting to Waiting for Admin Review`);
             setUnitVerificationStatus('Waiting for Admin Review');
-          } else {
-            console.log(`[FUTURE LEASE STATUS] Setting to In Progress - Finalize to Process`);
+          } else if (finalizedResidents.length > 0) {
+            // Some residents are finalized but not all - consistent with property summary
+            console.log(`[FUTURE LEASE STATUS] Mixed verification states (${finalizedResidents.length}/${allResidents.length} finalized) - setting to In Progress - Finalize to Process`);
             setUnitVerificationStatus('In Progress - Finalize to Process');
+          } else {
+            console.log(`[FUTURE LEASE STATUS] No residents finalized - setting to Out of Date Income Documents`);
+            setUnitVerificationStatus('Out of Date Income Documents');
           }
         }
       }
