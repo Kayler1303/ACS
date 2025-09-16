@@ -281,13 +281,51 @@ export async function PUT(
       
       // Create monthly subscription immediately for Self Service
       try {
-        // Get the payment method from the successful payment intent
+        // Get the payment method from the successful payment intent and attach it to customer
         let paymentMethodId: string | undefined;
         if (subscription.setupFeeTransactionId) {
-          const { retrievePaymentIntent } = await import('@/services/stripe');
+          const { retrievePaymentIntent, ensureStripe } = await import('@/services/stripe');
           const paymentIntent = await retrievePaymentIntent(subscription.setupFeeTransactionId);
           paymentMethodId = paymentIntent?.payment_method as string;
-          console.log('💳 [PUT DEBUG] Using payment method from setup payment:', paymentMethodId);
+          
+          console.log('💳 [PUT DEBUG] Retrieved payment method from setup payment:', {
+            paymentMethodId,
+            customerId: subscription.stripeCustomerId
+          });
+          
+          // Attach the payment method to the customer if not already attached
+          if (paymentMethodId && subscription.stripeCustomerId) {
+            try {
+              const stripe = ensureStripe();
+              
+              // Check if payment method is already attached to this customer
+              const paymentMethod = await stripe.paymentMethods.retrieve(paymentMethodId);
+              console.log('🔍 [PUT DEBUG] Payment method current status:', {
+                id: paymentMethod.id,
+                customer: paymentMethod.customer,
+                targetCustomer: subscription.stripeCustomerId
+              });
+              
+              if (paymentMethod.customer !== subscription.stripeCustomerId) {
+                console.log('🔗 [PUT DEBUG] Attaching payment method to customer...');
+                await stripe.paymentMethods.attach(paymentMethodId, {
+                  customer: subscription.stripeCustomerId,
+                });
+                console.log('✅ [PUT DEBUG] Payment method attached successfully');
+              } else {
+                console.log('ℹ️ [PUT DEBUG] Payment method already attached to correct customer');
+              }
+            } catch (attachError: any) {
+              console.error('❌ [PUT DEBUG] Error attaching payment method:', {
+                error: attachError.message,
+                type: attachError.type,
+                code: attachError.code,
+                paymentMethodId,
+                customerId: subscription.stripeCustomerId
+              });
+              // Don't fail completely - let Stripe handle the error in subscription creation
+            }
+          }
         }
         
         stripeSubscription = await createMonthlySubscription(
