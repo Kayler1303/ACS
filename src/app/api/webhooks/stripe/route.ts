@@ -4,16 +4,20 @@ import { prisma } from '@/lib/prisma';
 import Stripe from 'stripe';
 
 export async function POST(request: NextRequest) {
+  console.log('🔔 Stripe webhook received');
+  
   try {
     const body = await request.text();
     const signature = request.headers.get('stripe-signature');
 
     if (!signature) {
+      console.error('❌ Missing stripe-signature header');
       return NextResponse.json({ error: 'Missing stripe-signature header' }, { status: 400 });
     }
 
     // Verify the webhook signature
     const event = verifyWebhookSignature(body, signature);
+    console.log('✅ Webhook signature verified, event type:', event.type);
 
     // Handle the event
     switch (event.type) {
@@ -56,10 +60,20 @@ export async function POST(request: NextRequest) {
 }
 
 async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent) {
+  console.log('💰 Processing payment_intent.succeeded:', paymentIntent.id);
+  
   const propertyId = paymentIntent.metadata.propertyId;
   const setupType = paymentIntent.metadata.setupType;
   const discrepancyId = paymentIntent.metadata.discrepancyId;
   const paymentType = paymentIntent.metadata.type;
+  
+  console.log('📋 Payment metadata:', {
+    propertyId,
+    setupType,
+    discrepancyId,
+    paymentType,
+    amount: paymentIntent.amount
+  });
 
   // Handle unit discrepancy payment
   if (paymentType === 'unit_discrepancy' && discrepancyId) {
@@ -80,13 +94,15 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
   }
 
   if (!propertyId) {
-    console.error('No propertyId in payment intent metadata');
+    console.error('❌ No propertyId in payment intent metadata');
     return;
   }
 
   try {
+    console.log('🔄 Updating PropertySubscription for property:', propertyId);
+    
     // Update the property subscription
-    await prisma.propertySubscription.upsert({
+    const subscription = await prisma.propertySubscription.upsert({
       where: { propertyId },
       update: {
         setupFeePaid: true,
@@ -101,6 +117,8 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
         setupFeeAmount: paymentIntent.amount / 100, // Convert from cents
       },
     });
+    
+    console.log('✅ PropertySubscription updated:', subscription.id);
 
     // Create transaction record
     await prisma.paymentTransaction.create({
