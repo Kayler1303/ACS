@@ -193,13 +193,13 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id: propertyId } = await params;
+  
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const { id: propertyId } = await params;
 
     // Verify user owns this property and setup fee is paid
     const property = await prisma.property.findFirst({
@@ -269,8 +269,7 @@ export async function PUT(
     console.error('Error details:', {
       message: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined,
-      propertyId,
-      setupType: subscription?.setupType
+      propertyId
     });
     return NextResponse.json(
       { 
