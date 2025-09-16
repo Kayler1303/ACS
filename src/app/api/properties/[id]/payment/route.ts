@@ -152,6 +152,13 @@ export async function POST(
       propertyId,
       setupType
     );
+    
+    console.log('💳 [POST DEBUG] Created payment intent:', {
+      paymentIntentId: paymentIntent.id,
+      amount: paymentIntent.amount,
+      propertyId,
+      setupType
+    });
 
     // Create or update property subscription
     const subscription = await prisma.propertySubscription.upsert({
@@ -161,6 +168,7 @@ export async function POST(
         setupFeeAmount: setupFee,
         monthlyFeeAmount: monthlyFee,
         stripeCustomerId,
+        setupFeeTransactionId: paymentIntent.id, // Store the payment intent ID
       },
       create: {
         propertyId,
@@ -168,6 +176,7 @@ export async function POST(
         setupFeeAmount: setupFee,
         monthlyFeeAmount: monthlyFee,
         stripeCustomerId,
+        setupFeeTransactionId: paymentIntent.id, // Store the payment intent ID
       },
     });
 
@@ -217,9 +226,20 @@ export async function PUT(
     }
 
     const subscription = property.PropertySubscription;
+    
+    console.log('🔍 [PUT DEBUG] Checking setup fee payment status:', {
+      propertyId,
+      subscriptionId: subscription?.id,
+      setupFeePaid: subscription?.setupFeePaid,
+      setupFeeTransactionId: subscription?.setupFeeTransactionId
+    });
+    
     if (!subscription?.setupFeePaid) {
+      console.log('⚠️ [PUT DEBUG] Setup fee not marked as paid in DB');
+      
       // If setup fee isn't marked as paid in DB, check if there's a successful payment intent
       if (subscription?.setupFeeTransactionId) {
+        console.log('🔍 [PUT DEBUG] Found transaction ID, checking Stripe status:', subscription.setupFeeTransactionId);
         try {
           const { retrievePaymentIntent } = await import('@/services/stripe');
           const paymentIntent = await retrievePaymentIntent(subscription.setupFeeTransactionId);
@@ -232,10 +252,11 @@ export async function PUT(
             data: { setupFeePaid: true }
           });
         } catch (error) {
-          console.error('Error checking payment intent status:', error);
+          console.error('❌ [PUT DEBUG] Error checking payment intent status:', error);
           return NextResponse.json({ error: 'Setup fee must be paid first' }, { status: 400 });
         }
       } else {
+        console.log('❌ [PUT DEBUG] No transaction ID found - setup fee not paid');
         return NextResponse.json({ error: 'Setup fee must be paid first' }, { status: 400 });
       }
     }
