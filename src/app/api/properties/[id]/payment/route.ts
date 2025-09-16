@@ -253,55 +253,7 @@ export async function PUT(
             data: { setupFeePaid: true }
           });
           
-          // Also ensure the payment method is attached to the customer
-          if (paymentIntent.payment_method && paymentIntent.customer) {
-            console.log('💳 [PUT DEBUG] Attaching payment method to customer as fallback:', {
-              paymentMethod: paymentIntent.payment_method,
-              customer: paymentIntent.customer,
-              paymentIntentStatus: paymentIntent.status
-            });
-            
-            try {
-              const stripe = ensureStripe();
-              
-              // First check if payment method is already attached
-              const paymentMethod = await stripe.paymentMethods.retrieve(paymentIntent.payment_method as string);
-              console.log('🔍 [PUT DEBUG] Payment method details:', {
-                id: paymentMethod.id,
-                customer: paymentMethod.customer,
-                type: paymentMethod.type
-              });
-              
-              // Only attach if not already attached to this customer
-              if (paymentMethod.customer !== paymentIntent.customer) {
-                console.log('🔗 [PUT DEBUG] Attaching payment method to customer...');
-                await stripe.paymentMethods.attach(paymentIntent.payment_method as string, {
-                  customer: paymentIntent.customer as string,
-                });
-                console.log('✅ [PUT DEBUG] Payment method attached successfully');
-              } else {
-                console.log('ℹ️ [PUT DEBUG] Payment method already attached to customer');
-              }
-              
-              // Set it as the default payment method
-              console.log('🎯 [PUT DEBUG] Setting as default payment method...');
-              await stripe.customers.update(paymentIntent.customer as string, {
-                invoice_settings: {
-                  default_payment_method: paymentIntent.payment_method as string,
-                },
-              });
-              
-              console.log('✅ [PUT DEBUG] Payment method set as default');
-            } catch (pmError: any) {
-              console.error('❌ [PUT DEBUG] Error with payment method:', {
-                error: pmError.message,
-                type: pmError.type,
-                code: pmError.code,
-                decline_code: pmError.decline_code
-              });
-              // Don't fail the whole process - we'll try to create subscription anyway
-            }
-          }
+          console.log('✅ [PUT DEBUG] Setup fee payment verified, proceeding with subscription creation');
         } catch (error) {
           console.error('❌ [PUT DEBUG] Error checking payment intent status:', error);
           return NextResponse.json({ error: 'Setup fee must be paid first' }, { status: 400 });
@@ -329,11 +281,21 @@ export async function PUT(
       
       // Create monthly subscription immediately for Self Service
       try {
+        // Get the payment method from the successful payment intent
+        let paymentMethodId: string | undefined;
+        if (subscription.setupFeeTransactionId) {
+          const { retrievePaymentIntent } = await import('@/services/stripe');
+          const paymentIntent = await retrievePaymentIntent(subscription.setupFeeTransactionId);
+          paymentMethodId = paymentIntent?.payment_method as string;
+          console.log('💳 [PUT DEBUG] Using payment method from setup payment:', paymentMethodId);
+        }
+        
         stripeSubscription = await createMonthlySubscription(
           subscription.stripeCustomerId!,
           20.00, // $20 per unit per year
           property.numberOfUnits!,
-          propertyId
+          propertyId,
+          paymentMethodId // Pass the payment method ID directly
         );
         console.log('✅ [PUT DEBUG] Monthly subscription created:', stripeSubscription.id);
       } catch (subscriptionError: any) {

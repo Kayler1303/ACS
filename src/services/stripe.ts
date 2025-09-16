@@ -109,7 +109,8 @@ export async function createMonthlySubscription(
   customerId: string,
   pricePerUnit: number,
   units: number,
-  propertyId: string
+  propertyId: string,
+  paymentMethodId?: string
 ) {
   const stripeClient = ensureStripe();
   
@@ -131,7 +132,7 @@ export async function createMonthlySubscription(
     });
 
     // Create the subscription
-    const subscription = await stripeClient.subscriptions.create({
+    const subscriptionData: any = {
       customer: customerId,
       items: [
         {
@@ -145,7 +146,14 @@ export async function createMonthlySubscription(
       },
       collection_method: 'charge_automatically',
       expand: ['latest_invoice.payment_intent'],
-    });
+    };
+
+    // If a specific payment method is provided, use it instead of the customer's default
+    if (paymentMethodId) {
+      subscriptionData.default_payment_method = paymentMethodId;
+    }
+
+    const subscription = await stripeClient.subscriptions.create(subscriptionData);
 
     return subscription;
   } catch (error) {
