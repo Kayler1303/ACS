@@ -1225,108 +1225,32 @@ export default function ResidentDetailPage() {
     }
   };
 
-  // Function to fetch verification status for this unit using already available data
+  // Function to fetch verification status for this unit using the same logic as the APIs
   const fetchUnitVerificationStatus = async () => {
-    if (!tenancyData?.unit) return;
+    if (!tenancyData?.unit || !tenancyData?.lease) return;
     
     try {
-      // Find the current lease (one with a Tenancy record) for status calculation
-      const currentLease = tenancyData.unit.Lease?.find((lease: any) => lease.Tenancy);
-      const isViewingCurrentLease = currentLease && currentLease.id === tenancyData.lease?.id;
+      // Import the verification service to use the same logic as the APIs
+      const { getLeaseVerificationStatus } = await import('@/services/verification');
       
-      console.log(`[TENANCY DEBUG] Current Lease Found:`, !!currentLease);
-      console.log(`[TENANCY DEBUG] Current Lease ID:`, currentLease?.id);
-      console.log(`[TENANCY DEBUG] Viewing Lease ID:`, tenancyData.lease?.id);
-      console.log(`[TENANCY DEBUG] Is Viewing Current Lease:`, isViewingCurrentLease);
+      // Use the same logic as the future leases API and property summary
+      const lease = tenancyData.lease;
+      console.log(`[UNIT STATUS] Calculating status for lease ${lease.id} using verification service`);
       
-      if (currentLease) {
-        // We have a current lease with Tenancy - let the backend verification status determine the display
-        console.log(`[CURRENT LEASE STATUS] Current lease found, checking verification status from backend`);
-        
-        // For current leases, check if any verification is finalized AND all residents are actually finalized
-        const latestVerification = currentLease.IncomeVerification?.[0];
-        const allResidents = currentLease.Resident || [];
-        const finalizedResidents = allResidents.filter((resident: any) => resident.incomeFinalized || resident.hasNoIncome);
-        
-        if (latestVerification?.status === 'FINALIZED' && 
-            allResidents.length > 0 && 
-            finalizedResidents.length === allResidents.length) {
-          console.log(`[CURRENT LEASE STATUS] Verification finalized AND all residents finalized - setting to Verified`);
-          setUnitVerificationStatus('Verified');
-                 } else {
-           // Check if any documents need admin review
-           const allResidents = currentLease.Resident || [];
-           const hasDocumentsNeedingReview = allResidents.some((resident: any) => 
-             (resident.IncomeDocument || []).some((doc: any) => doc.status === 'NEEDS_REVIEW')
-           );
-          
-          if (hasDocumentsNeedingReview) {
-            console.log(`[CURRENT LEASE STATUS] Documents need admin review - setting to Waiting for Admin Review`);
-            setUnitVerificationStatus('Waiting for Admin Review');
-          } else {
-        // Check if all residents have finalized income (like the verification service does)
-        const finalizedResidents = allResidents.filter((resident: any) => resident.incomeFinalized || resident.hasNoIncome);
-        console.log(`[CURRENT LEASE STATUS] All residents: ${allResidents.length}, Finalized: ${finalizedResidents.length}`);
-        
-        // Debug Unit 310 resident data specifically
-        if (tenancyData?.unit?.unitNumber === '310' || tenancyData?.unit?.unitNumber === '0310') {
-          console.log(`[UNIT 310 RESIDENT DEBUG] All residents data:`, allResidents.map(r => ({
-            id: r.id,
-            name: r.name,
-            hasNoIncome: r.hasNoIncome,
-            incomeFinalized: r.incomeFinalized,
-            verifiedIncome: r.verifiedIncome,
-            calculatedAnnualizedIncome: r.calculatedAnnualizedIncome,
-            finalizedAt: r.finalizedAt
-          })));
-        }
-            
-            if (allResidents.length > 0 && finalizedResidents.length === allResidents.length) {
-              console.log(`[CURRENT LEASE STATUS] All residents finalized - setting to Verified`);
-              setUnitVerificationStatus('Verified');
-            } else if (finalizedResidents.length > 0) {
-              // Some residents are finalized but not all - this matches the property summary logic
-              console.log(`[CURRENT LEASE STATUS] Mixed verification states (${finalizedResidents.length}/${allResidents.length} finalized) - setting to In Progress - Finalize to Process`);
-              setUnitVerificationStatus('In Progress - Finalize to Process');
-            } else {
-              console.log(`[CURRENT LEASE STATUS] No residents finalized - setting to Out of Date Income Documents`);
-              setUnitVerificationStatus('Out of Date Income Documents');
-            }
-          }
-        }
-      } else {
-        // No current lease with Tenancy - this means we're viewing a future/provisional lease
-        console.log(`[FUTURE LEASE STATUS] No current lease found, calculating status for provisional lease`);
-        const allResidents = tenancyData.lease?.Resident || [];
-        const finalizedResidents = allResidents.filter((r: any) => r.incomeFinalized || r.hasNoIncome);
-        
-        console.log(`[FUTURE LEASE STATUS] All residents: ${allResidents.length}, Finalized: ${finalizedResidents.length}`);
-        
-        if (allResidents.length === 0) {
-          console.log(`[FUTURE LEASE STATUS] Setting to Vacant`);
-          setUnitVerificationStatus('Vacant');
-        } else if (finalizedResidents.length === allResidents.length) {
-          console.log(`[FUTURE LEASE STATUS] Setting to Verified`);
-          setUnitVerificationStatus('Verified');
-        } else {
-          // Check for documents needing admin review
-          const hasDocumentsNeedingReview = allResidents.some((resident: any) => 
-            (resident.IncomeDocument || []).some((doc: any) => doc.status === 'NEEDS_REVIEW')
-          );
-          
-          if (hasDocumentsNeedingReview) {
-            console.log(`[FUTURE LEASE STATUS] Setting to Waiting for Admin Review`);
-            setUnitVerificationStatus('Waiting for Admin Review');
-          } else if (finalizedResidents.length > 0) {
-            // Some residents are finalized but not all - consistent with property summary
-            console.log(`[FUTURE LEASE STATUS] Mixed verification states (${finalizedResidents.length}/${allResidents.length} finalized) - setting to In Progress - Finalize to Process`);
-            setUnitVerificationStatus('In Progress - Finalize to Process');
-          } else {
-            console.log(`[FUTURE LEASE STATUS] No residents finalized - setting to Out of Date Income Documents`);
-            setUnitVerificationStatus('Out of Date Income Documents');
-          }
-        }
+      // Calculate status using the same verification service used by the APIs
+      let status = getLeaseVerificationStatus(lease as any);
+      console.log(`[UNIT STATUS] Verification service returned: ${status}`);
+      
+      // Apply the same override logic as the future leases API
+      if (status === 'In Progress - Finalize to Process' && 
+          lease.IncomeVerification && 
+          lease.IncomeVerification.some((v: any) => v.status === 'FINALIZED')) {
+        console.log(`[UNIT STATUS] Overriding status: ${status} -> Verified (has FINALIZED verification)`);
+        status = 'Verified';
       }
+      
+      setUnitVerificationStatus(status);
+      
     } catch (error) {
       console.error('Error calculating unit verification status:', error);
     }
