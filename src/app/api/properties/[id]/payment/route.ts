@@ -131,9 +131,12 @@ export async function POST(
     const setupFee = calculateSetupFee(setupType, property.numberOfUnits);
     const monthlyFee = calculateMonthlyFee(property.numberOfUnits);
     const firstMonthFee = Math.round(monthlyFee / 12 * 100) / 100; // Monthly fee (annual fee / 12)
-    const totalFirstPayment = setupFee + firstMonthFee;
+    
+    // Full Service: Setup fee only (we set it up, billing starts after setup)
+    // Self Service: Setup fee + first month (they set it up, billing starts immediately)
+    const totalFirstPayment = setupType === 'FULL_SERVICE' ? setupFee : setupFee + firstMonthFee;
 
-    // Create setup fee payment intent (now includes first month)
+    // Create setup fee payment intent
     const paymentIntent = await createSetupFeePaymentIntent(
       stripeCustomerId,
       totalFirstPayment,
@@ -213,28 +216,43 @@ export async function PUT(
       return NextResponse.json({ error: 'Monthly subscription already set up' }, { status: 400 });
     }
 
-    // Create monthly subscription
-    const stripeSubscription = await createMonthlySubscription(
-      subscription.stripeCustomerId!,
-      20.00, // $20 per unit per year
-      property.numberOfUnits!,
-      propertyId
-    );
+    // For Self Service, create subscription immediately
+    // For Full Service, we'll create the subscription later when setup is complete
+    let stripeSubscription: any = null;
+    
+    if (subscription.setupType === 'SELF_SERVICE') {
+      // Create monthly subscription immediately for Self Service
+      stripeSubscription = await createMonthlySubscription(
+        subscription.stripeCustomerId!,
+        20.00, // $20 per unit per year
+        property.numberOfUnits!,
+        propertyId
+      );
 
-    // Update property subscription with Stripe subscription ID
-    await prisma.propertySubscription.update({
-      where: { id: subscription.id },
-      data: {
-        stripeSubscriptionId: stripeSubscription.id,
-        subscriptionStatus: 'ACTIVE',
-        currentPeriodStart: new Date((stripeSubscription as any).current_period_start * 1000),
-        currentPeriodEnd: new Date((stripeSubscription as any).current_period_end * 1000),
-      },
-    });
+      // Update property subscription with Stripe subscription ID
+      await prisma.propertySubscription.update({
+        where: { id: subscription.id },
+        data: {
+          stripeSubscriptionId: stripeSubscription.id,
+          subscriptionStatus: 'ACTIVE',
+          currentPeriodStart: new Date((stripeSubscription as any).current_period_start * 1000),
+          currentPeriodEnd: new Date((stripeSubscription as any).current_period_end * 1000),
+        },
+      });
+    } else {
+      // For Full Service, mark as setup complete but don't start billing yet
+      await prisma.propertySubscription.update({
+        where: { id: subscription.id },
+        data: {
+          subscriptionStatus: 'SETUP_COMPLETE',
+        },
+      });
+    }
 
     return NextResponse.json({
       success: true,
-      subscriptionId: stripeSubscription.id,
+      subscriptionId: stripeSubscription?.id || null,
+      setupType: subscription.setupType,
     });
 
   } catch (error) {

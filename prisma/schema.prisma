@@ -476,6 +476,7 @@ enum SubscriptionStatus {
   PAST_DUE
   CANCELED
   UNPAID
+  SETUP_COMPLETE
 }
 
 enum TransactionType {

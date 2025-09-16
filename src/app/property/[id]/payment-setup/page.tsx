@@ -157,7 +157,11 @@ function PaymentSetupForm() {
   };
 
   const calculateTotalFirstPayment = (setupType: 'FULL_SERVICE' | 'SELF_SERVICE', units: number) => {
-    return calculateSetupFee(setupType, units) + calculateFirstMonthFee(units);
+    // Full Service: Setup fee only (we set it up, billing starts after setup)
+    // Self Service: Setup fee + first month (they set it up, billing starts immediately)
+    return setupType === 'FULL_SERVICE' 
+      ? calculateSetupFee(setupType, units)
+      : calculateSetupFee(setupType, units) + calculateFirstMonthFee(units);
   };
 
   if (isLoading) {
@@ -437,9 +441,20 @@ function PaymentSetupForm() {
                   </div>
                 </div>
                 <div>
-                  <div className="text-sm text-gray-600">First Month</div>
+                  <div className="text-sm text-gray-600">
+                    {selectedSetupType === 'FULL_SERVICE' ? 'First Month' : 'First Month'}
+                  </div>
                   <div className="font-bold text-xl text-green-600">
-                    ${calculateFirstMonthFee(property.numberOfUnits).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {selectedSetupType === 'FULL_SERVICE' 
+                      ? '$0.00' 
+                      : `$${calculateFirstMonthFee(property.numberOfUnits).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                    }
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {selectedSetupType === 'FULL_SERVICE' 
+                      ? 'Billing starts after setup' 
+                      : 'Billing starts immediately'
+                    }
                   </div>
                 </div>
               </div>
@@ -448,7 +463,12 @@ function PaymentSetupForm() {
                 <div className="font-bold text-3xl text-red-600">
                   ${calculateTotalFirstPayment(selectedSetupType, property.numberOfUnits).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
-                <div className="text-xs text-gray-500">Setup fee + first month subscription</div>
+                <div className="text-xs text-gray-500">
+                  {selectedSetupType === 'FULL_SERVICE' 
+                    ? 'Setup fee only' 
+                    : 'Setup fee + first month subscription'
+                  }
+                </div>
               </div>
               <div className="mt-4 pt-4 border-t border-gray-200 text-center">
                 <div className="text-sm text-gray-600">Total First Year Cost</div>

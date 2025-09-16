@@ -69,6 +69,9 @@ export function getPropertyPaymentStatus(property: PropertyWithPayment): Payment
         }
       }
       return 'ACTIVE';
+    case 'SETUP_COMPLETE':
+      // Full Service setup is complete, billing will start when we activate it
+      return 'ACTIVE';
     case 'PAST_DUE':
       return 'PAST_DUE';
     case 'CANCELED':
