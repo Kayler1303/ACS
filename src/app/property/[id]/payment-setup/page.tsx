@@ -368,6 +368,15 @@ function PaymentSetupForm() {
                   </div>
                 </div>
 
+                {/* OR Divider */}
+                <div className="flex items-center justify-center md:col-span-2 my-4">
+                  <div className="flex-grow border-t border-gray-300"></div>
+                  <div className="mx-4 px-4 py-2 bg-gray-100 rounded-full">
+                    <span className="text-sm font-medium text-gray-600">OR</span>
+                  </div>
+                  <div className="flex-grow border-t border-gray-300"></div>
+                </div>
+
                 {/* Self Service Option */}
                 <div
                   className={`border-2 rounded-lg p-6 cursor-pointer transition-all ${

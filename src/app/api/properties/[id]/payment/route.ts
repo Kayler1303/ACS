@@ -136,6 +136,15 @@ export async function POST(
     // Self Service: Setup fee + first month (they set it up, billing starts immediately)
     const totalFirstPayment = setupType === 'FULL_SERVICE' ? setupFee : setupFee + firstMonthFee;
 
+    // Debug logging
+    console.log(`[PAYMENT DEBUG] Property ${propertyId} - ${setupType}:`, {
+      numberOfUnits: property.numberOfUnits,
+      setupFee,
+      monthlyFee,
+      firstMonthFee,
+      totalFirstPayment
+    });
+
     // Create setup fee payment intent
     const paymentIntent = await createSetupFeePaymentIntent(
       stripeCustomerId,
