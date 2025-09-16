@@ -3,7 +3,7 @@ import Stripe from 'stripe';
 // Initialize Stripe with secret key (only if environment variable is available)
 const stripe = process.env.STRIPE_SECRET_KEY 
   ? new Stripe(process.env.STRIPE_SECRET_KEY, {
-      apiVersion: '2025-08-27.basil',
+      apiVersion: '2024-12-18.acacia',
     })
   : null;
 
@@ -150,7 +150,14 @@ export async function createMonthlySubscription(
     return subscription;
   } catch (error) {
     console.error('Error creating monthly subscription:', error);
-    throw new Error('Failed to create subscription');
+    console.error('Subscription creation details:', {
+      customerId,
+      pricePerUnit,
+      units,
+      propertyId,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+    throw error; // Re-throw the original error to preserve the specific error message
   }
 }
 

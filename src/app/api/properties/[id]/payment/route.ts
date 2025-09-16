@@ -266,8 +266,17 @@ export async function PUT(
 
   } catch (error) {
     console.error('Error completing payment setup:', error);
+    console.error('Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      propertyId,
+      setupType: subscription?.setupType
+    });
     return NextResponse.json(
-      { error: 'Failed to complete payment setup' },
+      { 
+        error: 'Failed to complete payment setup',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      },
       { status: 500 }
     );
   }

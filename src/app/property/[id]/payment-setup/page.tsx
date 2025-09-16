@@ -140,7 +140,13 @@ function PaymentSetupForm() {
         });
 
         if (!response.ok) {
-          throw new Error('Failed to complete payment setup');
+          const errorData = await response.json().catch(() => ({}));
+          console.error('Payment setup completion failed:', {
+            status: response.status,
+            statusText: response.statusText,
+            errorData
+          });
+          throw new Error(errorData.details || errorData.error || 'Failed to complete payment setup');
         }
 
         setSetupComplete(true);
