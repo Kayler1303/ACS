@@ -130,11 +130,13 @@ export async function POST(
     // Calculate fees
     const setupFee = calculateSetupFee(setupType, property.numberOfUnits);
     const monthlyFee = calculateMonthlyFee(property.numberOfUnits);
+    const firstMonthFee = Math.round(monthlyFee / 12 * 100) / 100; // Monthly fee (annual fee / 12)
+    const totalFirstPayment = setupFee + firstMonthFee;
 
-    // Create setup fee payment intent
+    // Create setup fee payment intent (now includes first month)
     const paymentIntent = await createSetupFeePaymentIntent(
       stripeCustomerId,
-      setupFee,
+      totalFirstPayment,
       propertyId,
       setupType
     );

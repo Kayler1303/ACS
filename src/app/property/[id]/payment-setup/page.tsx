@@ -152,6 +152,14 @@ function PaymentSetupForm() {
     return (20 * units) / 12; // $20 per unit per year, billed monthly
   };
 
+  const calculateFirstMonthFee = (units: number) => {
+    return Math.round(calculateMonthlyFee(units) * 100) / 100; // Round to 2 decimal places
+  };
+
+  const calculateTotalFirstPayment = (setupType: 'FULL_SERVICE' | 'SELF_SERVICE', units: number) => {
+    return calculateSetupFee(setupType, units) + calculateFirstMonthFee(units);
+  };
+
   if (isLoading) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -423,21 +431,28 @@ function PaymentSetupForm() {
                   </div>
                 </div>
                 <div>
-                  <div className="text-sm text-gray-600">One-Time Setup Fee</div>
-                  <div className="font-bold text-2xl text-brand-blue">
+                  <div className="text-sm text-gray-600">Setup Fee</div>
+                  <div className="font-bold text-xl text-brand-blue">
                     ${calculateSetupFee(selectedSetupType, property.numberOfUnits).toLocaleString()}
                   </div>
                 </div>
                 <div>
-                  <div className="text-sm text-gray-600">Monthly Subscription</div>
-                  <div className="font-bold text-2xl text-green-600">
-                    ${monthlyFee.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  <div className="text-sm text-gray-600">First Month</div>
+                  <div className="font-bold text-xl text-green-600">
+                    ${calculateFirstMonthFee(property.numberOfUnits).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
                 </div>
               </div>
               <div className="mt-4 pt-4 border-t border-gray-200 text-center">
+                <div className="text-sm text-gray-600">Total First Payment</div>
+                <div className="font-bold text-3xl text-red-600">
+                  ${calculateTotalFirstPayment(selectedSetupType, property.numberOfUnits).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div className="text-xs text-gray-500">Setup fee + first month subscription</div>
+              </div>
+              <div className="mt-4 pt-4 border-t border-gray-200 text-center">
                 <div className="text-sm text-gray-600">Total First Year Cost</div>
-                <div className="font-bold text-3xl text-gray-900">
+                <div className="font-bold text-2xl text-gray-900">
                   ${(calculateSetupFee(selectedSetupType, property.numberOfUnits) + (monthlyFee * 12)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
                 <div className="text-xs text-gray-500">Setup fee + 12 months subscription</div>
@@ -577,3 +592,4 @@ export default function PaymentSetupPage() {
     </Elements>
   );
 }
+
