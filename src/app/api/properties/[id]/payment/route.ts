@@ -204,11 +204,16 @@ export async function PUT(
 ) {
   const { id: propertyId } = await params;
   
+  console.log('🚀 [PUT DEBUG] Starting payment completion for property:', propertyId);
+
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
+      console.log('❌ [PUT DEBUG] Unauthorized - no session');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    
+    console.log('✅ [PUT DEBUG] User authorized:', session.user.id);
 
     // Verify user owns this property and setup fee is paid
     const property = await prisma.property.findFirst({
@@ -373,7 +378,18 @@ export async function PUT(
           customerId: subscription.stripeCustomerId,
           units: property.numberOfUnits
         });
-        throw subscriptionError; // Re-throw to be caught by outer try-catch
+        
+        // Return a more detailed error response
+        return NextResponse.json({
+          error: 'Failed to complete payment setup',
+          details: `Subscription creation failed: ${subscriptionError.message}`,
+          debugInfo: {
+            customerId: subscription.stripeCustomerId,
+            units: property.numberOfUnits,
+            setupType: subscription.setupType,
+            stripeError: subscriptionError.code || subscriptionError.type
+          }
+        }, { status: 500 });
       }
 
       // Update property subscription with Stripe subscription ID
