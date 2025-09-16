@@ -255,26 +255,51 @@ export async function PUT(
           
           // Also ensure the payment method is attached to the customer
           if (paymentIntent.payment_method && paymentIntent.customer) {
-            console.log('💳 [PUT DEBUG] Attaching payment method to customer as fallback');
+            console.log('💳 [PUT DEBUG] Attaching payment method to customer as fallback:', {
+              paymentMethod: paymentIntent.payment_method,
+              customer: paymentIntent.customer,
+              paymentIntentStatus: paymentIntent.status
+            });
+            
             try {
               const stripe = ensureStripe();
               
-              // Attach the payment method to the customer
-              await stripe.paymentMethods.attach(paymentIntent.payment_method as string, {
-                customer: paymentIntent.customer as string,
+              // First check if payment method is already attached
+              const paymentMethod = await stripe.paymentMethods.retrieve(paymentIntent.payment_method as string);
+              console.log('🔍 [PUT DEBUG] Payment method details:', {
+                id: paymentMethod.id,
+                customer: paymentMethod.customer,
+                type: paymentMethod.type
               });
               
+              // Only attach if not already attached to this customer
+              if (paymentMethod.customer !== paymentIntent.customer) {
+                console.log('🔗 [PUT DEBUG] Attaching payment method to customer...');
+                await stripe.paymentMethods.attach(paymentIntent.payment_method as string, {
+                  customer: paymentIntent.customer as string,
+                });
+                console.log('✅ [PUT DEBUG] Payment method attached successfully');
+              } else {
+                console.log('ℹ️ [PUT DEBUG] Payment method already attached to customer');
+              }
+              
               // Set it as the default payment method
+              console.log('🎯 [PUT DEBUG] Setting as default payment method...');
               await stripe.customers.update(paymentIntent.customer as string, {
                 invoice_settings: {
                   default_payment_method: paymentIntent.payment_method as string,
                 },
               });
               
-              console.log('✅ [PUT DEBUG] Payment method attached as fallback');
-            } catch (pmError) {
-              console.error('⚠️ [PUT DEBUG] Error attaching payment method as fallback:', pmError);
-              // Don't fail if payment method is already attached
+              console.log('✅ [PUT DEBUG] Payment method set as default');
+            } catch (pmError: any) {
+              console.error('❌ [PUT DEBUG] Error with payment method:', {
+                error: pmError.message,
+                type: pmError.type,
+                code: pmError.code,
+                decline_code: pmError.decline_code
+              });
+              // Don't fail the whole process - we'll try to create subscription anyway
             }
           }
         } catch (error) {
@@ -296,13 +321,31 @@ export async function PUT(
     let stripeSubscription: any = null;
     
     if (subscription.setupType === 'SELF_SERVICE') {
-      // Create monthly subscription immediately for Self Service
-      stripeSubscription = await createMonthlySubscription(
-        subscription.stripeCustomerId!,
-        20.00, // $20 per unit per year
-        property.numberOfUnits!,
+      console.log('📅 [PUT DEBUG] Creating monthly subscription for Self Service:', {
+        customerId: subscription.stripeCustomerId,
+        units: property.numberOfUnits,
         propertyId
-      );
+      });
+      
+      // Create monthly subscription immediately for Self Service
+      try {
+        stripeSubscription = await createMonthlySubscription(
+          subscription.stripeCustomerId!,
+          20.00, // $20 per unit per year
+          property.numberOfUnits!,
+          propertyId
+        );
+        console.log('✅ [PUT DEBUG] Monthly subscription created:', stripeSubscription.id);
+      } catch (subscriptionError: any) {
+        console.error('❌ [PUT DEBUG] Failed to create monthly subscription:', {
+          error: subscriptionError.message,
+          type: subscriptionError.type,
+          code: subscriptionError.code,
+          customerId: subscription.stripeCustomerId,
+          units: property.numberOfUnits
+        });
+        throw subscriptionError; // Re-throw to be caught by outer try-catch
+      }
 
       // Update property subscription with Stripe subscription ID
       await prisma.propertySubscription.update({
