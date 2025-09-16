@@ -218,7 +218,26 @@ export async function PUT(
 
     const subscription = property.PropertySubscription;
     if (!subscription?.setupFeePaid) {
-      return NextResponse.json({ error: 'Setup fee must be paid first' }, { status: 400 });
+      // If setup fee isn't marked as paid in DB, check if there's a successful payment intent
+      if (subscription?.setupFeeTransactionId) {
+        try {
+          const { retrievePaymentIntent } = await import('@/services/stripe');
+          const paymentIntent = await retrievePaymentIntent(subscription.setupFeeTransactionId);
+          if (paymentIntent?.status !== 'succeeded') {
+            return NextResponse.json({ error: 'Setup fee payment not completed' }, { status: 400 });
+          }
+          // Payment succeeded but webhook hasn't updated DB yet - update it now
+          await prisma.propertySubscription.update({
+            where: { id: subscription.id },
+            data: { setupFeePaid: true }
+          });
+        } catch (error) {
+          console.error('Error checking payment intent status:', error);
+          return NextResponse.json({ error: 'Setup fee must be paid first' }, { status: 400 });
+        }
+      } else {
+        return NextResponse.json({ error: 'Setup fee must be paid first' }, { status: 400 });
+      }
     }
 
     if (subscription.stripeSubscriptionId) {

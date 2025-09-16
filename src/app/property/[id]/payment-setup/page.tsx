@@ -134,6 +134,9 @@ function PaymentSetupForm() {
       setIsProcessing(false);
     } else if (paymentIntent?.status === 'succeeded') {
       // Complete the payment setup (create monthly subscription)
+      // Wait a moment for webhook to process the payment
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
       try {
         const response = await fetch('/api/properties/' + propertyId + '/payment', {
           method: 'PUT',
