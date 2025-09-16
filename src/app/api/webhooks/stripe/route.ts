@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyWebhookSignature } from '@/services/stripe';
 import { prisma } from '@/lib/prisma';
+import { logPaymentEvent } from '@/lib/payment-monitoring';
+import { sendPaymentSuccessNotification, sendPaymentFailureNotification } from '@/services/email';
 import Stripe from 'stripe';
 
 export async function POST(request: NextRequest) {
@@ -73,6 +75,16 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
     discrepancyId,
     paymentType,
     amount: paymentIntent.amount
+  });
+
+  // Log payment success for monitoring
+  await logPaymentEvent('PAYMENT_SUCCESS', {
+    propertyId,
+    customerId: paymentIntent.customer as string,
+    amount: paymentIntent.amount,
+    currency: paymentIntent.currency,
+    paymentIntentId: paymentIntent.id,
+    metadata: paymentIntent.metadata,
   });
 
   // Handle unit discrepancy payment
@@ -150,6 +162,18 @@ async function handlePaymentIntentFailed(paymentIntent: Stripe.PaymentIntent) {
     console.error('No propertyId in payment intent metadata');
     return;
   }
+
+  // Log payment failure for monitoring
+  await logPaymentEvent('PAYMENT_FAILED', {
+    propertyId,
+    customerId: paymentIntent.customer as string,
+    amount: paymentIntent.amount,
+    currency: paymentIntent.currency,
+    paymentIntentId: paymentIntent.id,
+    errorMessage: paymentIntent.last_payment_error?.message || 'Payment failed',
+    errorCode: paymentIntent.last_payment_error?.code,
+    metadata: paymentIntent.metadata,
+  });
 
   try {
     const subscription = await prisma.propertySubscription.findUnique({
