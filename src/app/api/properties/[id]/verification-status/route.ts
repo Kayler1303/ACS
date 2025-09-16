@@ -404,11 +404,20 @@ export async function GET(
         documentStatuses: []
       }`);
 
+      // Check if any resident has documents that need admin review (PRIORITY CHECK)
+      const hasDocumentsNeedingReview = residents.some((resident: any) =>
+        (resident.IncomeDocument || []).some((doc: any) => doc.status === 'NEEDS_REVIEW')
+      );
+
       // Determine overall status
       // Valid statuses: Verified, In Progress - Finalize to Process, Out of Date Income Documents, Waiting for Admin Review, Vacant
       let status: string;
       if (totalResidents === 0) {
         status = 'Vacant';
+      } else if (hasDocumentsNeedingReview) {
+        // PRIORITY: If any documents need admin review, status is "Waiting for Admin Review"
+        status = 'Waiting for Admin Review';
+        console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: Has documents needing admin review - returning Waiting for Admin Review`);
       } else if (residentsWithVerifiedIncome === 0 && residentsWithInProgressVerification === 0) {
         status = 'Out of Date Income Documents';
         console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: No residents with verified income or in-progress verification - returning Out of Date Income Documents`);
