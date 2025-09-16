@@ -153,9 +153,6 @@ function PaymentSetupForm() {
         }
 
         setSetupComplete(true);
-        setTimeout(() => {
-          router.push('/property/' + propertyId + '/upload-units');
-        }, 2000);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to complete setup');
       }
@@ -214,11 +211,27 @@ function PaymentSetupForm() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h2 className="text-2xl font-bold text-green-800 mb-2">Payment Setup Complete!</h2>
-            <p className="text-green-600 mb-4">
-              Your payment has been processed successfully. You'll be redirected to upload your units.
+            <h2 className="text-2xl font-bold text-green-800 mb-4">Payment Setup Complete!</h2>
+            <p className="text-green-600 mb-6">
+              Your payment has been processed successfully and your subscription is now active.
             </p>
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-600 mx-auto"></div>
+            <div className="space-y-4">
+              <div className="bg-white rounded-lg p-4 border border-green-200">
+                <p className="text-sm text-gray-600 mb-2">What happens next?</p>
+                <p className="text-gray-800">
+                  You can now access your property dashboard and begin uploading your rent roll and unit information.
+                </p>
+              </div>
+              <button
+                onClick={() => router.push('/property/' + propertyId)}
+                className="inline-flex items-center px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors"
+              >
+                Continue to Property Dashboard
+                <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </div>
