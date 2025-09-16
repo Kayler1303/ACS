@@ -231,72 +231,130 @@ function PaymentSetupForm() {
           <p className="text-gray-600">Transparent pricing for your {property.numberOfUnits}-unit property</p>
         </div>
 
-        {/* Pricing Overview Section */}
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-8 mb-8">
-          <div className="text-center mb-6">
-            <h2 className="text-2xl font-bold text-brand-blue mb-2">Your Pricing Structure</h2>
-            <p className="text-gray-600">Simple, transparent pricing with no hidden fees</p>
-          </div>
-          
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* One-time Setup Fee */}
-            <div className="bg-white rounded-lg p-6 border border-blue-100">
-              <div className="text-center">
-                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <svg className="w-6 h-6 text-brand-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">One-Time Setup Fee</h3>
-                <p className="text-sm text-gray-600 mb-3 text-center">Choose one option below:</p>
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center p-2 bg-blue-50 rounded">
-                    <span className="text-sm font-medium text-gray-700">Full Service Option:</span>
-                    <span className="font-bold text-lg text-brand-blue">${calculateSetupFee('FULL_SERVICE', property.numberOfUnits).toLocaleString()}</span>
-                  </div>
-                  <div className="text-center text-xs text-gray-500 py-1">OR</div>
-                  <div className="flex justify-between items-center p-2 bg-green-50 rounded">
-                    <span className="text-sm font-medium text-gray-700">Self Service Option:</span>
-                    <span className="font-bold text-lg text-green-600">${calculateSetupFee('SELF_SERVICE', property.numberOfUnits).toLocaleString()}</span>
-                  </div>
-                </div>
-                <p className="text-xs text-gray-500 mt-2 text-center">You'll choose your preferred option below</p>
-              </div>
+        {/* Pricing Overview Section - Show all options before selection */}
+        {!selectedSetupType && (
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-8 mb-8">
+            <div className="text-center mb-6">
+              <h2 className="text-2xl font-bold text-brand-blue mb-2">Your Pricing Structure</h2>
+              <p className="text-gray-600">Simple, transparent pricing with no hidden fees</p>
             </div>
+            
+            <div className="grid md:grid-cols-2 gap-6">
+              {/* One-time Setup Fee */}
+              <div className="bg-white rounded-lg p-6 border border-blue-100">
+                <div className="text-center">
+                  <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <svg className="w-6 h-6 text-brand-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">One-Time Setup Fee</h3>
+                  <p className="text-sm text-gray-600 mb-3 text-center">Choose one option below:</p>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center p-2 bg-blue-50 rounded">
+                      <span className="text-sm font-medium text-gray-700">Full Service Option:</span>
+                      <span className="font-bold text-lg text-brand-blue">${calculateSetupFee('FULL_SERVICE', property.numberOfUnits).toLocaleString()}</span>
+                    </div>
+                    <div className="text-center text-xs text-gray-500 py-1">OR</div>
+                    <div className="flex justify-between items-center p-2 bg-green-50 rounded">
+                      <span className="text-sm font-medium text-gray-700">Self Service Option:</span>
+                      <span className="font-bold text-lg text-green-600">${calculateSetupFee('SELF_SERVICE', property.numberOfUnits).toLocaleString()}</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2 text-center">You'll choose your preferred option below</p>
+                </div>
+              </div>
 
-            {/* Ongoing Monthly Fee */}
-            <div className="bg-white rounded-lg p-6 border border-blue-100">
-              <div className="text-center">
-                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
+              {/* Ongoing Monthly Fee */}
+              <div className="bg-white rounded-lg p-6 border border-blue-100">
+                <div className="text-center">
+                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Monthly Subscription</h3>
+                  <div className="text-3xl font-bold text-green-600 mb-1">
+                    ${monthlyFee.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                  <p className="text-sm text-gray-600">per month</p>
+                  <p className="text-xs text-gray-500 mt-2">
+                    ${(monthlyFee * 12).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} annually • Same for both options
+                  </p>
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Monthly Subscription</h3>
-                <div className="text-3xl font-bold text-green-600 mb-1">
-                  ${monthlyFee.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
-                <p className="text-sm text-gray-600">per month</p>
-                <p className="text-xs text-gray-500 mt-2">
-                  ${(monthlyFee * 12).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} annually • Same for both options
-                </p>
               </div>
             </div>
           </div>
+        )}
+
+        {/* Selected Option Pricing - Show only after selection */}
+        {selectedSetupType && (
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-8 mb-8">
+            <div className="text-center mb-6">
+              <h2 className="text-2xl font-bold text-brand-blue mb-2">Your Selected Plan</h2>
+              <p className="text-gray-600">{selectedSetupType === 'FULL_SERVICE' ? 'Full Service Setup' : 'Self Service Setup'}</p>
+            </div>
+            
+            <div className="grid md:grid-cols-2 gap-6">
+              {/* Selected Setup Fee */}
+              <div className="bg-white rounded-lg p-6 border border-blue-100">
+                <div className="text-center">
+                  <div className={`w-12 h-12 ${selectedSetupType === 'FULL_SERVICE' ? 'bg-blue-100' : 'bg-green-100'} rounded-full flex items-center justify-center mx-auto mb-3`}>
+                    <svg className={`w-6 h-6 ${selectedSetupType === 'FULL_SERVICE' ? 'text-brand-blue' : 'text-green-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">One-Time Setup Fee</h3>
+                  <div className={`text-3xl font-bold mb-1 ${selectedSetupType === 'FULL_SERVICE' ? 'text-brand-blue' : 'text-green-600'}`}>
+                    ${calculateSetupFee(selectedSetupType, property.numberOfUnits).toLocaleString()}
+                  </div>
+                  <p className="text-sm text-gray-600">{selectedSetupType === 'FULL_SERVICE' ? 'Full Service' : 'Self Service'}</p>
+                </div>
+              </div>
+
+              {/* Monthly Fee */}
+              <div className="bg-white rounded-lg p-6 border border-blue-100">
+                <div className="text-center">
+                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Monthly Subscription</h3>
+                  <div className="text-3xl font-bold text-green-600 mb-1">
+                    ${monthlyFee.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                  <p className="text-sm text-gray-600">per month</p>
+                  <p className="text-xs text-gray-500 mt-2">
+                    ${(monthlyFee * 12).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} annually
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
           {/* Total Cost Preview */}
           <div className="mt-6 p-4 bg-white/70 rounded-lg border border-blue-100">
             <div className="text-center">
               <h4 className="font-semibold text-gray-900 mb-2">Your Total First Year Cost</h4>
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="text-center">
+              <div className="flex flex-col md:flex-row gap-4 items-center">
+                <div className="flex-1 text-center">
                   <div className="text-sm text-gray-600">Full Service Option</div>
                   <div className="text-xl font-bold text-brand-blue">
                     ${(calculateSetupFee('FULL_SERVICE', property.numberOfUnits) + (monthlyFee * 12)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
                   <div className="text-xs text-gray-500">Setup + 12 months</div>
                 </div>
-                <div className="text-center">
+                
+                {/* OR Divider */}
+                <div className="flex flex-col items-center justify-center mx-4">
+                  <div className="px-3 py-1 bg-gray-100 rounded-full">
+                    <span className="text-xs font-medium text-gray-600">OR</span>
+                  </div>
+                </div>
+                
+                <div className="flex-1 text-center">
                   <div className="text-sm text-gray-600">Self Service Option</div>
                   <div className="text-xl font-bold text-green-600">
                     ${(calculateSetupFee('SELF_SERVICE', property.numberOfUnits) + (monthlyFee * 12)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
