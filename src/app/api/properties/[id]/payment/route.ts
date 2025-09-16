@@ -392,16 +392,30 @@ export async function PUT(
         }, { status: 500 });
       }
 
-      // Update property subscription with Stripe subscription ID
-      await prisma.propertySubscription.update({
-        where: { id: subscription.id },
-        data: {
-          stripeSubscriptionId: stripeSubscription.id,
-          subscriptionStatus: 'ACTIVE',
-          currentPeriodStart: new Date((stripeSubscription as any).current_period_start * 1000),
-          currentPeriodEnd: new Date((stripeSubscription as any).current_period_end * 1000),
-        },
-      });
+        // Update property subscription with Stripe subscription ID
+        const currentPeriodStart = stripeSubscription.current_period_start 
+          ? new Date(stripeSubscription.current_period_start * 1000)
+          : new Date();
+        const currentPeriodEnd = stripeSubscription.current_period_end
+          ? new Date(stripeSubscription.current_period_end * 1000)
+          : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // Default to 30 days from now
+          
+        console.log('📅 [PUT DEBUG] Subscription dates:', {
+          current_period_start: stripeSubscription.current_period_start,
+          current_period_end: stripeSubscription.current_period_end,
+          currentPeriodStart,
+          currentPeriodEnd
+        });
+        
+        await prisma.propertySubscription.update({
+          where: { id: subscription.id },
+          data: {
+            stripeSubscriptionId: stripeSubscription.id,
+            subscriptionStatus: 'ACTIVE',
+            currentPeriodStart,
+            currentPeriodEnd,
+          },
+        });
     } else {
       // For Full Service, mark as setup complete but don't start billing yet
       await prisma.propertySubscription.update({
