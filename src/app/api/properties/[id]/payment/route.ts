@@ -307,6 +307,18 @@ export async function PUT(
               });
               
               if (paymentMethod.customer !== subscription.stripeCustomerId) {
+                // Payment method is attached to a different customer or not attached at all
+                if (paymentMethod.customer) {
+                  console.log('⚠️ [PUT DEBUG] Payment method is attached to different customer:', paymentMethod.customer);
+                  // Try to detach from the other customer first (this might fail, but worth trying)
+                  try {
+                    await stripe.paymentMethods.detach(paymentMethodId);
+                    console.log('🔓 [PUT DEBUG] Payment method detached from previous customer');
+                  } catch (detachError: any) {
+                    console.log('⚠️ [PUT DEBUG] Could not detach payment method:', detachError.message);
+                  }
+                }
+                
                 console.log('🔗 [PUT DEBUG] Attaching payment method to customer...');
                 await stripe.paymentMethods.attach(paymentMethodId, {
                   customer: subscription.stripeCustomerId,
@@ -328,14 +340,31 @@ export async function PUT(
           }
         }
         
-        stripeSubscription = await createMonthlySubscription(
-          subscription.stripeCustomerId!,
-          20.00, // $20 per unit per year
-          property.numberOfUnits!,
-          propertyId,
-          paymentMethodId // Pass the payment method ID directly
-        );
-        console.log('✅ [PUT DEBUG] Monthly subscription created:', stripeSubscription.id);
+        // Try to create subscription with the specific payment method first
+        try {
+          stripeSubscription = await createMonthlySubscription(
+            subscription.stripeCustomerId!,
+            20.00, // $20 per unit per year
+            property.numberOfUnits!,
+            propertyId,
+            paymentMethodId // Pass the payment method ID directly
+          );
+          console.log('✅ [PUT DEBUG] Monthly subscription created with specific payment method:', stripeSubscription.id);
+        } catch (subscriptionWithPMError: any) {
+          console.error('⚠️ [PUT DEBUG] Failed to create subscription with specific payment method:', subscriptionWithPMError.message);
+          
+          // Fallback: Try creating subscription without specifying payment method
+          // Stripe will use the customer's default payment method or the most recent one
+          console.log('🔄 [PUT DEBUG] Attempting subscription creation without specific payment method...');
+          stripeSubscription = await createMonthlySubscription(
+            subscription.stripeCustomerId!,
+            20.00, // $20 per unit per year
+            property.numberOfUnits!,
+            propertyId
+            // No payment method ID - let Stripe handle it
+          );
+          console.log('✅ [PUT DEBUG] Monthly subscription created with fallback approach:', stripeSubscription.id);
+        }
       } catch (subscriptionError: any) {
         console.error('❌ [PUT DEBUG] Failed to create monthly subscription:', {
           error: subscriptionError.message,
