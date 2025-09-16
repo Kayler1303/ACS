@@ -313,10 +313,10 @@ function PaymentSetupForm() {
             {/* Setup Type Selection */}
             <div className="mb-8">
               <h2 className="text-2xl font-bold text-center text-gray-900 mb-6">Choose Your Setup Option</h2>
-              <div className="grid md:grid-cols-2 gap-6">
+              <div className="flex flex-col md:flex-row gap-6 items-center">
                 {/* Full Service Option */}
                 <div
-                  className={`border-2 rounded-lg p-6 cursor-pointer transition-all ${
+                  className={`flex-1 border-2 rounded-lg p-6 cursor-pointer transition-all ${
                     selectedSetupType === 'FULL_SERVICE'
                       ? 'border-brand-blue bg-blue-50 ring-2 ring-brand-blue ring-opacity-20'
                       : 'border-gray-200 hover:border-gray-300'
@@ -369,17 +369,15 @@ function PaymentSetupForm() {
                 </div>
 
                 {/* OR Divider */}
-                <div className="flex items-center justify-center md:col-span-2 my-4">
-                  <div className="flex-grow border-t border-gray-300"></div>
-                  <div className="mx-4 px-4 py-2 bg-gray-100 rounded-full">
+                <div className="flex flex-col items-center justify-center mx-4">
+                  <div className="px-4 py-2 bg-gray-100 rounded-full">
                     <span className="text-sm font-medium text-gray-600">OR</span>
                   </div>
-                  <div className="flex-grow border-t border-gray-300"></div>
                 </div>
 
                 {/* Self Service Option */}
                 <div
-                  className={`border-2 rounded-lg p-6 cursor-pointer transition-all ${
+                  className={`flex-1 border-2 rounded-lg p-6 cursor-pointer transition-all ${
                     selectedSetupType === 'SELF_SERVICE'
                       ? 'border-brand-blue bg-blue-50 ring-2 ring-brand-blue ring-opacity-20'
                       : 'border-gray-200 hover:border-gray-300'
@@ -450,19 +448,14 @@ function PaymentSetupForm() {
                   </div>
                 </div>
                 <div>
-                  <div className="text-sm text-gray-600">
-                    {selectedSetupType === 'FULL_SERVICE' ? 'First Month' : 'First Month'}
-                  </div>
+                  <div className="text-sm text-gray-600">First Month Fee</div>
                   <div className="font-bold text-xl text-green-600">
-                    {selectedSetupType === 'FULL_SERVICE' 
-                      ? '$0.00' 
-                      : `$${calculateFirstMonthFee(property.numberOfUnits).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                    }
+                    ${calculateFirstMonthFee(property.numberOfUnits).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
                   <div className="text-xs text-gray-500">
                     {selectedSetupType === 'FULL_SERVICE' 
-                      ? 'Billing starts after setup' 
-                      : 'Billing starts immediately'
+                      ? 'Not included in first payment' 
+                      : 'Included in first payment'
                     }
                   </div>
                 </div>
@@ -523,12 +516,22 @@ function PaymentSetupForm() {
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span>One-time Setup Fee:</span>
+                  <span>Setup Fee:</span>
                   <span className="font-semibold">${setupFee.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                 </div>
+                {selectedSetupType === 'SELF_SERVICE' && (
+                  <div className="flex justify-between">
+                    <span>First Month Fee:</span>
+                    <span className="font-semibold">${calculateFirstMonthFee(property.numberOfUnits).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </div>
+                )}
                 <hr className="my-2" />
-                <div className="flex justify-between text-sm text-gray-600">
-                  <span>Monthly Fee (after setup):</span>
+                <div className="flex justify-between font-bold text-lg">
+                  <span>Total Due Today:</span>
+                  <span>${calculateTotalFirstPayment(selectedSetupType, property.numberOfUnits).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex justify-between text-sm text-gray-600 mt-2">
+                  <span>Monthly Fee (ongoing):</span>
                   <span>${monthlyFee.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/month</span>
                 </div>
               </div>
@@ -556,7 +559,7 @@ function PaymentSetupForm() {
                 disabled={!stripe || isProcessing}
                 className="w-full bg-brand-blue text-white py-3 px-4 rounded-lg font-semibold hover:bg-brand-blue-dark disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isProcessing ? 'Processing...' : `Pay $${setupFee.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                {isProcessing ? 'Processing...' : `Pay $${calculateTotalFirstPayment(selectedSetupType, property.numberOfUnits).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
               </button>
             </form>
           </div>
