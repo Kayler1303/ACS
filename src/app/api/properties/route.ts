@@ -158,6 +158,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!numberOfUnits || parseInt(numberOfUnits, 10) < 1) {
+      return NextResponse.json(
+        { error: 'Number of units is required and must be at least 1.' },
+        { status: 400 }
+      );
+    }
+
     const newProperty = await prisma.property.create({
       data: {
         id: randomUUID(),
@@ -165,7 +172,7 @@ export async function POST(request: NextRequest) {
         address,
         county,
         state,
-        numberOfUnits: numberOfUnits ? parseInt(numberOfUnits, 10) : null,
+        numberOfUnits: parseInt(numberOfUnits, 10),
         placedInServiceDate: placedInServiceDate ? new Date(placedInServiceDate) : null,
         ownerId: session.user.id,
         createdAt: new Date(),

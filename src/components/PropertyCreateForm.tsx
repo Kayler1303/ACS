@@ -86,6 +86,13 @@ export default function PropertyCreateForm() {
     setIsLoading(true);
     setError(null);
 
+    // Validate required fields
+    if (!numberOfUnits || parseInt(numberOfUnits) < 1) {
+      setError('Number of units is required and must be at least 1');
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const placedInServiceDate = convertYearToDate(placedInServiceYear);
       
@@ -100,7 +107,7 @@ export default function PropertyCreateForm() {
           address,
           county,
           state,
-          numberOfUnits: numberOfUnits ? parseInt(numberOfUnits) : null,
+          numberOfUnits: parseInt(numberOfUnits),
           placedInServiceDate
         }),
       });
@@ -212,7 +219,7 @@ export default function PropertyCreateForm() {
 
             <div>
               <label htmlFor="numberOfUnits" className="block text-sm font-medium text-gray-700">
-                Number of Units
+                Number of Units <span className="text-red-500">*</span>
               </label>
               <input
                 id="numberOfUnits"
@@ -222,6 +229,7 @@ export default function PropertyCreateForm() {
                 onChange={(e) => setNumberOfUnits(e.target.value)}
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-brand-blue focus:border-brand-blue"
                 placeholder="Enter number of units"
+                required
               />
             </div>
 
