@@ -459,11 +459,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       }
     } else {
       console.warn(`[BLOB STORAGE] Azure Blob Storage not configured - file will not be permanently stored`);
+      // For now, we'll continue with document analysis even without blob storage
+      // The file data is still in memory and can be analyzed
     }
 
     // Analyze the document with Azure Document Intelligence
     let analyzeResult;
     try {
+      console.log(`🔍 [AZURE DEBUG] Starting Azure analysis for document ${document.id}`);
+      console.log(`🔍 [AZURE DEBUG] File size: ${buffer.length} bytes`);
+      console.log(`🔍 [AZURE DEBUG] Document type: ${documentType}`);
+      
       let modelId: string;
       
       if (documentType === DocumentType.W2) {
@@ -521,8 +527,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       console.log(`🔍 [UPLOAD DEBUG] Azure endpoint configured:`, !!process.env.AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT);
       console.log(`🔍 [UPLOAD DEBUG] Azure key configured:`, !!process.env.AZURE_DOCUMENT_INTELLIGENCE_KEY);
       
+      const azureStartTime = Date.now();
+      console.log(`⏱️ [TIMING] Starting Azure analysis at ${new Date().toISOString()}`);
+      
       analyzeResult = await analyzeIncomeDocument(buffer, modelId);
-      console.log(`Azure analysis completed for document ${document.id} using model ${modelId}`);
+      
+      const azureEndTime = Date.now();
+      const azureDuration = azureEndTime - azureStartTime;
+      console.log(`⏱️ [TIMING] Azure analysis completed in ${azureDuration}ms for document ${document.id} using model ${modelId}`);
     } catch (azureError) {
       console.error('Azure Document Intelligence failed:', azureError);
       
