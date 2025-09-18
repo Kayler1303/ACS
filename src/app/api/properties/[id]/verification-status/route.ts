@@ -102,6 +102,14 @@ export async function GET(
     const verificationStatus = units.map((unit: any) => {
       console.log(`[VERIFICATION STATUS DEBUG] Processing unit ${unit.unitNumber} (ID: ${unit.id})`);
       
+      // Special debugging for Unit 1216 - track it from the beginning
+      if (unit.unitNumber === '1216') {
+        console.log(`🚨 [UNIT 1216 DEBUG] Starting to process Unit 1216`);
+        console.log(`🚨 [UNIT 1216 DEBUG] Unit ID: ${unit.id}`);
+        console.log(`🚨 [UNIT 1216 DEBUG] Target rent roll ID: ${targetRentRoll.id}`);
+        console.log(`🚨 [UNIT 1216 DEBUG] Target rent roll date: ${targetRentRoll.uploadDate}`);
+      }
+      
       const unitLeases = unit.Lease;
       
       // Special debugging for problematic units
@@ -162,6 +170,28 @@ export async function GET(
         return isCurrentLease;
       });
       console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: ${currentLeases.length} current leases (started on/before rent roll date)`);
+      
+      // Special debugging for Unit 1216 - check current leases result
+      if (unit.unitNumber === '1216') {
+        console.log(`🚨 [UNIT 1216 DEBUG] Current leases found: ${currentLeases.length}`);
+        if (currentLeases.length > 0) {
+          console.log(`🚨 [UNIT 1216 DEBUG] Unit 1216 HAS current leases - will not check future leases`);
+          currentLeases.forEach((lease: any, index: number) => {
+            console.log(`🚨 [UNIT 1216 DEBUG] Current lease ${index + 1}:`, {
+              id: lease.id,
+              leaseStartDate: lease.leaseStartDate,
+              hasTenancy: !!lease.Tenancy,
+              tenancyRentRollId: lease.Tenancy?.rentRollId,
+              residents: lease.Resident?.map((r: any) => ({
+                name: r.name,
+                incomeFinalized: r.incomeFinalized
+              })) || []
+            });
+          });
+        } else {
+          console.log(`🚨 [UNIT 1216 DEBUG] Unit 1216 has NO current leases - will check future leases`);
+        }
+      }
 
       if (unit.unitNumber === '0101') {
         console.error(`🏠 UNIT 0101 DEBUG - Processing verification status for Unit 0101`);
