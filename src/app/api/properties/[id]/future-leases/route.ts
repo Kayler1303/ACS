@@ -28,6 +28,8 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // IMMEDIATE LOGGING - should appear first
+  console.error(`🚨🚨🚨 FUTURE LEASE API HIT - TIMESTAMP: ${new Date().toISOString()} 🚨🚨🚨`);
   console.log(`[FUTURE LEASE API] ======================== GET REQUEST RECEIVED ========================`);
   console.log(`[FUTURE LEASE API] Request URL: ${request.url}`);
   console.log(`[FUTURE LEASE API] Method: ${request.method}`);
@@ -499,6 +501,17 @@ export async function GET(
 
     // Filter to only return units that have future leases
     const unitsWithFutureLeases = units.filter(unit => unit.futureLease);
+
+    console.error(`🚨🚨🚨 FUTURE LEASE API FINAL RESULTS 🚨🚨🚨`);
+    console.error(`🚨🚨🚨 Total units processed: ${units.length} 🚨🚨🚨`);
+    console.error(`🚨🚨🚨 Units with future leases: ${unitsWithFutureLeases.length} 🚨🚨🚨`);
+    console.error(`🚨🚨🚨 Unit 1216 in final results: ${unitsWithFutureLeases.some(u => u.unitNumber === '1216')} 🚨🚨🚨`);
+    
+    if (unitsWithFutureLeases.length > 0) {
+      console.error(`🚨🚨🚨 Units with future leases: [${unitsWithFutureLeases.map(u => u.unitNumber).join(', ')}] 🚨🚨🚨`);
+    } else {
+      console.error(`🚨🚨🚨 NO UNITS WITH FUTURE LEASES FOUND! 🚨🚨🚨`);
+    }
 
     console.log(`[FUTURE LEASE API] Final results:`, {
       totalUnits: units.length,
