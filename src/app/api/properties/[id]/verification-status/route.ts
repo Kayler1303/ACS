@@ -201,17 +201,35 @@ export async function GET(
         )[0];
         console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: Using current lease ${targetLease.id}`);
       } else {
-        console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: No current leases found for this rent roll - treating as Vacant`);
-        return {
-          unitId: unit.id,
-          unitNumber: unit.unitNumber,
-          status: 'Vacant',
-          totalResidents: 0,
-          residentsWithVerifiedIncome: 0,
-          verifiedDocuments: 0,
-          leaseStartDate: null,
-          residents: []
-        };
+        console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: No current leases found for this rent roll`);
+        
+        // Check for future leases (leases without Tenancy records)
+        const futureLeases = unitLeases.filter((lease: any) => {
+          // Future leases don't have Tenancy records
+          return !lease.Tenancy && lease.leaseStartDate;
+        });
+        
+        console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: Found ${futureLeases.length} future leases`);
+        
+        if (futureLeases.length > 0) {
+          // Use the most recent future lease
+          targetLease = futureLeases.sort((a: any, b: any) => 
+            new Date(b.leaseStartDate).getTime() - new Date(a.leaseStartDate).getTime()
+          )[0];
+          console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: Using future lease ${targetLease.id} for verification status`);
+        } else {
+          console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: No current or future leases found - treating as Vacant`);
+          return {
+            unitId: unit.id,
+            unitNumber: unit.unitNumber,
+            status: 'Vacant',
+            totalResidents: 0,
+            residentsWithVerifiedIncome: 0,
+            verifiedDocuments: 0,
+            leaseStartDate: null,
+            residents: []
+          };
+        }
       }
 
       // Check if current lease has verified residents
