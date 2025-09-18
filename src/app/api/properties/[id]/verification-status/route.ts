@@ -266,20 +266,40 @@ export async function GET(
         
         // Check for future leases (leases without Tenancy records)
         const futureLeases = unitLeases.filter((lease: any) => {
-          // Future leases don't have Tenancy records
-          return !lease.Tenancy && lease.leaseStartDate;
+          // Skip processed leases
+          if (lease.name && lease.name.startsWith('[PROCESSED]')) {
+            return false;
+          }
+          
+          // Check if lease has current tenancy for this rent roll
+          const hasCurrentTenancy = lease.Tenancy && targetRentRoll && lease.Tenancy.rentRollId === targetRentRoll.id;
+          
+          // If no current tenancy, check if it's a future lease
+          if (!hasCurrentTenancy) {
+            // Manual future lease with no date
+            if (!lease.leaseStartDate) {
+              return true;
+            }
+            
+            // Automatic future lease (starts after rent roll date)
+            const leaseStartDate = new Date(lease.leaseStartDate);
+            const rentRollDate = new Date(targetRentRoll.uploadDate);
+            return leaseStartDate > rentRollDate;
+          }
+          
+          return false;
         });
         
         console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: Found ${futureLeases.length} future leases`);
         
-        // Special debugging for Unit 1216
-        if (unit.unitNumber === '1216') {
-          console.log(`🚨 [UNIT 1216 DEBUG] Processing Unit 1216 - No current leases found`);
-          console.log(`🚨 [UNIT 1216 DEBUG] Total leases: ${unitLeases.length}`);
-          console.log(`🚨 [UNIT 1216 DEBUG] Future leases: ${futureLeases.length}`);
+        // Special debugging for Unit 1216 and Unit 1403
+        if (unit.unitNumber === '1216' || unit.unitNumber === '1403') {
+          console.log(`🚨 [UNIT ${unit.unitNumber} DEBUG] Processing Unit ${unit.unitNumber} - No current leases found`);
+          console.log(`🚨 [UNIT ${unit.unitNumber} DEBUG] Total leases: ${unitLeases.length}`);
+          console.log(`🚨 [UNIT ${unit.unitNumber} DEBUG] Future leases: ${futureLeases.length}`);
           
           unitLeases.forEach((lease: any, index: number) => {
-            console.log(`🚨 [UNIT 1216 DEBUG] Lease ${index + 1}:`, {
+            console.log(`🚨 [UNIT ${unit.unitNumber} DEBUG] Lease ${index + 1}:`, {
               id: lease.id,
               leaseStartDate: lease.leaseStartDate,
               hasTenancy: !!lease.Tenancy,
@@ -293,7 +313,7 @@ export async function GET(
           });
           
           futureLeases.forEach((lease: any, index: number) => {
-            console.log(`🚨 [UNIT 1216 DEBUG] Future lease ${index + 1}:`, {
+            console.log(`🚨 [UNIT ${unit.unitNumber} DEBUG] Future lease ${index + 1}:`, {
               id: lease.id,
               leaseStartDate: lease.leaseStartDate,
               residents: lease.Resident?.map((r: any) => ({
