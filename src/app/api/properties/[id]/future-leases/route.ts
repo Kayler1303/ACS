@@ -205,10 +205,24 @@ export async function GET(
     const units: UnitFutureLeaseData[] = [];
 
     console.error(`🔍 STARTING TO PROCESS ${property.Unit.length} UNITS FOR FUTURE LEASES`);
+    
+    // Log all unit numbers to see if Unit 1216 is included
+    const allUnitNumbers = property.Unit.map(u => u.unitNumber).sort();
+    console.error(`🚨🚨🚨 ALL UNIT NUMBERS IN FUTURE LEASES API: [${allUnitNumbers.join(', ')}] 🚨🚨🚨`);
+    console.error(`🚨🚨🚨 UNIT 1216 EXISTS IN FUTURE LEASES API: ${allUnitNumbers.includes('1216')} 🚨🚨🚨`);
 
         // Process each unit
     for (const unit of property.Unit) {
       console.log(`[FUTURE LEASE API] ========== Processing Unit ${unit.unitNumber} ==========`);
+      
+      // Special debugging for Unit 1216
+      if (unit.unitNumber === '1216') {
+        console.error(`🚨🚨🚨 UNIT 1216 FOUND IN FUTURE LEASES API! 🚨🚨🚨`);
+        console.error(`🚨🚨🚨 Unit 1216 has ${unit.Lease.length} leases 🚨🚨🚨`);
+        unit.Lease.forEach((lease: any, index: number) => {
+          console.error(`🚨🚨🚨 Unit 1216 Lease ${index + 1}: ${lease.name}, Start: ${lease.leaseStartDate?.toISOString() || 'null'}, Tenancy: ${!!lease.Tenancy} 🚨🚨🚨`);
+        });
+      }
       
       const unitData: UnitFutureLeaseData = {
         unitId: unit.id,
