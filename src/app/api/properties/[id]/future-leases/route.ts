@@ -212,8 +212,12 @@ export async function GET(
     console.error(`🚨🚨🚨 UNIT 1216 EXISTS IN FUTURE LEASES API: ${allUnitNumbers.includes('1216')} 🚨🚨🚨`);
 
         // Process each unit
+    let processedCount = 0;
     for (const unit of property.Unit) {
-      console.log(`[FUTURE LEASE API] ========== Processing Unit ${unit.unitNumber} ==========`);
+      try {
+        processedCount++;
+        console.log(`[FUTURE LEASE API] ========== Processing Unit ${unit.unitNumber} (${processedCount}/${property.Unit.length}) ==========`);
+        console.error(`🔄 PROCESSING UNIT ${processedCount}: ${unit.unitNumber}`);
       
       // Special debugging for Unit 1216
       if (unit.unitNumber === '1216') {
@@ -430,7 +434,14 @@ export async function GET(
       }
 
       units.push(unitData);
+      } catch (error) {
+        console.error(`🚨 ERROR processing unit ${unit.unitNumber}:`, error);
+        console.error(`🚨 Unit processing stopped at unit ${processedCount}: ${unit.unitNumber}`);
+        // Continue processing other units instead of stopping
+      }
     }
+    
+    console.error(`🏁 FINISHED PROCESSING ${processedCount} UNITS OUT OF ${property.Unit.length} TOTAL`);
 
     // Filter to only return units that have future leases
     const unitsWithFutureLeases = units.filter(unit => unit.futureLease);
