@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '../../../../../lib/prisma';
 import { getActualAmiBucket } from '../../../../../services/income';
 import { getHudIncomeLimits } from '../../../../../services/hud';
+import { getLeaseVerificationStatus } from '../../../../../services/verification';
 
 // Disable caching for this route
 export const dynamic = 'force-dynamic';
@@ -216,7 +217,7 @@ export async function GET(
     const processingEnd = Date.now();
     console.error(`⏱️ PROCESSING took ${processingEnd - processingStart}ms`);
     
-    // Batch calculate AMI buckets for performance
+    // Batch calculate AMI buckets with timeout protection
     const amiStart = Date.now();
     const unitsNeedingAmi = unitsWithFutureLeases.filter(unit => 
       unit.futureLease?.complianceBucket === 'Calculating...'
@@ -224,8 +225,15 @@ export async function GET(
     
     if (unitsNeedingAmi.length > 0) {
       try {
-        console.error(`🔢 Calculating AMI for ${unitsNeedingAmi.length} units`);
-        const hudIncomeLimits = await getHudIncomeLimits(property.county, property.state);
+        console.error(`🔢 Calculating AMI for ${unitsNeedingAmi.length} units with 5s timeout`);
+        
+        // Add timeout wrapper for HUD API call
+        const hudPromise = getHudIncomeLimits(property.county, property.state);
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('HUD API timeout')), 5000)
+        );
+        
+        const hudIncomeLimits = await Promise.race([hudPromise, timeoutPromise]);
         
         for (const unit of unitsNeedingAmi) {
           if (unit.futureLease) {
@@ -237,12 +245,13 @@ export async function GET(
             );
           }
         }
-      } catch (hudError) {
-        console.error('Error calculating AMI buckets:', hudError);
-        // Set error message for units that failed
+        console.error(`✅ AMI calculations completed successfully`);
+      } catch (hudError: any) {
+        console.error('⚠️ HUD API failed or timed out:', hudError?.message || hudError);
+        // Set fallback message for units that failed
         for (const unit of unitsNeedingAmi) {
           if (unit.futureLease) {
-            unit.futureLease.complianceBucket = 'Error loading AMI data';
+            unit.futureLease.complianceBucket = 'AMI Calculation Failed';
           }
         }
       }
