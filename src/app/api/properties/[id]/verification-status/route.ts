@@ -29,6 +29,14 @@ export async function GET(
     console.log(`🔍 [VERIFICATION STATUS API] ===== STARTING VERIFICATION STATUS CHECK =====`);
     console.log(`[VERIFICATION STATUS] Fetching status for property ${propertyId}, rentRoll: ${rentRollId || 'latest'}`);
 
+    // Debug: Log all available rent rolls for this property
+    const allRentRolls = await prisma.rentRoll.findMany({
+      where: { propertyId },
+      select: { id: true, uploadDate: true, snapshotId: true },
+      orderBy: { uploadDate: 'desc' }
+    });
+    console.log(`🚨 [DEBUG] Available rent rolls for property ${propertyId}:`, allRentRolls);
+
     // Check if user has access to this property (owner or shared)
     const access = await checkPropertyAccess(propertyId, session.user.id);
     if (!access.hasAccess) {
@@ -63,6 +71,8 @@ export async function GET(
 
     console.log(`[VERIFICATION STATUS] Using rent roll ${targetRentRoll.id} from ${targetRentRoll.uploadDate}`);
     console.error(`🔍 VERIFICATION STATUS API CALLED - Property: ${propertyId}, RentRoll: ${targetRentRoll.id}`);
+    console.log(`🚨 [DEBUG] Selected rent roll: ${targetRentRoll.id} (uploaded: ${targetRentRoll.uploadDate})`);
+    console.log(`🚨 [DEBUG] Requested rentRollId: ${rentRollId}`);
     
     // Log rent roll info to file
     fs.writeFileSync(logFile, `Property ID: ${propertyId}\n`, { flag: 'a' });
@@ -95,6 +105,10 @@ export async function GET(
     
     // Log all unit numbers to see what we're processing
     const unitNumbers = units.map((u: any) => u.unitNumber).sort();
+    console.log(`🚨 [DEBUG] All unit numbers found: [${unitNumbers.join(', ')}]`);
+    console.log(`🚨 [DEBUG] Looking for Unit 1216 in: [${unitNumbers.join(', ')}]`);
+    console.log(`🚨 [DEBUG] Unit 1216 exists: ${unitNumbers.includes('1216')}`);
+    
     fs.writeFileSync(logFile, `Total units found: ${units.length}\n`, { flag: 'a' });
     fs.writeFileSync(logFile, `Unit numbers: ${unitNumbers.join(', ')}\n`, { flag: 'a' });
     fs.writeFileSync(logFile, `Looking for units 102 and 107...\n`, { flag: 'a' });
