@@ -590,7 +590,14 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
         const url = rentRollId 
           ? `/api/properties/${property.id}/verification-status?rentRollId=${rentRollId}&bust=${Date.now()}`
           : `/api/properties/${property.id}/verification-status?bust=${Date.now()}`;
-        const res = await fetch(url);
+        const res = await fetch(url, {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        });
         console.log(`🔍 [PropertyPageClient] Verification-status API response:`, res.status, res.statusText);
         if (res.ok) {
           const data = await res.json();
