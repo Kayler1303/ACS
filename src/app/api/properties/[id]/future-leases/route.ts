@@ -276,9 +276,9 @@ export async function GET(
           return false;
         }
         
-        // ALIGN WITH VERIFICATION STATUS API: A lease is "future" if it has no Tenancy record
-        // This matches the logic in verification-status API: !lease.Tenancy && lease.leaseStartDate
-        const hasTenancy = !!lease.Tenancy;
+        // ALIGN WITH VERIFICATION STATUS API: A lease is "future" if it has no Tenancy record FOR THE CURRENT RENT ROLL
+        // This matches the logic in verification-status API more precisely
+        const hasCurrentTenancy = lease.Tenancy && lease.Tenancy.rentRollId === targetRentRoll.id;
         const hasStartDate = !!lease.leaseStartDate;
         
         // If start date is null, this could be a future lease (like "August 2025 Lease Renewal")
@@ -291,8 +291,8 @@ export async function GET(
         }
         
         // UPDATED LOGIC: Use same definition as verification-status API
-        // A lease is "future" if it has no Tenancy record and has a start date
-        const isFutureLease = !hasTenancy && hasStartDate;
+        // A lease is "future" if it has no Tenancy record FOR THE CURRENT RENT ROLL and has a start date
+        const isFutureLease = !hasCurrentTenancy && hasStartDate;
         
         const leaseStartDate = new Date(lease.leaseStartDate);
         const now = new Date();
@@ -307,10 +307,13 @@ export async function GET(
             rentRollDate: rentRollDate.toISOString(),
             isAfterNow,
             isAfterRentRoll,
-            hasTenancy,
+            hasTenancy: !!lease.Tenancy,
+            tenancyRentRollId: lease.Tenancy?.rentRollId || 'null',
+            targetRentRollId: targetRentRoll.id,
+            hasCurrentTenancy,
             hasStartDate,
             isFutureLease: isFutureLease,
-            reason: isFutureLease ? 'No Tenancy + has start date' : (hasTenancy ? 'Has Tenancy' : 'No start date'),
+            reason: isFutureLease ? 'No Current Tenancy + has start date' : (hasCurrentTenancy ? 'Has Current Tenancy' : 'No start date'),
             tenancyId: lease.Tenancy?.id || 'null'
           });
         }
@@ -321,10 +324,11 @@ export async function GET(
           rentRollDate: rentRollDate.toISOString(),
           isAfterNow,
           isAfterRentRoll,
-          hasTenancy,
+          hasTenancy: !!lease.Tenancy,
+          hasCurrentTenancy,
           hasStartDate,
           isFutureLease: isFutureLease,
-          reason: isFutureLease ? 'No Tenancy + has start date' : (hasTenancy ? 'Has Tenancy' : 'No start date')
+          reason: isFutureLease ? 'No Current Tenancy + has start date' : (hasCurrentTenancy ? 'Has Current Tenancy' : 'No start date')
         });
         
         return isFutureLease;
