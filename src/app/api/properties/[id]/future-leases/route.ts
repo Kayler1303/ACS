@@ -278,7 +278,7 @@ export async function GET(
         
         // ALIGN WITH VERIFICATION STATUS API: A lease is "future" if it has no Tenancy record FOR THE CURRENT RENT ROLL
         // This matches the logic in verification-status API more precisely
-        const hasCurrentTenancy = lease.Tenancy && lease.Tenancy.rentRollId === targetRentRoll.id;
+        const hasCurrentTenancy = lease.Tenancy && targetRentRoll && lease.Tenancy.rentRollId === targetRentRoll.id;
         const hasStartDate = !!lease.leaseStartDate;
         
         // If start date is null, this could be a future lease (like "August 2025 Lease Renewal")
@@ -309,7 +309,7 @@ export async function GET(
             isAfterRentRoll,
             hasTenancy: !!lease.Tenancy,
             tenancyRentRollId: lease.Tenancy?.rentRollId || 'null',
-            targetRentRollId: targetRentRoll.id,
+            targetRentRollId: targetRentRoll?.id || 'null',
             hasCurrentTenancy,
             hasStartDate,
             isFutureLease: isFutureLease,
