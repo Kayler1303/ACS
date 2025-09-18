@@ -29,6 +29,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const startTime = Date.now();
+  console.error(`🚀 FUTURE LEASE API STARTED at ${new Date().toISOString()}`);
   
   try {
     const session = await getServerSession(authOptions);
@@ -39,6 +40,10 @@ export async function GET(
     const { id: propertyId } = await params;
     const { searchParams } = new URL(request.url);
     const rentRollId = searchParams.get('rentRollId');
+    
+    console.error(`🔍 FUTURE LEASE API: Property ${propertyId}, RentRoll ${rentRollId || 'latest'}`);
+    
+    const queryStart = Date.now();
 
     // Optimized query - only get what we need
     const property = await prisma.property.findUnique({
@@ -93,9 +98,14 @@ export async function GET(
       }
     });
 
+    const queryEnd = Date.now();
+    console.error(`⏱️ DATABASE QUERY took ${queryEnd - queryStart}ms`);
+
     if (!property) {
       return NextResponse.json({ error: 'Property not found' }, { status: 404 });
     }
+
+    console.error(`📊 PROPERTY DATA: ${property.Unit.length} units, ${property.RentRoll.length} rent rolls`);
 
     // Get the target rent roll date for filtering future leases
     let targetRentRoll;
@@ -105,6 +115,8 @@ export async function GET(
       targetRentRoll = property.RentRoll[0]; // Most recent
     }
     const rentRollDate = targetRentRoll ? new Date(targetRentRoll.uploadDate) : new Date();
+    
+    const processingStart = Date.now();
 
     const units: UnitFutureLeaseData[] = [];
 
@@ -209,8 +221,12 @@ export async function GET(
     // Filter to only return units that have future leases
     const unitsWithFutureLeases = units.filter(unit => unit.futureLease);
     
+    const processingEnd = Date.now();
     const endTime = Date.now();
-    console.log(`Future leases API completed in ${endTime - startTime}ms - found ${unitsWithFutureLeases.length} units with future leases`);
+    
+    console.error(`⏱️ PROCESSING took ${processingEnd - processingStart}ms`);
+    console.error(`🏁 TOTAL API TIME: ${endTime - startTime}ms`);
+    console.error(`📈 FOUND ${unitsWithFutureLeases.length} units with future leases`);
 
     return NextResponse.json({ 
       units: unitsWithFutureLeases,
