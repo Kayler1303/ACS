@@ -233,12 +233,12 @@ export async function GET(
         
         try {
           // Try current year first
-          hudIncomeLimits = await getHudIncomeLimits(property.county, property.state, currentYear, property.placedInServiceDate);
+          hudIncomeLimits = await getHudIncomeLimits(property.county, property.state, currentYear, property.placedInServiceDate || undefined);
         } catch (error) {
           // Fall back to previous year if current year fails
           const fallbackYear = currentYear - 1;
           console.log(`Failed to fetch ${currentYear} limits, falling back to ${fallbackYear}:`, error);
-          hudIncomeLimits = await getHudIncomeLimits(property.county, property.state, fallbackYear, property.placedInServiceDate);
+          hudIncomeLimits = await getHudIncomeLimits(property.county, property.state, fallbackYear, property.placedInServiceDate || undefined);
           console.log(`Successfully fetched ${fallbackYear} limits as fallback`);
         }
         
