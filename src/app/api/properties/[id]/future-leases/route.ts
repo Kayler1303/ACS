@@ -224,7 +224,14 @@ export async function GET(
         console.error(`🚨🚨🚨 UNIT 1216 FOUND IN FUTURE LEASES API! 🚨🚨🚨`);
         console.error(`🚨🚨🚨 Unit 1216 has ${unit.Lease.length} leases 🚨🚨🚨`);
         unit.Lease.forEach((lease: any, index: number) => {
-          console.error(`🚨🚨🚨 Unit 1216 Lease ${index + 1}: ${lease.name}, Start: ${lease.leaseStartDate?.toISOString() || 'null'}, Tenancy: ${!!lease.Tenancy} 🚨🚨🚨`);
+          console.error(`🚨🚨🚨 Unit 1216 Lease ${index + 1}: ${lease.name}, Start: ${lease.leaseStartDate?.toISOString() || 'null'}, Tenancy: ${!!lease.Tenancy}, TenancyId: ${lease.Tenancy?.id || 'null'} 🚨🚨🚨`);
+        });
+        
+        // Also log preserved future leases for this unit
+        const preservedForUnit = preservedFutureLeases.filter(lease => lease.Unit.unitNumber === '1216');
+        console.error(`🚨🚨🚨 Unit 1216 preserved future leases: ${preservedForUnit.length} 🚨🚨🚨`);
+        preservedForUnit.forEach((lease: any, index: number) => {
+          console.error(`🚨🚨🚨 Unit 1216 Preserved Lease ${index + 1}: ${lease.name}, Start: ${lease.leaseStartDate?.toISOString() || 'null'}, Tenancy: ${!!lease.Tenancy} 🚨🚨🚨`);
         });
       }
       
@@ -277,6 +284,9 @@ export async function GET(
         // If start date is null, this could be a future lease (like "August 2025 Lease Renewal")
         if (!lease.leaseStartDate) {
           console.log(`[FUTURE LEASE DEBUG] Unit ${unit.unitNumber} - Including lease with null start date: ${lease.name}`);
+          if (unit.unitNumber === '1216') {
+            console.error(`🚨🚨🚨 Unit 1216 - NULL START DATE LEASE: ${lease.name} 🚨🚨🚨`);
+          }
           return true; // Include leases with null start dates as potential future leases
         }
         
@@ -288,6 +298,22 @@ export async function GET(
         const now = new Date();
         const isAfterNow = leaseStartDate > now;
         const isAfterRentRoll = leaseStartDate > rentRollDate;
+        
+        // Special debugging for Unit 1216
+        if (unit.unitNumber === '1216') {
+          console.error(`🚨🚨🚨 Unit 1216 FILTERING - Lease ${lease.name}:`, {
+            leaseStart: leaseStartDate.toISOString(),
+            now: now.toISOString(),
+            rentRollDate: rentRollDate.toISOString(),
+            isAfterNow,
+            isAfterRentRoll,
+            hasTenancy,
+            hasStartDate,
+            isFutureLease: isFutureLease,
+            reason: isFutureLease ? 'No Tenancy + has start date' : (hasTenancy ? 'Has Tenancy' : 'No start date'),
+            tenancyId: lease.Tenancy?.id || 'null'
+          });
+        }
         
         console.log(`[FUTURE LEASE DEBUG] Unit ${unit.unitNumber} - Lease ${lease.name}:`, {
           leaseStart: leaseStartDate.toISOString(),
@@ -305,6 +331,14 @@ export async function GET(
       });
       
       console.log(`[FUTURE LEASE DEBUG] Unit ${unit.unitNumber} - Found ${futureLeases.length} future leases`);
+      
+      // Special debugging for Unit 1216 final result
+      if (unit.unitNumber === '1216') {
+        console.error(`🚨🚨🚨 Unit 1216 FINAL RESULT: Found ${futureLeases.length} future leases 🚨🚨🚨`);
+        futureLeases.forEach((lease: any, index: number) => {
+          console.error(`🚨🚨🚨 Unit 1216 Future Lease ${index + 1}: ${lease.name}, Start: ${lease.leaseStartDate?.toISOString() || 'null'} 🚨🚨🚨`);
+        });
+      }
 
         if (futureLeases.length > 0) {
           // Get the most recent future lease
