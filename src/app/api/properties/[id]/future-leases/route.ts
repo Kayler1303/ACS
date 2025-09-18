@@ -225,15 +225,22 @@ export async function GET(
     
     if (unitsNeedingAmi.length > 0) {
       try {
-        console.error(`🔢 Calculating AMI for ${unitsNeedingAmi.length} units with 2s timeout`);
+        console.error(`🔢 Calculating AMI for ${unitsNeedingAmi.length} units using robust HUD API approach`);
         
-        // Try to get HUD data with a very short timeout
-        const hudPromise = getHudIncomeLimits(property.county, property.state);
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('HUD API timeout')), 2000)
-        );
+        // Use the same robust approach as the income-limits API
+        const currentYear = new Date().getFullYear();
+        let hudIncomeLimits;
         
-        const hudIncomeLimits = await Promise.race([hudPromise, timeoutPromise]);
+        try {
+          // Try current year first
+          hudIncomeLimits = await getHudIncomeLimits(property.county, property.state, currentYear, property.placedInServiceDate);
+        } catch (error) {
+          // Fall back to previous year if current year fails
+          const fallbackYear = currentYear - 1;
+          console.log(`Failed to fetch ${currentYear} limits, falling back to ${fallbackYear}:`, error);
+          hudIncomeLimits = await getHudIncomeLimits(property.county, property.state, fallbackYear, property.placedInServiceDate);
+          console.log(`Successfully fetched ${fallbackYear} limits as fallback`);
+        }
         
         for (const unit of unitsNeedingAmi) {
           if (unit.futureLease) {
@@ -247,15 +254,15 @@ export async function GET(
         }
         console.error(`✅ AMI calculations completed successfully`);
       } catch (hudError: any) {
-        console.error('⚠️ HUD API failed or timed out, using fallback:', hudError?.message || hudError);
-        // Instead of showing "Failed", show "Pending AMI" for better UX
+        console.error('⚠️ HUD API failed for both current and previous year:', hudError?.message || hudError);
+        // Set fallback messages when HUD API completely fails
         for (const unit of unitsNeedingAmi) {
           if (unit.futureLease) {
             // For $0 income, show proper message instead of trying to calculate AMI
             if (unit.futureLease.totalIncome === 0) {
               unit.futureLease.complianceBucket = 'No Income Information';
             } else {
-              unit.futureLease.complianceBucket = 'AMI Pending';
+              unit.futureLease.complianceBucket = 'HUD API Unavailable';
             }
           }
         }
