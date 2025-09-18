@@ -590,7 +590,11 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
         const url = rentRollId 
           ? `/api/properties/${property.id}/verification-status?rentRollId=${rentRollId}&bust=${Date.now()}`
           : `/api/properties/${property.id}/verification-status?bust=${Date.now()}`;
+        
+        console.error(`🚨🚨🚨 FRONTEND: About to fetch URL: ${url} 🚨🚨🚨`);
+        
         const res = await fetch(url, {
+          method: 'GET',
           cache: 'no-store',
           headers: {
             'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -600,6 +604,8 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
             'X-Debug-Request': 'true'
           }
         });
+        
+        console.error(`🚨🚨🚨 FRONTEND: Fetch response status: ${res.status} 🚨🚨🚨`);
         console.log(`🔍 [PropertyPageClient] Verification-status API response:`, res.status, res.statusText);
         if (res.ok) {
           const data = await res.json();
