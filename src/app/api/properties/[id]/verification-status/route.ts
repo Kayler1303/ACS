@@ -28,6 +28,7 @@ export async function GET(
 
     console.log(`🔍 [VERIFICATION STATUS API] ===== STARTING VERIFICATION STATUS CHECK =====`);
     console.log(`[VERIFICATION STATUS] Fetching status for property ${propertyId}, rentRoll: ${rentRollId || 'latest'}`);
+    console.error(`🚨 [DEPLOYMENT TEST] This message should appear in browser console if deployment worked!`);
 
     // Debug: Log all available rent rolls for this property
     const allRentRolls = await prisma.rentRoll.findMany({
