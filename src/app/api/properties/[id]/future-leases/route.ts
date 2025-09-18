@@ -269,25 +269,20 @@ export async function GET(
           return false;
         }
         
-        // ALIGN WITH VERIFICATION STATUS API: A lease is "future" if it has no Tenancy record
-        // This matches the logic in verification-status API: !lease.Tenancy && lease.leaseStartDate
-        const hasTenancy = !!lease.Tenancy;
-        const hasStartDate = !!lease.leaseStartDate;
-        
         // If start date is null, this could be a future lease (like "August 2025 Lease Renewal")
         if (!lease.leaseStartDate) {
           console.log(`[FUTURE LEASE DEBUG] Unit ${unit.unitNumber} - Including lease with null start date: ${lease.name}`);
           return true; // Include leases with null start dates as potential future leases
         }
         
-        // UPDATED LOGIC: Use same definition as verification-status API
-        // A lease is "future" if it has no Tenancy record and has a start date
-        const isFutureLease = !hasTenancy && hasStartDate;
-        
         const leaseStartDate = new Date(lease.leaseStartDate);
         const now = new Date();
         const isAfterNow = leaseStartDate > now;
         const isAfterRentRoll = leaseStartDate > rentRollDate;
+        
+        // A lease is considered "future" if it starts after the rent roll date
+        // This means leases that start after the snapshot date are "future leases"
+        const isFutureLease = isAfterRentRoll;
         
         console.log(`[FUTURE LEASE DEBUG] Unit ${unit.unitNumber} - Lease ${lease.name}:`, {
           leaseStart: leaseStartDate.toISOString(),
@@ -295,10 +290,8 @@ export async function GET(
           rentRollDate: rentRollDate.toISOString(),
           isAfterNow,
           isAfterRentRoll,
-          hasTenancy,
-          hasStartDate,
-          isFutureLease: isFutureLease,
-          reason: isFutureLease ? 'No Tenancy + has start date' : (hasTenancy ? 'Has Tenancy' : 'No start date')
+          hasTenancy: !!lease.Tenancy,
+          isFutureLease
         });
         
         return isFutureLease;
