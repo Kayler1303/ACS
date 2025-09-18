@@ -295,12 +295,14 @@ export async function GET(
         const isAfterNow = leaseStartDate > now;
         const isAfterRentRoll = leaseStartDate > rentRollDate;
         
-        // UPDATED LOGIC: Combine verification-status API logic with date-based filtering
-        // A lease is "future" if:
-        // 1. It has no Tenancy record FOR THE CURRENT RENT ROLL and has a start date
-        // 2. AND the lease start date is after the rent roll date (actually in the future)
-        const hasNoCurrentTenancy = !hasCurrentTenancy && hasStartDate;
-        const isFutureLease = hasNoCurrentTenancy && isAfterRentRoll;
+        // UPDATED LOGIC: Handle both manual and automatic future leases
+        // A lease is "future" if it has no Tenancy record for the current rent roll AND either:
+        // 1. Has no start date (manual future lease with no date specified), OR
+        // 2. Has a start date after the rent roll date (automatic future lease or manual with future date)
+        const hasNoCurrentTenancy = !hasCurrentTenancy;
+        const isManualFutureLeaseWithNoDate = hasNoCurrentTenancy && !hasStartDate;
+        const isAutomaticOrDatedFutureLease = hasNoCurrentTenancy && hasStartDate && isAfterRentRoll;
+        const isFutureLease = isManualFutureLeaseWithNoDate || isAutomaticOrDatedFutureLease;
         
         // Special debugging for Unit 1216
         if (unit.unitNumber === '1216') {
@@ -316,7 +318,9 @@ export async function GET(
             hasCurrentTenancy,
             hasStartDate,
             isFutureLease: isFutureLease,
-            reason: isFutureLease ? 'No Current Tenancy + after rent roll date' : (hasCurrentTenancy ? 'Has Current Tenancy' : (!isAfterRentRoll ? 'Before rent roll date' : 'No start date')),
+            reason: isFutureLease ? 
+              (isManualFutureLeaseWithNoDate ? 'Manual future lease (no date)' : 'Future lease (after rent roll date)') : 
+              (hasCurrentTenancy ? 'Has Current Tenancy' : (!hasStartDate ? 'No start date + has tenancy' : 'Before rent roll date')),
             tenancyId: lease.Tenancy?.id || 'null'
           });
         }
@@ -331,7 +335,9 @@ export async function GET(
           hasCurrentTenancy,
           hasStartDate,
           isFutureLease: isFutureLease,
-          reason: isFutureLease ? 'No Current Tenancy + after rent roll date' : (hasCurrentTenancy ? 'Has Current Tenancy' : (!isAfterRentRoll ? 'Before rent roll date' : 'No start date'))
+          reason: isFutureLease ? 
+            (isManualFutureLeaseWithNoDate ? 'Manual future lease (no date)' : 'Future lease (after rent roll date)') : 
+            (hasCurrentTenancy ? 'Has Current Tenancy' : (!hasStartDate ? 'No start date + has tenancy' : 'Before rent roll date'))
         });
         
         return isFutureLease;
