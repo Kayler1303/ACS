@@ -290,14 +290,17 @@ export async function GET(
           return true; // Include leases with null start dates as potential future leases
         }
         
-        // UPDATED LOGIC: Use same definition as verification-status API
-        // A lease is "future" if it has no Tenancy record FOR THE CURRENT RENT ROLL and has a start date
-        const isFutureLease = !hasCurrentTenancy && hasStartDate;
-        
         const leaseStartDate = new Date(lease.leaseStartDate);
         const now = new Date();
         const isAfterNow = leaseStartDate > now;
         const isAfterRentRoll = leaseStartDate > rentRollDate;
+        
+        // UPDATED LOGIC: Combine verification-status API logic with date-based filtering
+        // A lease is "future" if:
+        // 1. It has no Tenancy record FOR THE CURRENT RENT ROLL and has a start date
+        // 2. AND the lease start date is after the rent roll date (actually in the future)
+        const hasNoCurrentTenancy = !hasCurrentTenancy && hasStartDate;
+        const isFutureLease = hasNoCurrentTenancy && isAfterRentRoll;
         
         // Special debugging for Unit 1216
         if (unit.unitNumber === '1216') {
@@ -313,7 +316,7 @@ export async function GET(
             hasCurrentTenancy,
             hasStartDate,
             isFutureLease: isFutureLease,
-            reason: isFutureLease ? 'No Current Tenancy + has start date' : (hasCurrentTenancy ? 'Has Current Tenancy' : 'No start date'),
+            reason: isFutureLease ? 'No Current Tenancy + after rent roll date' : (hasCurrentTenancy ? 'Has Current Tenancy' : (!isAfterRentRoll ? 'Before rent roll date' : 'No start date')),
             tenancyId: lease.Tenancy?.id || 'null'
           });
         }
@@ -328,7 +331,7 @@ export async function GET(
           hasCurrentTenancy,
           hasStartDate,
           isFutureLease: isFutureLease,
-          reason: isFutureLease ? 'No Current Tenancy + has start date' : (hasCurrentTenancy ? 'Has Current Tenancy' : 'No start date')
+          reason: isFutureLease ? 'No Current Tenancy + after rent roll date' : (hasCurrentTenancy ? 'Has Current Tenancy' : (!isAfterRentRoll ? 'Before rent roll date' : 'No start date'))
         });
         
         return isFutureLease;
