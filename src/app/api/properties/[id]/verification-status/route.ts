@@ -211,6 +211,38 @@ export async function GET(
         
         console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: Found ${futureLeases.length} future leases`);
         
+        // Special debugging for Unit 1216
+        if (unit.unitNumber === '1216') {
+          console.log(`🚨 [UNIT 1216 DEBUG] Processing Unit 1216 - No current leases found`);
+          console.log(`🚨 [UNIT 1216 DEBUG] Total leases: ${unitLeases.length}`);
+          console.log(`🚨 [UNIT 1216 DEBUG] Future leases: ${futureLeases.length}`);
+          
+          unitLeases.forEach((lease: any, index: number) => {
+            console.log(`🚨 [UNIT 1216 DEBUG] Lease ${index + 1}:`, {
+              id: lease.id,
+              leaseStartDate: lease.leaseStartDate,
+              hasTenancy: !!lease.Tenancy,
+              tenancyRentRollId: lease.Tenancy?.rentRollId,
+              targetRentRollId: targetRentRoll.id,
+              residents: lease.Resident?.map((r: any) => ({
+                name: r.name,
+                incomeFinalized: r.incomeFinalized
+              })) || []
+            });
+          });
+          
+          futureLeases.forEach((lease: any, index: number) => {
+            console.log(`🚨 [UNIT 1216 DEBUG] Future lease ${index + 1}:`, {
+              id: lease.id,
+              leaseStartDate: lease.leaseStartDate,
+              residents: lease.Resident?.map((r: any) => ({
+                name: r.name,
+                incomeFinalized: r.incomeFinalized
+              })) || []
+            });
+          });
+        }
+        
         if (futureLeases.length > 0) {
           // Use the most recent future lease
           targetLease = futureLeases.sort((a: any, b: any) => 
