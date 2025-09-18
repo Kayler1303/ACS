@@ -80,6 +80,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Property not found' }, { status: 404 });
     }
 
+    // Debug: Log unit information
+    console.error(`🚨🚨🚨 PROPERTY API - Property ${propertyId} has ${property.Unit.length} units 🚨🚨🚨`);
+    const allUnitNumbers = property.Unit.map(u => u.unitNumber).sort();
+    console.error(`🚨🚨🚨 PROPERTY API - Unit numbers: [${allUnitNumbers.join(', ')}] 🚨🚨🚨`);
+    console.error(`🚨🚨🚨 PROPERTY API - Unit 1216 exists: ${allUnitNumbers.includes('1216')} 🚨🚨🚨`);
+
     // Check for pending deletion request
     const pendingDeletionRequest = await prisma.overrideRequest.findFirst({
       where: {
