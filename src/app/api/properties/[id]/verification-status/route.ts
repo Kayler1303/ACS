@@ -9,6 +9,8 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // IMMEDIATE LOGGING - should appear first
+  console.error(`🚨🚨🚨 VERIFICATION STATUS API HIT - TIMESTAMP: ${new Date().toISOString()} 🚨🚨🚨`);
   console.log(`🚨 [VERIFICATION STATUS API] ===== API ENDPOINT HIT =====`);
   console.error(`🚨 [VERIFICATION STATUS API] ===== THIS SHOULD APPEAR IN CONSOLE =====`);
   
