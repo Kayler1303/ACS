@@ -186,17 +186,9 @@ export async function GET(
           // Calculate compliance bucket for verified leases with income
           let complianceBucket = '-';
           if (verificationStatus === 'Verified' && totalIncome > 0) {
-            try {
-              const hudIncomeLimits = await getHudIncomeLimits(property.county, property.state);
-              complianceBucket = getActualAmiBucket(
-                totalIncome,
-                (futureLease.Resident || []).length,
-                hudIncomeLimits,
-                property.complianceOption || "20% at 50% AMI, 55% at 80% AMI"
-              );
-            } catch (hudError) {
-              complianceBucket = 'Error loading AMI data';
-            }
+            // For performance, we'll calculate AMI buckets in a batch after processing all units
+            // For now, just mark that this unit needs AMI calculation
+            complianceBucket = 'Calculating...';
           }
 
           unitData.futureLease = {
@@ -222,9 +214,44 @@ export async function GET(
     const unitsWithFutureLeases = units.filter(unit => unit.futureLease);
     
     const processingEnd = Date.now();
-    const endTime = Date.now();
-    
     console.error(`⏱️ PROCESSING took ${processingEnd - processingStart}ms`);
+    
+    // Batch calculate AMI buckets for performance
+    const amiStart = Date.now();
+    const unitsNeedingAmi = unitsWithFutureLeases.filter(unit => 
+      unit.futureLease?.complianceBucket === 'Calculating...'
+    );
+    
+    if (unitsNeedingAmi.length > 0) {
+      try {
+        console.error(`🔢 Calculating AMI for ${unitsNeedingAmi.length} units`);
+        const hudIncomeLimits = await getHudIncomeLimits(property.county, property.state);
+        
+        for (const unit of unitsNeedingAmi) {
+          if (unit.futureLease) {
+            unit.futureLease.complianceBucket = getActualAmiBucket(
+              unit.futureLease.totalIncome,
+              unit.futureLease.residents.length,
+              hudIncomeLimits,
+              property.complianceOption || "20% at 50% AMI, 55% at 80% AMI"
+            );
+          }
+        }
+      } catch (hudError) {
+        console.error('Error calculating AMI buckets:', hudError);
+        // Set error message for units that failed
+        for (const unit of unitsNeedingAmi) {
+          if (unit.futureLease) {
+            unit.futureLease.complianceBucket = 'Error loading AMI data';
+          }
+        }
+      }
+    }
+    
+    const amiEnd = Date.now();
+    console.error(`🔢 AMI calculation took ${amiEnd - amiStart}ms`);
+    
+    const endTime = Date.now();
     console.error(`🏁 TOTAL API TIME: ${endTime - startTime}ms`);
     console.error(`📈 FOUND ${unitsWithFutureLeases.length} units with future leases`);
 
