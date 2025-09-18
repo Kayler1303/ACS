@@ -595,7 +595,9 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
           headers: {
             'Cache-Control': 'no-cache, no-store, must-revalidate',
             'Pragma': 'no-cache',
-            'Expires': '0'
+            'Expires': '0',
+            'X-Force-Fresh': Date.now().toString(),
+            'X-Debug-Request': 'true'
           }
         });
         console.log(`🔍 [PropertyPageClient] Verification-status API response:`, res.status, res.statusText);
