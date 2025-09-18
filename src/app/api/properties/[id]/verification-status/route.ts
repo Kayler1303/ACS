@@ -110,8 +110,22 @@ export async function GET(
     console.log(`🚨 [DEBUG] Looking for Unit 1216 in: [${unitNumbers.join(', ')}]`);
     console.log(`🚨 [DEBUG] Unit 1216 exists: ${unitNumbers.includes('1216')}`);
     
+    // CRITICAL: Check for Unit 1216 specifically
+    const has1216 = unitNumbers.includes('1216');
+    console.error(`🚨🚨🚨 UNIT 1216 CHECK: EXISTS = ${has1216} 🚨🚨🚨`);
+    
+    if (!has1216) {
+      console.error(`🚨🚨🚨 UNIT 1216 NOT FOUND! Available units: ${unitNumbers.slice(0, 20).join(', ')}... (showing first 20) 🚨🚨🚨`);
+      // Check if it's stored with different formatting
+      const unit1216Variations = unitNumbers.filter(num => num.includes('1216') || num.includes('12') && num.includes('16'));
+      console.error(`🚨🚨🚨 Unit 1216 variations found: ${unit1216Variations.join(', ')} 🚨🚨🚨`);
+    } else {
+      console.error(`🚨🚨🚨 UNIT 1216 FOUND! It should be processed... 🚨🚨🚨`);
+    }
+    
     fs.writeFileSync(logFile, `Total units found: ${units.length}\n`, { flag: 'a' });
     fs.writeFileSync(logFile, `Unit numbers: ${unitNumbers.join(', ')}\n`, { flag: 'a' });
+    fs.writeFileSync(logFile, `UNIT 1216 EXISTS: ${has1216}\n`, { flag: 'a' });
     fs.writeFileSync(logFile, `Looking for units 102 and 107...\n`, { flag: 'a' });
 
     const verificationStatus = units.map((unit: any) => {
