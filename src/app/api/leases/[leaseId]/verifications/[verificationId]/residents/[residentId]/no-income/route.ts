@@ -51,14 +51,16 @@ export async function PATCH(
     console.log(`[NO INCOME API] Marking resident ${resident.name} (${residentId}) as having no income`);
     console.log(`[NO INCOME API] Before update - hasNoIncome: ${resident.hasNoIncome}, verifiedIncome: ${resident.verifiedIncome}`);
 
-    // Mark resident as having no income but DO NOT finalize yet
-    // Let the frontend handle discrepancy detection and finalization
+    // Mark resident as having no income AND finalize them automatically
+    // No income means verification is complete - no further action needed
     await prisma.$executeRaw`
       UPDATE "Resident" 
       SET 
         "hasNoIncome" = true,
         "calculatedAnnualizedIncome" = 0::numeric,
         "verifiedIncome" = 0::numeric,
+        "incomeFinalized" = true,
+        "finalizedAt" = NOW(),
         "updatedAt" = NOW()
       WHERE "id" = ${residentId}
     `;
@@ -68,13 +70,19 @@ export async function PATCH(
     // Verify the update worked
     const updatedResident = await prisma.resident.findUnique({
       where: { id: residentId },
-      select: { hasNoIncome: true, verifiedIncome: true, calculatedAnnualizedIncome: true }
+      select: { 
+        hasNoIncome: true, 
+        verifiedIncome: true, 
+        calculatedAnnualizedIncome: true,
+        incomeFinalized: true,
+        finalizedAt: true
+      }
     });
     console.log(`[NO INCOME API] After update - resident data:`, updatedResident);
 
     return NextResponse.json({ 
       success: true, 
-      message: `${resident.name} marked as having no income. Please resolve any income discrepancies to complete verification.`,
+      message: `${resident.name} marked as having no income and automatically finalized.`,
       updatedResident
     });
 
