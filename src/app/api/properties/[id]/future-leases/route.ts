@@ -224,49 +224,22 @@ export async function GET(
     );
     
     if (unitsNeedingAmi.length > 0) {
-      try {
-        console.error(`🔢 Calculating AMI for ${unitsNeedingAmi.length} units using robust HUD API approach`);
-        
-        // Use the same robust approach as the income-limits API
-        const currentYear = new Date().getFullYear();
-        let hudIncomeLimits;
-        
-        try {
-          // Try current year first
-          hudIncomeLimits = await getHudIncomeLimits(property.county, property.state, currentYear, property.placedInServiceDate || undefined);
-        } catch (error) {
-          // Fall back to previous year if current year fails
-          const fallbackYear = currentYear - 1;
-          console.log(`Failed to fetch ${currentYear} limits, falling back to ${fallbackYear}:`, error);
-          hudIncomeLimits = await getHudIncomeLimits(property.county, property.state, fallbackYear, property.placedInServiceDate || undefined);
-          console.log(`Successfully fetched ${fallbackYear} limits as fallback`);
-        }
-        
-        for (const unit of unitsNeedingAmi) {
-          if (unit.futureLease) {
-            unit.futureLease.complianceBucket = getActualAmiBucket(
-              unit.futureLease.totalIncome,
-              unit.futureLease.residents.length,
-              hudIncomeLimits,
-              property.complianceOption || "20% at 50% AMI, 55% at 80% AMI"
-            );
-          }
-        }
-        console.error(`✅ AMI calculations completed successfully`);
-      } catch (hudError: any) {
-        console.error('⚠️ HUD API failed for both current and previous year:', hudError?.message || hudError);
-        // Set fallback messages when HUD API completely fails
-        for (const unit of unitsNeedingAmi) {
-          if (unit.futureLease) {
-            // For $0 income, show proper message instead of trying to calculate AMI
-            if (unit.futureLease.totalIncome === 0) {
-              unit.futureLease.complianceBucket = 'No Income Information';
-            } else {
-              unit.futureLease.complianceBucket = 'HUD API Unavailable';
-            }
+      console.error(`🔢 Skipping HUD API calls - will use frontend cached data for AMI calculations`);
+      
+      // Don't make HUD API calls from the backend - let the frontend handle AMI calculations
+      // The frontend has cached HUD data and can calculate AMI buckets client-side
+      for (const unit of unitsNeedingAmi) {
+        if (unit.futureLease) {
+          // For $0 income, show proper message
+          if (unit.futureLease.totalIncome === 0) {
+            unit.futureLease.complianceBucket = 'No Income Information';
+          } else {
+            // Let frontend calculate AMI using cached data
+            unit.futureLease.complianceBucket = 'Calculate Client-Side';
           }
         }
       }
+      console.error(`✅ AMI calculation deferred to frontend (using cached HUD data)`);
     }
     
     const amiEnd = Date.now();

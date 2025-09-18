@@ -1164,6 +1164,18 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
         })));
       }
 
+      // Calculate AMI bucket for future lease if needed (client-side calculation)
+      if (processedFutureLease && processedFutureLease.complianceBucket === 'Calculate Client-Side' && hudIncomeLimits) {
+        const futureLeaseAmi = getActualBucket(
+          processedFutureLease.totalIncome,
+          processedFutureLease.residents.length,
+          hudIncomeLimits,
+          complianceOption
+        );
+        processedFutureLease.complianceBucket = futureLeaseAmi;
+        console.log(`🔢 [CLIENT AMI] Calculated AMI for unit ${unit.unitNumber} future lease: ${futureLeaseAmi}`);
+      }
+
       return {
         id: unit.id,
         unitNumber: unit.unitNumber,
