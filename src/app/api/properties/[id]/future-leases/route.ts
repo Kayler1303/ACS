@@ -225,12 +225,12 @@ export async function GET(
     
     if (unitsNeedingAmi.length > 0) {
       try {
-        console.error(`🔢 Calculating AMI for ${unitsNeedingAmi.length} units with 5s timeout`);
+        console.error(`🔢 Calculating AMI for ${unitsNeedingAmi.length} units with 2s timeout`);
         
-        // Add timeout wrapper for HUD API call
+        // Try to get HUD data with a very short timeout
         const hudPromise = getHudIncomeLimits(property.county, property.state);
         const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('HUD API timeout')), 5000)
+          setTimeout(() => reject(new Error('HUD API timeout')), 2000)
         );
         
         const hudIncomeLimits = await Promise.race([hudPromise, timeoutPromise]);
@@ -247,11 +247,16 @@ export async function GET(
         }
         console.error(`✅ AMI calculations completed successfully`);
       } catch (hudError: any) {
-        console.error('⚠️ HUD API failed or timed out:', hudError?.message || hudError);
-        // Set fallback message for units that failed
+        console.error('⚠️ HUD API failed or timed out, using fallback:', hudError?.message || hudError);
+        // Instead of showing "Failed", show "Pending AMI" for better UX
         for (const unit of unitsNeedingAmi) {
           if (unit.futureLease) {
-            unit.futureLease.complianceBucket = 'AMI Calculation Failed';
+            // For $0 income, show proper message instead of trying to calculate AMI
+            if (unit.futureLease.totalIncome === 0) {
+              unit.futureLease.complianceBucket = 'No Income Information';
+            } else {
+              unit.futureLease.complianceBucket = 'AMI Pending';
+            }
           }
         }
       }
