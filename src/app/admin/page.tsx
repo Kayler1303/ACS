@@ -845,13 +845,25 @@ function OverrideRequestItem({
         if (response.ok) {
           console.log('Document review processed successfully');
           // For document reviews, we don't need to call onAction since the document API handles everything
-          // Just close the dialog and the parent will refresh on its own
+          // Just close the dialog and refresh the requests data
           setShowReviewDialog(false);
           setAdminNotes('');
           setCorrectedValues({});
           
-          // Trigger a page refresh to update the admin dashboard
-          window.location.reload();
+          // Refresh the override requests data instead of full page reload
+          // This keeps the user on the requests tab
+          const url = new URL('/api/admin/override-requests', window.location.origin);
+          if (propertyFilter !== 'all') {
+            url.searchParams.set('propertyId', propertyFilter);
+          }
+          
+          const refreshResponse = await fetch(url);
+          if (refreshResponse.ok) {
+            const data = await refreshResponse.json();
+            setOverrideRequests(data.requests);
+            setOverrideStats(data.stats);
+          }
+          
           return; // Exit early to avoid calling onAction
         } else {
           let errorMessage = `Failed to process document review (${response.status})`;
@@ -863,8 +875,21 @@ function OverrideRequestItem({
             // Handle specific error cases with better messaging
             if (response.status === 409 && errorData.alreadyProcessed) {
               // Document already processed - show friendly message
-              alert(`✅ ${errorData.error}\n\nThis document has already been processed. The page will refresh to show the current status.`);
-              window.location.reload();
+              alert(`✅ ${errorData.error}\n\nThis document has already been processed. The data will refresh to show the current status.`);
+              
+              // Refresh the override requests data instead of full page reload
+              const url = new URL('/api/admin/override-requests', window.location.origin);
+              if (propertyFilter !== 'all') {
+                url.searchParams.set('propertyId', propertyFilter);
+              }
+              
+              const refreshResponse = await fetch(url);
+              if (refreshResponse.ok) {
+                const data = await refreshResponse.json();
+                setOverrideRequests(data.requests);
+                setOverrideStats(data.stats);
+              }
+              
               return;
             } else if (errorData.error) {
               errorMessage = errorData.error;
