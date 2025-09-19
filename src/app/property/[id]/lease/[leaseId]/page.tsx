@@ -124,8 +124,14 @@ export default function LeaseDetailPage() {
         throw new Error('Failed to mark resident as no income');
       }
 
+      const responseData = await response.json();
+      
+      if (responseData.hasDiscrepancy) {
+        // Show discrepancy alert - user needs to use finalization dialog
+        alert(`Income discrepancy detected. The rent roll shows $${responseData.discrepancyDetails.originalIncome} but you marked this resident as having no income. Please use the finalization dialog to resolve this discrepancy.`);
+      }
+
       // Refresh the lease data to show updated status
-      // The frontend will detect discrepancies and show appropriate modals
       handleRefresh();
     } catch (error) {
       console.error('Error marking resident as no income:', error);

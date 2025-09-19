@@ -454,8 +454,16 @@ export default function ResidentDetailPage() {
       const responseData = await response.json();
       console.log(`[NO INCOME DEBUG] API success response:`, responseData);
 
+      if (responseData.hasDiscrepancy) {
+        // Show discrepancy modal - don't auto-finalize
+        console.log(`[NO INCOME DEBUG] Income discrepancy detected - showing discrepancy modal`);
+        alert(`Income discrepancy detected for ${residentName}. The rent roll shows $${responseData.discrepancyDetails.originalIncome} but you marked them as having no income. Please use the finalization dialog to resolve this discrepancy.`);
+      } else {
+        // No discrepancy - resident was auto-finalized
+        console.log(`[NO INCOME DEBUG] No discrepancy - resident auto-finalized`);
+      }
+
       // Refresh data to show updated resident status
-      // The frontend will then detect any discrepancies and show appropriate modals
       console.log(`[NO INCOME DEBUG] Refreshing data...`);
       await fetchTenancyData(false);
       await fetchUnitVerificationStatus();

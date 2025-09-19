@@ -51,19 +51,53 @@ export async function PATCH(
     console.log(`[NO INCOME API] Marking resident ${resident.name} (${residentId}) as having no income`);
     console.log(`[NO INCOME API] Before update - hasNoIncome: ${resident.hasNoIncome}, verifiedIncome: ${resident.verifiedIncome}`);
 
-    // Mark resident as having no income AND finalize them automatically
-    // No income means verification is complete - no further action needed
-    await prisma.$executeRaw`
-      UPDATE "Resident" 
-      SET 
-        "hasNoIncome" = true,
-        "calculatedAnnualizedIncome" = 0::numeric,
-        "verifiedIncome" = 0::numeric,
-        "incomeFinalized" = true,
-        "finalizedAt" = NOW(),
-        "updatedAt" = NOW()
-      WHERE "id" = ${residentId}
-    `;
+    // Check for income discrepancy - if rent roll shows income but user says "No Income"
+    const originalRentRollIncome = Number(resident.originalRentRollIncome || 0);
+    const annualizedIncome = Number(resident.annualizedIncome || 0);
+    const hasIncomeDiscrepancy = originalRentRollIncome > 0 || annualizedIncome > 0;
+
+    console.log(`[NO INCOME API] Discrepancy check - originalRentRollIncome: $${originalRentRollIncome}, annualizedIncome: $${annualizedIncome}, hasDiscrepancy: ${hasIncomeDiscrepancy}`);
+
+    if (hasIncomeDiscrepancy) {
+      // There's a discrepancy - only mark as no income, don't finalize
+      // Let the frontend handle the discrepancy modal
+      await prisma.$executeRaw`
+        UPDATE "Resident" 
+        SET 
+          "hasNoIncome" = true,
+          "calculatedAnnualizedIncome" = 0::numeric,
+          "verifiedIncome" = 0::numeric,
+          "updatedAt" = NOW()
+        WHERE "id" = ${residentId}
+      `;
+
+      console.log(`[NO INCOME API] Income discrepancy detected - marked as no income but NOT finalized`);
+      
+      return NextResponse.json({ 
+        success: true, 
+        hasDiscrepancy: true,
+        message: `${resident.name} marked as having no income. Please resolve the income discrepancy to complete verification.`,
+        discrepancyDetails: {
+          originalIncome: originalRentRollIncome,
+          verifiedIncome: 0
+        }
+      });
+    } else {
+      // No discrepancy - safe to auto-finalize
+      await prisma.$executeRaw`
+        UPDATE "Resident" 
+        SET 
+          "hasNoIncome" = true,
+          "calculatedAnnualizedIncome" = 0::numeric,
+          "verifiedIncome" = 0::numeric,
+          "incomeFinalized" = true,
+          "finalizedAt" = NOW(),
+          "updatedAt" = NOW()
+        WHERE "id" = ${residentId}
+      `;
+
+      console.log(`[NO INCOME API] No discrepancy detected - auto-finalized resident`);
+    }
 
     console.log(`[NO INCOME API] Successfully updated resident ${residentId}`);
 
@@ -80,8 +114,10 @@ export async function PATCH(
     });
     console.log(`[NO INCOME API] After update - resident data:`, updatedResident);
 
+    // Return success response for no-discrepancy case
     return NextResponse.json({ 
       success: true, 
+      hasDiscrepancy: false,
       message: `${resident.name} marked as having no income and automatically finalized.`,
       updatedResident
     });
