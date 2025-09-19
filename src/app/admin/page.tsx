@@ -844,27 +844,17 @@ function OverrideRequestItem({
 
         if (response.ok) {
           console.log('Document review processed successfully');
-          // For document reviews, we don't need to call onAction since the document API handles everything
-          // Just close the dialog and refresh the requests data
+          // For document reviews, use onAction to trigger the parent's refresh logic
+          // This will refresh the data and keep the user on the requests tab
           setShowReviewDialog(false);
           setAdminNotes('');
           setCorrectedValues({});
           
-          // Refresh the override requests data instead of full page reload
-          // This keeps the user on the requests tab
-          const url = new URL('/api/admin/override-requests', window.location.origin);
-          if (propertyFilter !== 'all') {
-            url.searchParams.set('propertyId', propertyFilter);
-          }
+          // Call onAction to trigger the parent component's refresh logic
+          // Pass empty adminNotes since the document API already handled the notes
+          onAction(request.id, actionType, '');
           
-          const refreshResponse = await fetch(url);
-          if (refreshResponse.ok) {
-            const data = await refreshResponse.json();
-            setOverrideRequests(data.requests);
-            setOverrideStats(data.stats);
-          }
-          
-          return; // Exit early to avoid calling onAction
+          return; // Exit early
         } else {
           let errorMessage = `Failed to process document review (${response.status})`;
           
@@ -877,18 +867,8 @@ function OverrideRequestItem({
               // Document already processed - show friendly message
               alert(`✅ ${errorData.error}\n\nThis document has already been processed. The data will refresh to show the current status.`);
               
-              // Refresh the override requests data instead of full page reload
-              const url = new URL('/api/admin/override-requests', window.location.origin);
-              if (propertyFilter !== 'all') {
-                url.searchParams.set('propertyId', propertyFilter);
-              }
-              
-              const refreshResponse = await fetch(url);
-              if (refreshResponse.ok) {
-                const data = await refreshResponse.json();
-                setOverrideRequests(data.requests);
-                setOverrideStats(data.stats);
-              }
+              // Use onAction to trigger the parent component's refresh logic
+              onAction(request.id, actionType, '');
               
               return;
             } else if (errorData.error) {
