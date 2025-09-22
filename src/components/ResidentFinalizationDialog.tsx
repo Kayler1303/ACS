@@ -209,6 +209,25 @@ export default function ResidentFinalizationDialog({
       });
     });
     
+    // Process OTHER document types (OTHER, SSA_1099, BANK_STATEMENT, OFFER_LETTER, etc.)
+    const otherDocuments = residentDocuments.filter(doc => 
+      !['W2', 'PAYSTUB', 'SOCIAL_SECURITY'].includes(doc.documentType) && doc.status === 'COMPLETED'
+    );
+    console.log(`[DEBUG] OTHER documents found:`, otherDocuments.length);
+    
+    otherDocuments.forEach(doc => {
+      // For OTHER documents, use calculatedAnnualizedIncome directly
+      const annualIncome = doc.calculatedAnnualizedIncome || 0;
+      totalIncome += annualIncome;
+      
+      console.log(`[REAL-TIME CALC] ${resident.name} ${doc.documentType} calculation:`, {
+        documentId: doc.id,
+        documentType: doc.documentType,
+        calculatedAnnualizedIncome: doc.calculatedAnnualizedIncome,
+        annualIncome
+      });
+    });
+    
     console.log(`[REAL-TIME CALC] ${resident.name} total calculated income: $${totalIncome}`);
     return totalIncome;
   };
@@ -664,7 +683,15 @@ export default function ResidentFinalizationDialog({
                       displayText = `${doc.documentType} (${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`;
                     }
                   } else if (doc.documentType === 'SOCIAL_SECURITY') {
-                    verifiedAmount = doc.grossPayAmount || 0; // Monthly benefit amount
+                    // For Social Security, show monthly amount - calculate from annual if needed
+                    if (doc.grossPayAmount) {
+                      verifiedAmount = doc.grossPayAmount; // Use stored monthly amount
+                    } else if (doc.calculatedAnnualizedIncome) {
+                      verifiedAmount = doc.calculatedAnnualizedIncome / 12; // Calculate monthly from annual
+                    } else {
+                      verifiedAmount = 0;
+                    }
+                    
                     if (doc.documentDate) {
                       const docDate = new Date(doc.documentDate);
                       displayText = `Social Security Letter (${docDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })})`;
