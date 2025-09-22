@@ -719,7 +719,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
               const monthlyBenefit = !isNaN(parsedAmount) ? parsedAmount / 12 : null;
               const annualizedIncome = !isNaN(parsedAmount) ? parsedAmount : null;
               
-              console.log(`[SSA-1099] Extracted: ${beneficiaryName}, Annual: $${annualBenefits}, Monthly: $${monthlyBenefit}`);
+              console.log(`[SSA-1099] ✅ SUCCESSFUL EXTRACTION:`);
+              console.log(`[SSA-1099] - Beneficiary: ${beneficiaryName}`);
+              console.log(`[SSA-1099] - Raw Annual Benefits: "${annualBenefits}"`);
+              console.log(`[SSA-1099] - Clean Benefits: "${cleanBenefits}"`);
+              console.log(`[SSA-1099] - Parsed Amount: ${parsedAmount}`);
+              console.log(`[SSA-1099] - Monthly Benefit: $${monthlyBenefit}`);
+              console.log(`[SSA-1099] - Annualized Income: $${annualizedIncome}`);
               
               // Apply the extracted data immediately
               let documentDate = new Date(); // Default to current date
@@ -737,6 +743,38 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 }
               }
               
+              // Validate the parsed amounts before storing
+              if (parsedAmount <= 0) {
+                console.log(`[SSA-1099] ⚠️ WARNING: Parsed amount is ${parsedAmount} - this seems incorrect for SSA-1099`);
+                console.log(`[SSA-1099] Raw benefits string: "${annualBenefits}"`);
+                console.log(`[SSA-1099] Clean benefits string: "${cleanBenefits}"`);
+                console.log(`[SSA-1099] Marking for admin review due to suspicious $0 amount`);
+                
+                // Mark for admin review instead of auto-verifying as $0
+                document = await prisma.incomeDocument.update({
+                  where: { id: document.id },
+                  data: { status: DocumentStatus.NEEDS_REVIEW }
+                });
+
+                await prisma.overrideRequest.create({
+                  data: {
+                    id: randomUUID(),
+                    type: 'DOCUMENT_REVIEW',
+                    status: 'PENDING',
+                    userExplanation: `SSA-1099 document extracted $0 income which seems incorrect. Raw benefits: "${annualBenefits}". Please manually review and enter the correct income amount.`,
+                    documentId: document.id,
+                    verificationId: verificationId,
+                    residentId: residentId,
+                    requesterId: session.user.id,
+                    propertyId: verification.Lease?.Unit?.Property?.id,
+                    updatedAt: new Date(),
+                  }
+                });
+
+                console.log(`[SSA-1099] Document ${document.id} marked for admin review due to $0 extraction`);
+                return NextResponse.json(document, { status: 201 });
+              }
+
               const updateData: any = {
                 employeeName: beneficiaryName ?? null,
                 grossPayAmount: monthlyBenefit ?? null,
@@ -760,7 +798,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 throw new Error(`Database update failed: ${prismaError?.message || 'Unknown database error'}`);
               }
             } else {
-              console.log('[SSA-1099] Could not extract required fields, marking for review');
+              console.log(`[SSA-1099] ❌ EXTRACTION FAILED - Missing required fields:`);
+              console.log(`[SSA-1099] - Has beneficiaryName: ${!!beneficiaryName} (value: "${beneficiaryName}")`);
+              console.log(`[SSA-1099] - Has annualBenefits: ${!!annualBenefits} (value: "${annualBenefits}")`);
+              console.log(`[SSA-1099] - Available Azure fields:`, Object.keys(extractedData));
+              console.log(`[SSA-1099] - Full Azure extraction data:`, JSON.stringify(extractedData, null, 2));
+              
+              // Check if we got any income amount at all (even if name is missing)
+              if (annualBenefits && !beneficiaryName) {
+                console.log(`[SSA-1099] ⚠️ Found income amount but missing beneficiary name - this might be salvageable`);
+              }
               
               // Mark as needing admin review
               document = await prisma.incomeDocument.update({

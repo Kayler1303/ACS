@@ -121,12 +121,34 @@ export default function OverrideRequestModal({
               value={explanation}
               onChange={(e) => setExplanation(e.target.value)}
               rows={6}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                explanation.trim().length < 20 && explanation.trim().length > 0
+                  ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
+                  : explanation.trim().length >= 20
+                  ? 'border-green-300 focus:ring-green-500 focus:border-green-500'
+                  : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+              }`}
               placeholder={getPlaceholder()}
             />
-            <p className="text-xs text-gray-500 mt-1">
-              Minimum 20 characters. Be specific and provide relevant details.
-            </p>
+            <div className="mt-2 flex justify-between items-center">
+              <p className={`text-xs ${
+                explanation.trim().length < 20 && explanation.trim().length > 0
+                  ? 'text-red-600'
+                  : explanation.trim().length >= 20
+                  ? 'text-green-600'
+                  : 'text-gray-500'
+              }`}>
+                {explanation.trim().length < 20 
+                  ? explanation.trim().length === 0
+                    ? 'Please provide a detailed explanation (minimum 20 characters)'
+                    : `${20 - explanation.trim().length} more characters needed`
+                  : '✓ Ready to submit'
+                }
+              </p>
+              <p className="text-xs text-gray-400">
+                {explanation.trim().length}/20
+              </p>
+            </div>
           </div>
 
           {/* Action Buttons */}
