@@ -101,8 +101,8 @@ export async function POST(
         if (correctedValues.employeeName) updateData.employeeName = correctedValues.employeeName;
         if (correctedValues.employerName) updateData.employerName = correctedValues.employerName;
         
-        // Paystub fields
-        if (correctedValues.grossPayAmount) updateData.grossPayAmount = correctedValues.grossPayAmount;
+        // Paystub fields - allow $0 gross pay
+        if (correctedValues.grossPayAmount !== undefined) updateData.grossPayAmount = correctedValues.grossPayAmount;
         if (correctedValues.payFrequency) updateData.payFrequency = correctedValues.payFrequency;
         if (correctedValues.payPeriodStartDate) {
           const startDate = new Date(correctedValues.payPeriodStartDate + 'T12:00:00');
@@ -156,10 +156,10 @@ export async function POST(
             
           case 'PAYSTUB':
             // For paystub, calculate based on pay frequency
-            const grossPay = correctedValues?.grossPayAmount || document.grossPayAmount;
+            const grossPay = correctedValues?.grossPayAmount !== undefined ? correctedValues.grossPayAmount : document.grossPayAmount;
             const frequency = correctedValues?.payFrequency || document.payFrequency;
             
-            if (grossPay && frequency) {
+            if (grossPay !== null && grossPay !== undefined && frequency) {
               const frequencyMultipliers: Record<string, number> = {
                 'WEEKLY': 52,
                 'BI-WEEKLY': 26,
@@ -168,7 +168,13 @@ export async function POST(
               };
               
               const multiplier = frequencyMultipliers[frequency] || 26; // Default to bi-weekly
-              calculatedAnnualizedIncome = grossPay * multiplier;
+              calculatedAnnualizedIncome = grossPay * multiplier; // This will be 0 if grossPay is 0
+              
+              console.log(`[ADMIN OVERRIDE] Paystub calculation: grossPay=${grossPay}, frequency=${frequency}, multiplier=${multiplier}, annualized=${calculatedAnnualizedIncome}`);
+              
+              if (grossPay === 0) {
+                console.log(`[ADMIN OVERRIDE] ✅ Zero gross pay correctly processed for document ${documentId}`);
+              }
             }
             break;
             
@@ -180,8 +186,8 @@ export async function POST(
         }
       }
 
-      // Store the calculated income if we have one
-      if (calculatedAnnualizedIncome) {
+      // Store the calculated income if we have one (including $0)
+      if (calculatedAnnualizedIncome !== null && calculatedAnnualizedIncome !== undefined) {
         updateData.calculatedAnnualizedIncome = calculatedAnnualizedIncome;
       }
 
@@ -191,8 +197,8 @@ export async function POST(
         data: updateData
       });
 
-      // Update resident-level calculated income if we have it
-      if (calculatedAnnualizedIncome) {
+      // Update resident-level calculated income if we have it (including $0)
+      if (calculatedAnnualizedIncome !== null && calculatedAnnualizedIncome !== undefined) {
         await prisma.$executeRaw`
           UPDATE "Resident" 
           SET "calculatedAnnualizedIncome" = ${Number(calculatedAnnualizedIncome)}::numeric

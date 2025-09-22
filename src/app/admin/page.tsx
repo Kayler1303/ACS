@@ -1951,11 +1951,25 @@ function OverrideRequestItem({
                               <input
                                 type="number"
                                 step="0.01"
-                                value={correctedValues.grossPayAmount || ''}
-                                onChange={(e) => setCorrectedValues(prev => ({ ...prev, grossPayAmount: parseFloat(e.target.value) || undefined }))}
+                                min="0"
+                                value={correctedValues.grossPayAmount !== undefined ? correctedValues.grossPayAmount : ''}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  if (value === '') {
+                                    // Explicitly set to undefined when empty (will use original document value)
+                                    setCorrectedValues(prev => ({ ...prev, grossPayAmount: undefined }));
+                                  } else {
+                                    // Allow $0 and positive values
+                                    const numValue = parseFloat(value);
+                                    setCorrectedValues(prev => ({ ...prev, grossPayAmount: isNaN(numValue) ? undefined : numValue }));
+                                  }
+                                }}
                                 className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
-                                placeholder="Correct gross pay amount if needed"
+                                placeholder="Enter gross pay amount (0 for zero wages)"
                               />
+                              <p className="text-xs text-gray-500 mt-1">
+                                Enter 0 for zero wages. Leave blank to use original extracted value.
+                              </p>
                             </div>
                             
                             <div>
