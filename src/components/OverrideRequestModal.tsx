@@ -122,9 +122,9 @@ export default function OverrideRequestModal({
               onChange={(e) => setExplanation(e.target.value)}
               rows={6}
               className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                explanation.trim().length < 20 && explanation.trim().length > 0
+                explanation.trim().length < 10 && explanation.trim().length > 0
                   ? 'border-red-300 focus:ring-red-500 focus:border-red-500'
-                  : explanation.trim().length >= 20
+                  : explanation.trim().length >= 10
                   ? 'border-green-300 focus:ring-green-500 focus:border-green-500'
                   : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
               }`}
@@ -132,21 +132,21 @@ export default function OverrideRequestModal({
             />
             <div className="mt-2 flex justify-between items-center">
               <p className={`text-xs ${
-                explanation.trim().length < 20 && explanation.trim().length > 0
+                explanation.trim().length < 10 && explanation.trim().length > 0
                   ? 'text-red-600'
-                  : explanation.trim().length >= 20
+                  : explanation.trim().length >= 10
                   ? 'text-green-600'
                   : 'text-gray-500'
               }`}>
-                {explanation.trim().length < 20 
+                {explanation.trim().length < 10 
                   ? explanation.trim().length === 0
-                    ? 'Please provide a detailed explanation (minimum 20 characters)'
-                    : `${20 - explanation.trim().length} more characters needed`
+                    ? 'Please provide a detailed explanation (minimum 10 characters)'
+                    : `${10 - explanation.trim().length} more characters needed`
                   : '✓ Ready to submit'
                 }
               </p>
               <p className="text-xs text-gray-400">
-                {explanation.trim().length}/20
+                {explanation.trim().length}/10
               </p>
             </div>
           </div>
@@ -161,9 +161,9 @@ export default function OverrideRequestModal({
             </button>
             <button
               onClick={handleSubmit}
-              disabled={isSubmitting || explanation.trim().length < 20}
+              disabled={isSubmitting || explanation.trim().length < 10}
               className={`px-4 py-2 text-sm font-medium text-white rounded-md ${
-                !isSubmitting && explanation.trim().length >= 20
+                !isSubmitting && explanation.trim().length >= 10
                   ? 'bg-orange-600 hover:bg-orange-700'
                   : 'bg-gray-400 cursor-not-allowed'
               }`}
