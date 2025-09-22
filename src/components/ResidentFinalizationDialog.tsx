@@ -111,6 +111,15 @@ export default function ResidentFinalizationDialog({
   const residentDocuments = verification.IncomeDocument.filter(
     (doc: IncomeDocument) => doc.residentId === resident.id && (doc.status === 'COMPLETED' || doc.status === 'NEEDS_REVIEW')
   );
+  
+  // Debug document statuses
+  console.log(`[DOCUMENT DEBUG] ${resident.name} documents:`, residentDocuments.map(doc => ({
+    id: doc.id,
+    type: doc.documentType,
+    status: doc.status,
+    calculatedAnnualizedIncome: doc.calculatedAnnualizedIncome,
+    grossPayAmount: doc.grossPayAmount
+  })));
 
   // Check for W2s that need manual entry (NEEDS_REVIEW with no extracted data)
   const w2DocumentsNeedingManualEntry = residentDocuments.filter(
@@ -190,9 +199,9 @@ export default function ResidentFinalizationDialog({
       });
     }
     
-    // Process Social Security documents
+    // Process Social Security documents (include NEEDS_REVIEW if admin approved)
     const socialSecurityDocuments = residentDocuments.filter(doc => 
-      doc.documentType === 'SOCIAL_SECURITY' && doc.status === 'COMPLETED'
+      doc.documentType === 'SOCIAL_SECURITY' && (doc.status === 'COMPLETED' || (doc.status === 'NEEDS_REVIEW' && doc.calculatedAnnualizedIncome))
     );
     console.log(`[DEBUG] Social Security documents found:`, socialSecurityDocuments.length);
     
@@ -211,7 +220,7 @@ export default function ResidentFinalizationDialog({
     
     // Process OTHER document types (OTHER, SSA_1099, BANK_STATEMENT, OFFER_LETTER, etc.)
     const otherDocuments = residentDocuments.filter(doc => 
-      !['W2', 'PAYSTUB', 'SOCIAL_SECURITY'].includes(doc.documentType) && doc.status === 'COMPLETED'
+      !['W2', 'PAYSTUB', 'SOCIAL_SECURITY'].includes(doc.documentType) && (doc.status === 'COMPLETED' || (doc.status === 'NEEDS_REVIEW' && doc.calculatedAnnualizedIncome))
     );
     console.log(`[DEBUG] OTHER documents found:`, otherDocuments.length);
     
@@ -235,6 +244,16 @@ export default function ResidentFinalizationDialog({
   // Calculate available income for finalization - prioritize real-time calculation when documents exist
   const calculatedIncomeFromDocs = calculateIncomeFromDocuments();
   const availableIncomeForFinalization = calculatedIncomeFromDocs || resident.calculatedAnnualizedIncome || manualW2Value || 0;
+  
+  // Debug logging for total calculation
+  console.log(`[FINALIZATION DEBUG] ${resident.name} income calculation:`, {
+    calculatedIncomeFromDocs,
+    residentCalculatedAnnualizedIncome: resident.calculatedAnnualizedIncome,
+    manualW2Value,
+    availableIncomeForFinalization,
+    residentDocumentsCount: residentDocuments.length,
+    completedDocumentsCount: residentDocuments.filter(doc => doc.status === 'COMPLETED').length
+  });
   
   // Calculate verified income display - show calculated income from stored value or real-time calculation
   const residentVerifiedIncome = resident.incomeFinalized 
