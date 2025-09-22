@@ -2371,6 +2371,43 @@ export default function ResidentDetailPage() {
                                             </div>
                                           )}
                                           
+                                          {(doc.documentType === 'OTHER' || doc.documentType === 'SSA_1099' || doc.documentType === 'BANK_STATEMENT' || doc.documentType === 'OFFER_LETTER') && !needsReview && (
+                                            <div className="grid grid-cols-2 gap-3 text-xs">
+                                              {doc.employeeName && (
+                                                <div>
+                                                  <span className="font-medium text-gray-700">Employee:</span>
+                                                  <div className="text-gray-600">
+                                                    {doc.employeeName}
+                                                  </div>
+                                                </div>
+                                              )}
+                                              {doc.employerName && (
+                                                <div>
+                                                  <span className="font-medium text-gray-700">Employer:</span>
+                                                  <div className="text-gray-600">
+                                                    {doc.employerName}
+                                                  </div>
+                                                </div>
+                                              )}
+                                              {doc.documentDate && (
+                                                <div>
+                                                  <span className="font-medium text-gray-700">Document Date:</span>
+                                                  <div className="text-gray-600">
+                                                    {format(new Date(doc.documentDate), 'MMM d, yyyy')}
+                                                  </div>
+                                                </div>
+                                              )}
+                                              {doc.calculatedAnnualizedIncome && (
+                                                <div className="col-span-2">
+                                                  <span className="font-medium text-gray-700">Annual Income:</span>
+                                                  <div className="text-green-700 font-semibold">
+                                                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(doc.calculatedAnnualizedIncome)}
+                                                  </div>
+                                                </div>
+                                              )}
+                                            </div>
+                                          )}
+
                                           {doc.documentType === 'W2' && doc.status === 'COMPLETED' && doc.box1_wages && (
                                             <div className="space-y-2">
                                                 {/* Successfully extracted W2 data */}

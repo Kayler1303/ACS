@@ -377,6 +377,10 @@ export default function VerificationFinalizationDialog({
                           } else {
                             displayText = 'Social Security Letter';
                           }
+                        } else {
+                          // Handle OTHER, SSA_1099, BANK_STATEMENT, OFFER_LETTER, etc.
+                          verifiedAmount = doc.calculatedAnnualizedIncome || 0;
+                          displayText = doc.documentType;
                         }
 
                         return (

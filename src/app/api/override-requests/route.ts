@@ -31,8 +31,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid override request type' }, { status: 400 });
     }
 
-    if (userExplanation.trim().length < 20) {
-      return NextResponse.json({ error: 'Explanation must be at least 20 characters' }, { status: 400 });
+    if (userExplanation.trim().length < 10) {
+      return NextResponse.json({ error: 'Explanation must be at least 10 characters' }, { status: 400 });
     }
 
     // Extract unitId from leaseId if not provided directly
