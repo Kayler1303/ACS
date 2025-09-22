@@ -207,7 +207,7 @@ export default function ResidentFinalizationDialog({
     
     socialSecurityDocuments.forEach(doc => {
       // For Social Security, use calculatedAnnualizedIncome if available, otherwise annualize grossPayAmount
-      const annualIncome = doc.calculatedAnnualizedIncome || (doc.grossPayAmount ? Number(doc.grossPayAmount) * 12 : 0);
+      const annualIncome = Number(doc.calculatedAnnualizedIncome) || (doc.grossPayAmount ? Number(doc.grossPayAmount) * 12 : 0);
       totalIncome += annualIncome;
       
       console.log(`[REAL-TIME CALC] ${resident.name} Social Security calculation:`, {
@@ -226,7 +226,7 @@ export default function ResidentFinalizationDialog({
     
     otherDocuments.forEach(doc => {
       // For OTHER documents, use calculatedAnnualizedIncome directly
-      const annualIncome = doc.calculatedAnnualizedIncome || 0;
+      const annualIncome = Number(doc.calculatedAnnualizedIncome) || 0;
       totalIncome += annualIncome;
       
       console.log(`[REAL-TIME CALC] ${resident.name} ${doc.documentType} calculation:`, {
@@ -751,8 +751,8 @@ export default function ResidentFinalizationDialog({
                 <div className="border-t pt-3 flex justify-between items-center font-semibold text-lg">
                   <span>Total Annualized Verified Income:</span>
                   <span className={resident.incomeFinalized ? "text-green-600" : "text-blue-600"}>
-                    {availableIncomeForFinalization > 0
-                      ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(availableIncomeForFinalization)
+                    {Number(availableIncomeForFinalization) > 0
+                      ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(availableIncomeForFinalization))
                       : <span className="text-gray-400">No income calculated</span>
                     }
                   </span>
