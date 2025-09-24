@@ -45,9 +45,17 @@ export async function POST(
       return NextResponse.json({ error: 'Lease not found or access denied' }, { status: 404 });
     }
 
-    if (lease.Tenancy) {
+    // Check if this is a rent roll lease (has residents from rent roll import)
+    // vs a manual lease (created by user, should allow manual resident addition)
+    const existingResidents = await prisma.resident.count({
+      where: { leaseId: leaseId }
+    });
+
+    // If lease has Tenancy AND existing residents, it's likely from rent roll import
+    // Manual leases with Tenancy but no residents should still allow manual addition
+    if (lease.Tenancy && existingResidents > 0) {
       return NextResponse.json(
-        { error: 'Cannot manually add residents to a non-provisional lease.' },
+        { error: 'Cannot manually add residents to a lease that already has residents from rent roll import.' },
         { status: 403 } // Forbidden
       );
     }

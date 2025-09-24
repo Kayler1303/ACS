@@ -14,7 +14,7 @@ export async function POST(
   }
 
   const { id: unitId } = await params;
-  const { name, leaseStartDate, leaseEndDate, leaseRent } = await req.json();
+  const { name, leaseStartDate, leaseEndDate, leaseRent, rentRollId } = await req.json();
 
   if (!name || !unitId) {
     return NextResponse.json(
@@ -24,42 +24,120 @@ export async function POST(
   }
 
   try {
-    const data: {
-      id: string;
-      name: string;
-      Unit: { connect: { id: string } };
-      leaseStartDate?: Date;
-      leaseEndDate?: Date;
-      leaseRent?: number;
-      updatedAt: Date;
-    } = {
-      id: randomUUID(),
-      name,
-      Unit: {
-        connect: {
-          id: unitId,
-        },
+    // Verify unit ownership and get rent roll context
+    const unit = await prisma.unit.findFirst({
+      where: {
+        id: unitId,
+        Property: {
+          ownerId: session.user.id
+        }
       },
-      updatedAt: new Date(),
-    };
-
-    if (leaseStartDate) {
-      data.leaseStartDate = new Date(leaseStartDate);
-    }
-
-    if (leaseEndDate) {
-      data.leaseEndDate = new Date(leaseEndDate);
-    }
-
-    if (leaseRent) {
-      data.leaseRent = parseFloat(leaseRent);
-    }
-
-    const newLease = await prisma.lease.create({
-      data,
+      include: {
+        Property: {
+          include: {
+            RentRoll: {
+              orderBy: {
+                uploadDate: 'desc'
+              },
+              take: 1
+            }
+          }
+        }
+      }
     });
 
-    return NextResponse.json(newLease, { status: 201 });
+    if (!unit) {
+      return NextResponse.json(
+        { error: 'Unit not found or access denied' },
+        { status: 404 }
+      );
+    }
+
+    // Determine which rent roll to link to
+    let targetRentRoll = null;
+    if (rentRollId) {
+      // Validate the provided rent roll ID belongs to this property
+      targetRentRoll = await prisma.rentRoll.findFirst({
+        where: {
+          id: rentRollId,
+          propertyId: unit.Property.id
+        }
+      });
+      
+      if (!targetRentRoll) {
+        return NextResponse.json(
+          { error: 'Invalid rent roll ID for this property' },
+          { status: 400 }
+        );
+      }
+    } else {
+      // Use the most recent rent roll for this property
+      targetRentRoll = unit.Property.RentRoll[0];
+    }
+
+    if (!targetRentRoll) {
+      return NextResponse.json(
+        { error: 'No rent roll found for this property. Please upload a rent roll first.' },
+        { status: 400 }
+      );
+    }
+    // Create lease and tenancy in a transaction
+    const result = await prisma.$transaction(async (tx) => {
+      const leaseId = randomUUID();
+      const tenancyId = randomUUID();
+
+      const leaseData: {
+        id: string;
+        name: string;
+        Unit: { connect: { id: string } };
+        leaseStartDate?: Date;
+        leaseEndDate?: Date;
+        leaseRent?: number;
+        updatedAt: Date;
+      } = {
+        id: leaseId,
+        name,
+        Unit: {
+          connect: {
+            id: unitId,
+          },
+        },
+        updatedAt: new Date(),
+      };
+
+      if (leaseStartDate) {
+        leaseData.leaseStartDate = new Date(leaseStartDate);
+      }
+
+      if (leaseEndDate) {
+        leaseData.leaseEndDate = new Date(leaseEndDate);
+      }
+
+      if (leaseRent) {
+        leaseData.leaseRent = parseFloat(leaseRent);
+      }
+
+      // Create the lease
+      const newLease = await tx.lease.create({
+        data: leaseData,
+      });
+
+      // Create the tenancy record to link lease to rent roll
+      await tx.tenancy.create({
+        data: {
+          id: tenancyId,
+          rentRollId: targetRentRoll.id,
+          leaseId: leaseId,
+          updatedAt: new Date(),
+        },
+      });
+
+      console.log(`[MANUAL LEASE CREATION] Created lease "${name}" (${leaseId}) with tenancy (${tenancyId}) linked to rent roll ${targetRentRoll.id}`);
+
+      return newLease;
+    });
+
+    return NextResponse.json(result, { status: 201 });
   } catch (error) {
     console.error('Error creating lease:', error);
     return NextResponse.json(

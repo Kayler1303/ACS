@@ -213,13 +213,16 @@ export default function IncomeVerificationDocumentUploadForm({
   const handleLeaseCreated = async (formData: { name: string; leaseStartDate: string; leaseEndDate: string; leaseRent: number | null }) => {
     
     try {
-      // Actually create the lease via API
+      // Actually create the lease via API, including rent roll context
       const response = await fetch(`/api/units/${unitId}/leases`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          rentRollId: rentRollId // Pass rent roll context
+        }),
       });
 
       if (!response.ok) {

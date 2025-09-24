@@ -1664,14 +1664,14 @@ export default function ResidentDetailPage() {
             unitId={unitId as string}
             onSubmit={async (leaseData) => {
               try {
-                const response = await fetch('/api/leases', {
+                const response = await fetch(`/api/units/${unitId}/leases`, {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
                   },
                   body: JSON.stringify({
                     ...leaseData,
-                    unitId: unitId as string,
+                    rentRollId: rentRollId as string, // Pass rent roll context
                   }),
                 });
 
