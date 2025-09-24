@@ -8,6 +8,7 @@ import { PropertyVerificationSummary, VerificationStatus } from '@/services/veri
 import { getActualAmiBucket } from '@/services/income';
 import PropertyShareManager from './PropertyShareManager';
 import { usePropertyScrollRestoration } from '@/hooks/useScrollRestoration';
+import SnapshotSelector from './SnapshotSelector';
 
 interface PropertyPageClientProps {
   initialProperty: FullProperty;
@@ -1803,52 +1804,30 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                 </div>
 
                 <div className="space-y-2">
-                  <label htmlFor="rent-roll-select" className="block text-sm font-medium text-gray-700">
-                    📅 Data Snapshot Date
-                  </label>
-                  <select
-                    id="rent-roll-select"
-                    value={selectedSnapshotId || ''}
-                    onChange={(e) => {
-                      const newValue = e.target.value;
-                      setSelectedSnapshotId(newValue);
+                  <SnapshotSelector
+                    propertyId={property.id}
+                    selectedSnapshotId={selectedSnapshotId || undefined}
+                    onSnapshotChange={(snapshotId, snapshotData) => {
+                      setSelectedSnapshotId(snapshotId);
                       // Persist the selection in sessionStorage
-                      sessionStorage.setItem(`selectedSnapshotId_${property.id}`, newValue);
+                      sessionStorage.setItem(`selectedSnapshotId_${property.id}`, snapshotId);
 
                       // Set HUD data from the selected snapshot
-                      if (newValue) {
-                        const selectedRentRoll = property.RentRoll.find(rr => rr.snapshotId === newValue);
-                        const snapshotData = (selectedRentRoll as any)?.snapshot;
-                        if (snapshotData?.hudIncomeLimits) {
-                          console.log(`📋 Setting HUD data from snapshot ${newValue}:`, {
-                            hasHudData: !!snapshotData.hudIncomeLimits,
-                            hudDataYear: snapshotData.hudDataYear
-                          });
-                          setSnapshotHudData({
-                            limits: snapshotData.hudIncomeLimits,
-                            year: snapshotData.hudDataYear
-                          });
-                        } else {
-                          console.log(`⚠️ No HUD data found in snapshot ${newValue}`);
-                          setSnapshotHudData(null);
-                        }
+                      if (snapshotData?.hudIncomeLimits) {
+                        console.log(`📋 Setting HUD data from snapshot ${snapshotId}:`, {
+                          hasHudData: !!snapshotData.hudIncomeLimits,
+                          hudDataYear: snapshotData.hudDataYear
+                        });
+                        setSnapshotHudData({
+                          limits: snapshotData.hudIncomeLimits,
+                          year: snapshotData.hudDataYear
+                        });
                       } else {
+                        console.log(`⚠️ No HUD data found in snapshot ${snapshotId}`);
                         setSnapshotHudData(null);
                       }
                     }}
-                    className="w-full pl-3 pr-10 py-2.5 text-sm border-gray-300 focus:outline-none focus:ring-brand-blue focus:border-brand-blue rounded-md shadow-sm bg-white"
-                                              >
-                    {/* Group rent rolls by snapshot and show unique snapshots */}
-                    {Array.from(new Map(property.RentRoll.map((rentRoll: FullRentRoll) => [
-                      rentRoll.snapshotId,
-                      { snapshotId: rentRoll.snapshotId, uploadDate: rentRoll.uploadDate, snapshot: (rentRoll as any).snapshot }
-                    ])).values()).map((snapshot: any) => (
-                      <option key={snapshot.snapshotId} value={snapshot.snapshotId}>
-                        {new Date(snapshot.uploadDate).toLocaleDateString('en-US', { timeZone: 'UTC' })}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-gray-500">Choose which rent roll snapshot to analyze</p>
+                  />
                 </div>
               </div>
             </div>
