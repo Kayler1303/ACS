@@ -295,61 +295,38 @@ export async function POST(
               leaseEndDate = new Date(leaseData.leaseEndDate);
             }
 
-            console.log(`[COMPLIANCE UPDATE] 📅 New lease for unit ${unitNumber}:`);
+            console.log(`[COMPLIANCE UPDATE] 📅 New future lease for unit ${unitNumber}:`);
             console.log(`[COMPLIANCE UPDATE] - Start: ${leaseStartDate?.toISOString() || 'null'}`);
             console.log(`[COMPLIANCE UPDATE] - End: ${leaseEndDate?.toISOString() || 'null'}`);
+            console.log(`[COMPLIANCE UPDATE] 📅 Existing future lease for unit ${unitNumber}:`);
+            console.log(`[COMPLIANCE UPDATE] - Start: ${existingFutureLeaseForUnit.leaseStartDate?.toISOString() || 'null'}`);
+            console.log(`[COMPLIANCE UPDATE] - End: ${existingFutureLeaseForUnit.leaseEndDate?.toISOString() || 'null'}`);
 
-            // CRITICAL: We need to compare the new lease dates to the CURRENT lease dates
-            // from the previous snapshot, NOT to the future lease dates (which are often null).
-            // Find the current lease for this unit from the most recent rent roll before this upload.
+            // Compare new future lease to existing future lease (both dates AND residents)
+            const existingStartTime = existingFutureLeaseForUnit.leaseStartDate?.getTime();
+            const existingEndTime = existingFutureLeaseForUnit.leaseEndDate?.getTime();
+            const newStartTime = leaseStartDate?.getTime();
+            const newEndTime = leaseEndDate?.getTime();
+
+            const datesAreIdentical = existingStartTime === newStartTime && existingEndTime === newEndTime;
             
-            // Query the current lease from the most recent rent roll for this unit
-            const currentLeaseForUnit = await tx.lease.findFirst({
-              where: {
-                Unit: {
-                  unitNumber: unitNumber,
-                  propertyId: propertyId
-                },
-                Tenancy: {
-                  RentRoll: {
-                    propertyId: propertyId
-                  }
-                }
-              },
-              include: {
-                Tenancy: {
-                  include: {
-                    RentRoll: true
-                  }
-                }
-              },
-              orderBy: {
-                createdAt: 'desc'
-              }
-            });
+            // Compare residents between existing future lease and new lease data
+            const residentsMatch = compareResidents(existingFutureLeaseForUnit.Resident, leaseData.residents || []);
+            const residentMatchPercentage = residentsMatch.filter(match => match.isMatch).length / Math.max(residentsMatch.length, 1);
+            const residentsAreSimilar = residentMatchPercentage >= 0.8; // 80% of residents must match
 
-            let shouldTriggerModal = true; // Default to showing modal
+            console.log(`[COMPLIANCE UPDATE] 🔍 Lease comparison for unit ${unitNumber}:`);
+            console.log(`[COMPLIANCE UPDATE] - Dates identical: ${datesAreIdentical}`);
+            console.log(`[COMPLIANCE UPDATE] - Residents similar: ${residentsAreSimilar} (${Math.round(residentMatchPercentage * 100)}% match)`);
+            console.log(`[COMPLIANCE UPDATE] - Resident matches:`, residentsMatch);
 
-            if (currentLeaseForUnit) {
-              const currentStartTime = currentLeaseForUnit.leaseStartDate?.getTime();
-              const currentEndTime = currentLeaseForUnit.leaseEndDate?.getTime();
-              const newStartTime = leaseStartDate?.getTime();
-              const newEndTime = leaseEndDate?.getTime();
+            const shouldAutoInherit = datesAreIdentical && residentsAreSimilar;
+            const shouldTriggerModal = !shouldAutoInherit;
 
-              console.log(`[COMPLIANCE UPDATE] 🔍 Comparing new lease to CURRENT lease (not future lease):`);
-              console.log(`[COMPLIANCE UPDATE] - Current lease: ${currentLeaseForUnit.leaseStartDate?.toISOString() || 'null'} to ${currentLeaseForUnit.leaseEndDate?.toISOString() || 'null'}`);
-              console.log(`[COMPLIANCE UPDATE] - New lease: ${leaseStartDate?.toISOString() || 'null'} to ${leaseEndDate?.toISOString() || 'null'}`);
-
-              const datesAreIdentical = currentStartTime === newStartTime && currentEndTime === newEndTime;
-              shouldTriggerModal = !datesAreIdentical;
-
-              if (datesAreIdentical) {
-                console.log(`[COMPLIANCE UPDATE] ✅ New lease dates match current lease - same lease continuing. Future lease will carry forward automatically.`);
-              } else {
-                console.log(`[COMPLIANCE UPDATE] 🎯 New lease dates differ from current lease - inheritance decision needed.`);
-              }
+            if (shouldAutoInherit) {
+              console.log(`[COMPLIANCE UPDATE] ✅ Future lease matches exactly (dates + residents) - automatic inheritance, no modal needed.`);
             } else {
-              console.log(`[COMPLIANCE UPDATE] ⚠️ No current lease found for unit ${unitNumber} - will show inheritance modal by default.`);
+              console.log(`[COMPLIANCE UPDATE] 🎯 Future lease differs (dates or residents) - inheritance decision needed.`);
             }
 
             if (!shouldTriggerModal) {
@@ -421,4 +398,43 @@ export async function POST(
       { status: 500 }
     );
   }
+}
+
+// Helper function to compare residents between leases
+function compareResidents(existingResidents: any[], newResidents: any[]) {
+  const matches = [];
+  
+  for (const existingResident of existingResidents) {
+    const bestMatch = newResidents.find(newResident => {
+      // Simple name matching - could be enhanced with fuzzy matching
+      const existingName = existingResident.name.toLowerCase().trim();
+      const newName = newResident.name.toLowerCase().trim();
+      
+      // Exact match
+      if (existingName === newName) return true;
+      
+      // Check if names are similar (allowing for minor differences)
+      const similarity = calculateStringSimilarity(existingName, newName);
+      return similarity >= 0.8; // 80% similarity threshold
+    });
+    
+    matches.push({
+      existingName: existingResident.name,
+      newName: bestMatch?.name || 'No match',
+      isMatch: !!bestMatch
+    });
+  }
+  
+  return matches;
+}
+
+// Simple string similarity calculation (Jaccard similarity)
+function calculateStringSimilarity(str1: string, str2: string): number {
+  const set1 = new Set(str1.split(''));
+  const set2 = new Set(str2.split(''));
+  
+  const intersection = new Set([...set1].filter(x => set2.has(x)));
+  const union = new Set([...set1, ...set2]);
+  
+  return intersection.size / union.size;
 }
