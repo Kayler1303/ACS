@@ -157,7 +157,7 @@ export default function SnapshotSelector({
           {snapshots.map((snapshot) => (
             <option key={snapshot.id} value={snapshot.id}>
               {formatDate(snapshot.uploadDate)}
-              {snapshot.filename && ` - ${snapshot.filename}`}
+              {snapshot.filename && !snapshot.filename.startsWith('Upload ') && !snapshot.filename.includes('Compliance Upload') && ` - ${snapshot.filename}`}
               {snapshot.isActive && ' (Current)'}
             </option>
           ))}
@@ -195,10 +195,10 @@ export default function SnapshotSelector({
                   }`} />
                   <div>
                     <div className="text-sm font-medium text-gray-900">
-                      {snapshot.filename || 'Unnamed File'}
+                      {formatDate(snapshot.uploadDate)}
                     </div>
                     <div className="text-xs text-gray-500">
-                      {formatDate(snapshot.uploadDate)}
+                      {snapshot.filename && !snapshot.filename.startsWith('Upload ') && !snapshot.filename.includes('Compliance Upload') ? snapshot.filename : 'Data Snapshot'}
                     </div>
                   </div>
                 </div>
