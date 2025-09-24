@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
+import SnapshotDeleteDialog from './SnapshotDeleteDialog';
 
 export interface User {
   id: string;
@@ -150,6 +151,99 @@ export function PropertySnapshotsModal({
   onClose: () => void;
 }) {
   const { property, snapshots, statistics } = propertyData;
+  const [deleteDialog, setDeleteDialog] = useState<{
+    isOpen: boolean;
+    snapshot: any;
+    requiresForce: boolean;
+    errorDetails?: any;
+  }>({
+    isOpen: false,
+    snapshot: null,
+    requiresForce: false
+  });
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleDeleteSnapshot = async (snapshot: any) => {
+    try {
+      const response = await fetch(`/api/admin/properties/${property.id}/snapshots/${snapshot.id}`, {
+        method: 'DELETE'
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (data.requiresForce) {
+          setDeleteDialog({
+            isOpen: true,
+            snapshot,
+            requiresForce: true,
+            errorDetails: data.details
+          });
+          return;
+        }
+        throw new Error(data.error || 'Failed to delete snapshot');
+      }
+
+      // Success - refresh the page or close modal
+      alert('Snapshot deleted successfully');
+      window.location.reload();
+    } catch (error) {
+      console.error('Error deleting snapshot:', error);
+      alert(error instanceof Error ? error.message : 'Failed to delete snapshot');
+    }
+  };
+
+  const handleMakeActive = async (snapshot: any) => {
+    try {
+      setIsLoading(true);
+      const response = await fetch(`/api/admin/properties/${property.id}/snapshots/${snapshot.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ action: 'make_active' })
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to activate snapshot');
+      }
+
+      // Success - refresh the page
+      alert('Snapshot activated successfully');
+      window.location.reload();
+    } catch (error) {
+      console.error('Error activating snapshot:', error);
+      alert(error instanceof Error ? error.message : 'Failed to activate snapshot');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleConfirmDelete = async (force = false) => {
+    try {
+      setIsLoading(true);
+      const url = `/api/admin/properties/${property.id}/snapshots/${deleteDialog.snapshot.id}${force ? '?force=true' : ''}`;
+      
+      const response = await fetch(url, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to delete snapshot');
+      }
+
+      setDeleteDialog({ isOpen: false, snapshot: null, requiresForce: false });
+      alert('Snapshot deleted successfully');
+      window.location.reload();
+    } catch (error) {
+      console.error('Error deleting snapshot:', error);
+      alert(error instanceof Error ? error.message : 'Failed to delete snapshot');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
@@ -235,13 +329,33 @@ export function PropertySnapshotsModal({
                           </div>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className="text-sm text-gray-900">
-                          {snapshot._count?.rentRolls || 0} rent rolls
+                      <div className="flex items-center space-x-2">
+                        <div className="text-right mr-4">
+                          <div className="text-sm text-gray-900">
+                            {snapshot._count?.rentRolls || 0} rent rolls
+                          </div>
+                          {snapshot.isActive && (
+                            <div className="text-xs text-green-600 font-medium">Active</div>
+                          )}
                         </div>
-                        {snapshot.isActive && (
-                          <div className="text-xs text-green-600 font-medium">Active</div>
+                        
+                        {!snapshot.isActive && (
+                          <button
+                            onClick={() => handleMakeActive(snapshot)}
+                            disabled={isLoading}
+                            className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 disabled:opacity-50"
+                          >
+                            Make Active
+                          </button>
                         )}
+                        
+                        <button
+                          onClick={() => handleDeleteSnapshot(snapshot)}
+                          disabled={isLoading}
+                          className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 disabled:opacity-50"
+                        >
+                          Delete
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -251,6 +365,17 @@ export function PropertySnapshotsModal({
           </div>
         </div>
       </div>
+
+      {/* Delete Dialog */}
+      <SnapshotDeleteDialog
+        isOpen={deleteDialog.isOpen}
+        onClose={() => setDeleteDialog({ isOpen: false, snapshot: null, requiresForce: false })}
+        onConfirm={handleConfirmDelete}
+        snapshot={deleteDialog.snapshot}
+        isAdmin={true}
+        requiresForce={deleteDialog.requiresForce}
+        errorDetails={deleteDialog.errorDetails}
+      />
     </div>
   );
 }
