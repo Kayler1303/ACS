@@ -1246,6 +1246,16 @@ export default function ResidentDetailPage() {
       console.log(`[UNIT STATUS] Calculating status for lease ${lease.id} using verification service`);
       
       // Calculate status using the same verification service used by the APIs
+      console.log(`[UNIT STATUS] Lease data being passed to verification service:`, {
+        leaseId: lease.id,
+        residents: lease.Resident?.map(r => ({
+          name: r.name,
+          incomeFinalized: r.incomeFinalized,
+          hasNoIncome: r.hasNoIncome,
+          isFinalized: r.incomeFinalized || r.hasNoIncome
+        })) || []
+      });
+      
       let status = getLeaseVerificationStatus(lease as any);
       console.log(`[UNIT STATUS] Verification service returned: ${status}`);
       
