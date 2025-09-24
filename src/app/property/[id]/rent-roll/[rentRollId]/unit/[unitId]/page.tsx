@@ -1325,8 +1325,9 @@ export default function ResidentDetailPage() {
         // When "Accept Verified Income" is used, it updates annualizedIncome to match calculatedAnnualizedIncome
         const residentsWithDiscrepancies = allResidents.filter(resident => {
           const rentRollIncome = resident.annualizedIncome || 0;
-          // Use verifiedIncome for residents with hasNoIncome=true, otherwise use calculatedAnnualizedIncome
-          const verifiedIncome = resident.hasNoIncome ? (resident.verifiedIncome || 0) : (resident.calculatedAnnualizedIncome || 0);
+          // For finalized residents, use verifiedIncome (the actual approved amount)
+          // This is consistent with the "Total Verified Income" display logic
+          const verifiedIncome = resident.verifiedIncome || 0;
           const discrepancy = Math.abs(rentRollIncome - verifiedIncome);
           const hasDiscrepancy = discrepancy > 1.00;
           
