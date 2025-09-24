@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import SnapshotDeleteDialog from './SnapshotDeleteDialog';
+import SnapshotDeletionRequestDialog from './SnapshotDeletionRequestDialog';
 
 interface Snapshot {
   id: string;
@@ -25,14 +25,9 @@ export default function SnapshotSelector({
 }: SnapshotSelectorProps) {
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [loading, setLoading] = useState(true);
-  const [deleteDialog, setDeleteDialog] = useState<{
+  const [deletionRequestDialog, setDeletionRequestDialog] = useState<{
     isOpen: boolean;
     snapshot: Snapshot | null;
-    error?: string;
-    errorDetails?: {
-      isActive: boolean;
-      rentRollCount: number;
-    };
   }>({
     isOpen: false,
     snapshot: null
@@ -75,48 +70,28 @@ export default function SnapshotSelector({
     });
   };
 
-  const handleDeleteSnapshot = async (snapshot: Snapshot) => {
+  const handleRequestDeletion = async (snapshot: Snapshot, reason: string) => {
     try {
-      const response = await fetch(`/api/properties/${propertyId}/snapshots/${snapshot.id}`, {
-        method: 'DELETE'
+      const response = await fetch(`/api/properties/${propertyId}/snapshots/${snapshot.id}/request-deletion`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ reason })
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        // Parse error details for better user experience
-        const errorDetails = {
-          isActive: snapshot.isActive,
-          rentRollCount: data.error?.includes('associated rent roll') ? 1 : 0
-        };
-        
-        // Show error in dialog instead of closing it
-        setDeleteDialog({ 
-          isOpen: true, 
-          snapshot, 
-          error: data.error,
-          errorDetails 
-        });
-        return;
+        throw new Error(data.error || 'Failed to submit deletion request');
       }
 
-      // Success - refresh snapshots
+      // Success - show confirmation and refresh
+      alert(data.message);
       await fetchSnapshots();
-      setDeleteDialog({ isOpen: false, snapshot: null });
-      
-      // If deleted snapshot was selected, select another one
-      if (selectedSnapshotId === snapshot.id && snapshots.length > 1) {
-        const remainingSnapshots = snapshots.filter(s => s.id !== snapshot.id);
-        const activeSnapshot = remainingSnapshots.find(s => s.isActive) || remainingSnapshots[0];
-        onSnapshotChange(activeSnapshot.id, activeSnapshot);
-      }
     } catch (error) {
-      console.error('Error deleting snapshot:', error);
-      setDeleteDialog({ 
-        isOpen: true, 
-        snapshot, 
-        error: error instanceof Error ? error.message : 'Failed to delete snapshot'
-      });
+      console.error('Error requesting snapshot deletion:', error);
+      throw error; // Re-throw to be handled by the dialog
     }
   };
 
@@ -234,10 +209,10 @@ export default function SnapshotSelector({
                   
                   {!snapshot.isActive && (
                     <button
-                      onClick={() => setDeleteDialog({ isOpen: true, snapshot, error: undefined, errorDetails: undefined })}
-                      className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
+                      onClick={() => setDeletionRequestDialog({ isOpen: true, snapshot })}
+                      className="px-2 py-1 text-xs bg-yellow-100 text-yellow-700 rounded hover:bg-yellow-200"
                     >
-                      Delete
+                      Request Deletion
                     </button>
                   )}
                   
@@ -251,16 +226,13 @@ export default function SnapshotSelector({
         </div>
       )}
 
-      {/* Delete Dialog */}
-      {deleteDialog.snapshot && (
-        <SnapshotDeleteDialog
-          isOpen={deleteDialog.isOpen}
-          onClose={() => setDeleteDialog({ isOpen: false, snapshot: null })}
-          onConfirm={() => deleteDialog.snapshot && handleDeleteSnapshot(deleteDialog.snapshot)}
-          snapshot={deleteDialog.snapshot}
-          isAdmin={false}
-          requiresForce={!!deleteDialog.error}
-          errorDetails={deleteDialog.errorDetails}
+      {/* Deletion Request Dialog */}
+      {deletionRequestDialog.snapshot && (
+        <SnapshotDeletionRequestDialog
+          isOpen={deletionRequestDialog.isOpen}
+          onClose={() => setDeletionRequestDialog({ isOpen: false, snapshot: null })}
+          onSubmit={(reason) => handleRequestDeletion(deletionRequestDialog.snapshot!, reason)}
+          snapshot={deletionRequestDialog.snapshot}
         />
       )}
     </div>

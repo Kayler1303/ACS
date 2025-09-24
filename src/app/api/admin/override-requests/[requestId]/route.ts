@@ -80,6 +80,13 @@ export async function PATCH(
             address: true
           }
         },
+        RentRollSnapshot: {
+          select: {
+            id: true,
+            filename: true,
+            uploadDate: true
+          }
+        },
         Unit: {
           select: {
             id: true,
@@ -121,6 +128,30 @@ export async function PATCH(
         });
         return NextResponse.json({ 
           error: 'Failed to delete property. The request has been reverted to pending status.' 
+        }, { status: 500 });
+      }
+    }
+
+    // Handle snapshot deletion if approved
+    if (action === 'approve' && existingRequest.type === 'SNAPSHOT_DELETION' && updatedRequest.RentRollSnapshot) {
+      try {
+        await prisma.rentRollSnapshot.delete({
+          where: { id: updatedRequest.RentRollSnapshot.id }
+        });
+        console.log(`Snapshot ${updatedRequest.RentRollSnapshot.filename || 'Unnamed'} (${updatedRequest.RentRollSnapshot.id}) deleted by admin ${session.user.id}`);
+      } catch (deleteError) {
+        console.error('Error deleting snapshot:', deleteError);
+        // Revert the override request status if deletion fails
+        await prisma.overrideRequest.update({
+          where: { id: requestId },
+          data: {
+            status: 'PENDING',
+            adminNotes: `${adminNotes.trim()}\n\nERROR: Snapshot deletion failed. Please try again or contact support.`,
+            reviewedAt: null,
+          }
+        });
+        return NextResponse.json({ 
+          error: 'Failed to delete snapshot. The request has been reverted to pending status.' 
         }, { status: 500 });
       }
     }

@@ -108,9 +108,11 @@ model OverrideRequest {
   reviewedAt                             DateTime?
   updatedAt                              DateTime
   propertyId                             String?
+  snapshotId                             String?
   AdminMessage                           AdminMessage[]
   IncomeDocument                         IncomeDocument?       @relation(fields: [documentId], references: [id])
   Property                               Property?             @relation(fields: [propertyId], references: [id])
+  RentRollSnapshot                       RentRollSnapshot?     @relation(fields: [snapshotId], references: [id])
   User_OverrideRequest_requesterIdToUser User                  @relation("OverrideRequest_requesterIdToUser", fields: [requesterId], references: [id])
   Resident                               Resident?             @relation(fields: [residentId], references: [id])
   User_OverrideRequest_reviewerIdToUser  User?                 @relation("OverrideRequest_reviewerIdToUser", fields: [reviewerId], references: [id])
@@ -363,15 +365,16 @@ model UnitCountDiscrepancy {
 }
 
 model RentRollSnapshot {
-  id              String     @id
+  id              String            @id
   propertyId      String
-  uploadDate      DateTime   @default(now())
+  uploadDate      DateTime          @default(now())
   filename        String?
-  isActive        Boolean    @default(true)
+  isActive        Boolean           @default(true)
   hudIncomeLimits Json?
   hudDataYear     Int?
   rentRolls       RentRoll[]
-  property        Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  property        Property          @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  OverrideRequest OverrideRequest[]
 
   @@index([propertyId])
   @@index([uploadDate])
@@ -423,6 +426,7 @@ enum OverrideRequestType {
   DOCUMENT_REVIEW
   PROPERTY_DELETION
   DUPLICATE_DOCUMENT
+  SNAPSHOT_DELETION
 }
 
 enum UserRole {
