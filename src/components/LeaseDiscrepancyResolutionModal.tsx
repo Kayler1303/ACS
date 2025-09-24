@@ -52,7 +52,7 @@ export default function LeaseDiscrepancyResolutionModal({
   const isLastResident = currentResidentIndex === residentsWithDiscrepancies.length - 1;
   
   const rentRollIncome = currentResident.annualizedIncome || 0;
-  const verifiedIncome = currentResident.calculatedAnnualizedIncome || 0;
+  const verifiedIncome = currentResident.verifiedIncome || 0;
   const discrepancy = Math.abs(rentRollIncome - verifiedIncome);
   const verifiedIsHigher = verifiedIncome > rentRollIncome;
 
