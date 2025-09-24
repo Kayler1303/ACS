@@ -1250,6 +1250,16 @@ export default function ResidentDetailPage() {
       console.log(`[UNIT STATUS] Verification service returned: ${status}`);
       
       // Apply the same override logic as the future leases API
+      console.log(`[UNIT STATUS DEBUG] Unit ${tenancyData.unit.unitNumber} Lease ${lease.id}:`, {
+        initialStatus: status,
+        hasIncomeVerification: !!lease.IncomeVerification,
+        verificationCount: lease.IncomeVerification?.length || 0,
+        verificationStatuses: lease.IncomeVerification?.map((v: any) => v.status) || [],
+        shouldOverride: status === 'In Progress - Finalize to Process' && 
+                       lease.IncomeVerification && 
+                       lease.IncomeVerification.some((v: any) => v.status === 'FINALIZED')
+      });
+      
       if (status === 'In Progress - Finalize to Process' && 
           lease.IncomeVerification && 
           lease.IncomeVerification.some((v: any) => v.status === 'FINALIZED')) {

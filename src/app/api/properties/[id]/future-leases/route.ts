@@ -161,10 +161,21 @@ export async function GET(
           const { getLeaseVerificationStatus } = await import('../../../../../services/verification');
           let verificationStatus = getLeaseVerificationStatus({...futureLease, Tenancy: null} as any);
           
+          console.log(`[FUTURE LEASES API DEBUG] Unit ${unit.unitNumber} Lease ${futureLease.id}:`, {
+            initialStatus: verificationStatus,
+            hasIncomeVerification: !!futureLease.IncomeVerification,
+            verificationCount: futureLease.IncomeVerification?.length || 0,
+            verificationStatuses: futureLease.IncomeVerification?.map((v: any) => v.status) || [],
+            shouldOverride: verificationStatus === 'In Progress - Finalize to Process' && 
+                           futureLease.IncomeVerification && 
+                           futureLease.IncomeVerification.some((v: any) => v.status === 'FINALIZED')
+          });
+          
           // Override status if we have FINALIZED verifications
           if (verificationStatus === 'In Progress - Finalize to Process' && 
               futureLease.IncomeVerification && 
               futureLease.IncomeVerification.some((v: any) => v.status === 'FINALIZED')) {
+            console.log(`[FUTURE LEASES API DEBUG] Overriding status: ${verificationStatus} -> Verified`);
             verificationStatus = 'Verified';
           }
 
