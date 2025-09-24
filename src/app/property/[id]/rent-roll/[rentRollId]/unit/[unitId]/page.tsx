@@ -1331,6 +1331,19 @@ export default function ResidentDetailPage() {
           const discrepancy = Math.abs(rentRollIncome - verifiedIncome);
           const hasDiscrepancy = discrepancy > 1.00;
           
+          // DEBUG: Log detailed resident data to understand the issue
+          console.log(`[DISCREPANCY DEBUG] Resident ${resident.name}:`, {
+            id: resident.id,
+            rentRollIncome,
+            verifiedIncome: resident.verifiedIncome,
+            calculatedAnnualizedIncome: resident.calculatedAnnualizedIncome,
+            incomeFinalized: resident.incomeFinalized,
+            hasNoIncome: resident.hasNoIncome,
+            finalizedAt: resident.finalizedAt,
+            discrepancy,
+            hasDiscrepancy
+          });
+          
           // If there's a discrepancy AND the resident has been finalized, check if they already
           // resolved it through "Accept Verified Income" which updates annualizedIncome to match calculatedAnnualizedIncome
           const wasResolvedByAcceptingVerifiedIncome = resident.incomeFinalized && 
