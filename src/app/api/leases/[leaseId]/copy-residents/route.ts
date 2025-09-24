@@ -36,6 +36,7 @@ export async function POST(
       },
       include: {
         Resident: true, // Include residents to check if lease is empty
+        Tenancy: true, // Include tenancy to check if lease is provisional
       }
     });
 
