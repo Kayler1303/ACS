@@ -519,10 +519,18 @@ export default function ResidentDetailPage() {
 
   // Delete lease handlers
   const handleDeleteFutureLease = (lease: any) => {
-    // Check if this is a future lease
-    const isFutureLease = !lease.Tenancy || 
-      (lease.leaseStartDate && tenancyData?.rentRoll?.date && 
-       new Date(lease.leaseStartDate) > new Date(tenancyData.rentRoll.date));
+    // Check if this is a future lease (relative to snapshot date, not current date)
+    const snapshotDate = tenancyData?.rentRoll?.date;
+    const leaseStartDate = lease.leaseStartDate;
+    
+    const isFutureLease = 
+      // No Tenancy = provisional lease (always deletable)
+      !lease.Tenancy ||
+      // No start date = manually created future lease without dates
+      !leaseStartDate ||
+      // Start date after snapshot date = future lease
+      (leaseStartDate && snapshotDate && 
+       new Date(leaseStartDate) > new Date(snapshotDate));
 
     if (!isFutureLease) {
       alert('Only future leases can be deleted. Current leases cannot be deleted.');
@@ -2094,25 +2102,51 @@ export default function ResidentDetailPage() {
                             return null;
                           })()}
 
-                          {period.isProvisional && (
-                            <>
-                              <button
-                                onClick={() => {
-                                  setSelectedLeaseForResident(period);
-                                  setInitialAddResidentDialogOpen(true);
-                                }}
-                                className="text-xs text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded transition-colors"
-                              >
-                                Add Resident
-                              </button>
-                              <button
-                                onClick={() => handleDeleteFutureLease(period)}
-                                className="text-xs text-red-600 hover:text-red-900 bg-red-50 hover:bg-red-100 px-2 py-1 rounded transition-colors"
-                              >
-                                🗑️ Delete Lease
-                              </button>
-                            </>
-                          )}
+                          {(() => {
+                            // Determine if this is a future lease that can be deleted
+                            // Future lease criteria (relative to snapshot date, NOT current date):
+                            // 1. No lease start date (manually created without dates) = future lease
+                            // 2. Lease start date > snapshot date = future lease
+                            // 3. Provisional leases (no Tenancy) = always deletable
+                            
+                            const snapshotDate = tenancyData?.rentRoll?.date;
+                            const leaseStartDate = period.leaseStartDate;
+                            
+                            const isFutureLease = 
+                              // No Tenancy = provisional lease (always deletable)
+                              !period.Tenancy ||
+                              // No start date = manually created future lease without dates
+                              !leaseStartDate ||
+                              // Start date after snapshot date = future lease
+                              (leaseStartDate && snapshotDate && 
+                               new Date(leaseStartDate) > new Date(snapshotDate));
+                            
+                            const showLeaseActions = isFutureLease;
+                            
+                            if (!showLeaseActions) return null;
+                            
+                            return (
+                              <>
+                                {period.isProvisional && (
+                                  <button
+                                    onClick={() => {
+                                      setSelectedLeaseForResident(period);
+                                      setInitialAddResidentDialogOpen(true);
+                                    }}
+                                    className="text-xs text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded transition-colors"
+                                  >
+                                    Add Resident
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => handleDeleteFutureLease(period)}
+                                  className="text-xs text-red-600 hover:text-red-900 bg-red-50 hover:bg-red-100 px-2 py-1 rounded transition-colors"
+                                >
+                                  🗑️ Delete Lease
+                                </button>
+                              </>
+                            );
+                          })()}
                         </div>
                       </div>
                     </div>
