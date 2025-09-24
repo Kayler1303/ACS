@@ -175,6 +175,16 @@ export async function POST(
           verificationMap.set(verification.id, newVerificationId);
         }
 
+        // Mark the original future lease as processed to prevent duplicates
+        await tx.lease.update({
+          where: { id: futureLease.id },
+          data: { 
+            name: `[PROCESSED] ${futureLease.name}`,
+            updatedAt: new Date()
+          }
+        });
+        console.log(`[COMPLIANCE UPDATE] ✅ Marked original future lease as processed: [PROCESSED] ${futureLease.name}`);
+
         // Copy residents for this lease
         for (const resident of futureLease.Resident) {
           const newResidentId = randomUUID();
