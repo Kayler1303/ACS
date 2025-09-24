@@ -20,6 +20,7 @@ import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { getUnitVerificationStatus, type VerificationStatus } from '@/services/verification';
 import OverrideRequestModal from '@/components/OverrideRequestModal';
+import DeleteLeaseDialog from '@/components/DeleteLeaseDialog';
 
 // --- NEW Data Structures ---
 
@@ -417,6 +418,17 @@ export default function ResidentDetailPage() {
     residents: Array<{ id: string; name: string }>;
   }>({ isOpen: false, verificationId: null, leaseName: '', residents: [] });
 
+  // Delete lease dialog state
+  const [deleteLeaseDialog, setDeleteLeaseDialog] = useState<{
+    isOpen: boolean;
+    lease: {
+      id: string;
+      name: string;
+      residentCount: number;
+      hasDocuments: boolean;
+    } | null;
+  }>({ isOpen: false, lease: null });
+
   // Helper function to clean up new lease workflow state
   const resetNewLeaseWorkflow = () => {
     setIsNewLeaseWorkflow(false);
@@ -502,6 +514,68 @@ export default function ResidentDetailPage() {
     } catch (error) {
       console.error('Error unfinalizing resident income:', error);
       alert(error instanceof Error ? error.message : 'Failed to unfinalize resident income');
+    }
+  };
+
+  // Delete lease handlers
+  const handleDeleteFutureLease = (lease: any) => {
+    // Check if this is a future lease
+    const isFutureLease = !lease.Tenancy || 
+      (lease.leaseStartDate && tenancyData?.rentRoll?.date && 
+       new Date(lease.leaseStartDate) > new Date(tenancyData.rentRoll.date));
+
+    if (!isFutureLease) {
+      alert('Only future leases can be deleted. Current leases cannot be deleted.');
+      return;
+    }
+
+    // Check if lease has documents
+    const hasDocuments = lease.IncomeVerification?.some((v: any) => 
+      v.IncomeDocument && v.IncomeDocument.length > 0
+    ) || false;
+
+    setDeleteLeaseDialog({
+      isOpen: true,
+      lease: {
+        id: lease.id,
+        name: lease.name,
+        residentCount: lease.Resident?.length || 0,
+        hasDocuments
+      }
+    });
+  };
+
+  const handleConfirmDeleteLease = async () => {
+    if (!deleteLeaseDialog.lease) return;
+
+    try {
+      const response = await fetch(`/api/leases/${deleteLeaseDialog.lease.id}/delete`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete lease');
+      }
+
+      const result = await response.json();
+      
+      // Show success message
+      toast.success(result.message || 'Lease deleted successfully');
+      
+      // Refresh the data
+      await fetchTenancyData(false);
+      await fetchUnitVerificationStatus();
+      
+      // Close dialog
+      setDeleteLeaseDialog({ isOpen: false, lease: null });
+      
+    } catch (error) {
+      console.error('Error deleting lease:', error);
+      throw error; // Re-throw so DeleteLeaseDialog can handle it
     }
   };
 
@@ -2032,10 +2106,10 @@ export default function ResidentDetailPage() {
                                 Add Resident
                               </button>
                               <button
-                                onClick={() => handleDeleteLease(period.id)}
+                                onClick={() => handleDeleteFutureLease(period)}
                                 className="text-xs text-red-600 hover:text-red-900 bg-red-50 hover:bg-red-100 px-2 py-1 rounded transition-colors"
                               >
-                                Delete Lease
+                                🗑️ Delete Lease
                               </button>
                             </>
                           )}
@@ -2916,6 +2990,16 @@ export default function ResidentDetailPage() {
               setDiscrepancyModalCooldown(false);
             }, 2000); // 2 second cooldown
           }}
+        />
+      )}
+
+      {/* Delete Lease Dialog */}
+      {deleteLeaseDialog.isOpen && deleteLeaseDialog.lease && (
+        <DeleteLeaseDialog
+          isOpen={deleteLeaseDialog.isOpen}
+          onClose={() => setDeleteLeaseDialog({ isOpen: false, lease: null })}
+          onConfirm={handleConfirmDeleteLease}
+          lease={deleteLeaseDialog.lease}
         />
       )}
 
