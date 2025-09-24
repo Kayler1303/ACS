@@ -158,7 +158,6 @@ export default function SnapshotSelector({
             <option key={snapshot.id} value={snapshot.id}>
               {formatDate(snapshot.uploadDate)}
               {snapshot.filename && !snapshot.filename.startsWith('Upload ') && !snapshot.filename.includes('Compliance Upload') && ` - ${snapshot.filename}`}
-              {snapshot.isActive && ' (Current)'}
             </option>
           ))}
         </select>
@@ -190,12 +189,10 @@ export default function SnapshotSelector({
                 }`}
               >
                 <div className="flex items-center space-x-3">
-                  <div className={`w-3 h-3 rounded-full ${
-                    snapshot.isActive ? 'bg-green-500' : 'bg-gray-400'
-                  }`} />
                   <div>
                     <div className="text-sm font-medium text-gray-900">
                       {formatDate(snapshot.uploadDate)}
+                      {snapshot.isActive && <span className="ml-2 text-xs text-green-600 font-medium">(Default)</span>}
                     </div>
                     <div className="text-xs text-gray-500">
                       {snapshot.filename && !snapshot.filename.startsWith('Upload ') && !snapshot.filename.includes('Compliance Upload') ? snapshot.filename : 'Data Snapshot'}
@@ -209,7 +206,7 @@ export default function SnapshotSelector({
                       onClick={() => handleMakeActive(snapshot)}
                       className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
                     >
-                      Make Active
+                      Make Default
                     </button>
                   )}
                   
