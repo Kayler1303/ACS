@@ -153,9 +153,31 @@ export async function GET(
           
           return false;
         });
+        
         if (futureLeases.length > 0) {
-          // Get the most recent future lease
-          const futureLease = futureLeases[0];
+          // Sort future leases to prioritize FINALIZED verifications first, then by creation date
+          const sortedFutureLeases = futureLeases.sort((a: any, b: any) => {
+            // First priority: FINALIZED verifications
+            const aHasFinalized = a.IncomeVerification && a.IncomeVerification.some((v: any) => v.status === 'FINALIZED');
+            const bHasFinalized = b.IncomeVerification && b.IncomeVerification.some((v: any) => v.status === 'FINALIZED');
+            
+            if (aHasFinalized && !bHasFinalized) return -1;
+            if (!aHasFinalized && bHasFinalized) return 1;
+            
+            // Second priority: Most recent creation date
+            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          });
+          
+          // Get the highest priority future lease
+          const futureLease = sortedFutureLeases[0];
+          
+          console.log(`[FUTURE LEASES API DEBUG] Unit ${unit.unitNumber} lease selection:`, {
+            totalFutureLeases: futureLeases.length,
+            selectedLeaseId: futureLease.id,
+            selectedLeaseCreatedAt: futureLease.createdAt,
+            hasFinalized: futureLease.IncomeVerification && futureLease.IncomeVerification.some((v: any) => v.status === 'FINALIZED'),
+            allLeaseIds: futureLeases.map((l: any) => ({ id: l.id, createdAt: l.createdAt, hasFinalized: l.IncomeVerification && l.IncomeVerification.some((v: any) => v.status === 'FINALIZED') }))
+          });
           
           // Use the lease-specific verification function
           const { getLeaseVerificationStatus } = await import('../../../../../services/verification');
