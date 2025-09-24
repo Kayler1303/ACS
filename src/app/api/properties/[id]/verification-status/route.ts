@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { checkPropertyAccess } from '@/lib/permissions';
+import { isFutureLease, filterFutureLeases, debugLeaseClassification } from '@/lib/lease-classification';
 import * as fs from 'fs';
 
 export async function GET(
@@ -264,30 +265,15 @@ export async function GET(
       } else {
         console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: No current leases found for this rent roll`);
         
-        // Check for future leases (leases without Tenancy records)
+        // Check for future leases using consistent date-based classification
         const futureLeases = unitLeases.filter((lease: any) => {
           // Skip processed leases
           if (lease.name && lease.name.startsWith('[PROCESSED]')) {
             return false;
           }
           
-          // Check if lease has current tenancy for this rent roll
-          const hasCurrentTenancy = lease.Tenancy && targetRentRoll && lease.Tenancy.rentRollId === targetRentRoll.id;
-          
-          // If no current tenancy, check if it's a future lease
-          if (!hasCurrentTenancy) {
-            // Manual future lease with no date
-            if (!lease.leaseStartDate) {
-              return true;
-            }
-            
-            // Automatic future lease (starts after rent roll date)
-            const leaseStartDate = new Date(lease.leaseStartDate);
-            const rentRollDate = new Date(targetRentRoll.uploadDate);
-            return leaseStartDate > rentRollDate;
-          }
-          
-          return false;
+          // Use consistent date-based classification
+          return isFutureLease(lease, targetRentRoll.uploadDate);
         });
         
         console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: Found ${futureLeases.length} future leases`);

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { isFutureLease, isCurrentLease, debugLeaseClassification } from '@/lib/lease-classification';
 
 interface IncomeDiscrepancy {
   unitNumber: string | number;
@@ -68,13 +69,12 @@ export async function GET(
       const unit = tenancy.Lease.Unit;
       const newResidents = tenancy.Lease.Resident;
       
-      // Get the most recent CURRENT lease for this unit that has verified income (not the new lease)
-      // Only look at leases that have Tenancy records (current leases), not future leases
+      // Get the most recent lease for this unit that has verified income (not the new lease)
+      // Include both current and future leases - all can have income discrepancies
       const existingLeases = await prisma.lease.findMany({
         where: {
           unitId: unit.id,
           id: { not: tenancy.Lease.id }, // Exclude the new lease
-          Tenancy: { isNot: null }, // Only current leases (with Tenancy), not future leases
           Resident: {
             some: {
               AND: [
@@ -100,25 +100,7 @@ export async function GET(
         take: 1 // Only take the most recent lease to prevent duplicates
       });
 
-      // Also check how many future leases we're excluding for debugging
-      const futureLeases = await prisma.lease.findMany({
-        where: {
-          unitId: unit.id,
-          id: { not: tenancy.Lease.id },
-          Tenancy: null, // Future leases (no Tenancy)
-          Resident: {
-            some: {
-              AND: [
-                { incomeFinalized: true },
-                { calculatedAnnualizedIncome: { not: null } }
-              ]
-            }
-          }
-        }
-      });
-
-      console.log(`[DISCREPANCY API] 🔍 Unit ${unit.unitNumber}: Found ${existingLeases.length} existing CURRENT leases with verified income`);
-      console.log(`[DISCREPANCY API] 🔮 Unit ${unit.unitNumber}: Excluding ${futureLeases.length} future leases with verified income from discrepancy check`);
+      console.log(`[DISCREPANCY API] 🔍 Unit ${unit.unitNumber}: Found ${existingLeases.length} existing leases with verified income (includes both current and future leases)`);
       
       // Debug: Also check the current lease residents to see if they have verified income
       console.log(`[DISCREPANCY API] 📋 Unit ${unit.unitNumber}: Current lease residents:`, newResidents.map(r => ({

@@ -4,6 +4,7 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { isFutureLease, isCurrentLease, debugLeaseClassification } from '@/lib/lease-classification';
 
 interface FutureToCurrentTransition {
   unitId: string;
@@ -102,9 +103,10 @@ export async function GET(
     const transitions: FutureToCurrentTransition[] = [];
 
     for (const unit of units) {
-      // Find current lease for this unit in the new rent roll
+      // Find current lease for this unit using date-based classification
       const currentLease = unit.Lease.find(lease => 
-        Array.isArray(lease.Tenancy) && lease.Tenancy.length > 0
+        isCurrentLease(lease, currentRentRoll.uploadDate) && 
+        lease.Tenancy && Array.isArray(lease.Tenancy) && lease.Tenancy.some((t: any) => t.rentRollId === rentRollId)
       );
 
       if (!currentLease) continue;
@@ -115,9 +117,9 @@ export async function GET(
       );
       const previousLease = previousTenancy?.Lease;
 
-      // Find any future leases for this unit (leases without tenancy in current rent roll)
+      // Find any future leases for this unit using date-based classification
       const futureLeases = unit.Lease.filter(lease => 
-        !Array.isArray(lease.Tenancy) || lease.Tenancy.length === 0
+        isFutureLease(lease, currentRentRoll.uploadDate)
       );
 
       // Check if current lease changed from previous AND there are future leases

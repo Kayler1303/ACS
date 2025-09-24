@@ -5,6 +5,7 @@ import { prisma } from '../../../../../lib/prisma';
 import { getActualAmiBucket } from '../../../../../services/income';
 import { getHudIncomeLimits } from '../../../../../services/hud';
 import { getLeaseVerificationStatus } from '../../../../../services/verification';
+import { isFutureLease, debugLeaseClassification } from '../../../../../lib/lease-classification';
 
 // Disable caching for this route
 export const dynamic = 'force-dynamic';
@@ -129,29 +130,15 @@ export async function GET(
           unitNumber: unit.unitNumber
         };
 
-        // Filter for future leases efficiently
+        // Filter for future leases using consistent date-based classification
         const futureLeases = unit.Lease.filter((lease: any) => {
           // Skip processed leases
           if (lease.name.startsWith('[PROCESSED]')) {
             return false;
           }
           
-          // Check if lease has current tenancy for this rent roll
-          const hasCurrentTenancy = lease.Tenancy && targetRentRoll && lease.Tenancy.rentRollId === targetRentRoll.id;
-          
-          // If no current tenancy, check if it's a future lease
-          if (!hasCurrentTenancy) {
-            // Manual future lease with no date
-            if (!lease.leaseStartDate) {
-              return true;
-            }
-            
-            // Automatic future lease (starts after rent roll date)
-            const leaseStartDate = new Date(lease.leaseStartDate);
-            return leaseStartDate > rentRollDate;
-          }
-          
-          return false;
+          // Use consistent date-based classification
+          return isFutureLease(lease, rentRollDate);
         });
         
         if (futureLeases.length > 0) {
