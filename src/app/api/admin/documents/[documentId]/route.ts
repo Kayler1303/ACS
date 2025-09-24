@@ -201,11 +201,13 @@ export async function POST(
       if (calculatedAnnualizedIncome !== null && calculatedAnnualizedIncome !== undefined) {
         await prisma.$executeRaw`
           UPDATE "Resident" 
-          SET "calculatedAnnualizedIncome" = ${Number(calculatedAnnualizedIncome)}::numeric
+          SET 
+            "calculatedAnnualizedIncome" = ${Number(calculatedAnnualizedIncome)}::numeric,
+            "verifiedIncome" = ${Number(calculatedAnnualizedIncome)}::numeric
           WHERE "id" = ${document.residentId}
         `;
         
-        console.log(`Admin approved document ${documentId} - Updated resident ${document.residentId} with calculated income: $${calculatedAnnualizedIncome}`);
+        console.log(`Admin approved document ${documentId} - Updated resident ${document.residentId} with calculated income: $${calculatedAnnualizedIncome} (set both calculatedAnnualizedIncome and verifiedIncome)`);
       }
 
       // Update the override request
