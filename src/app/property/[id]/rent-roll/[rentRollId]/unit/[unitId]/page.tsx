@@ -1344,6 +1344,13 @@ export default function ResidentDetailPage() {
             hasDiscrepancy
           });
           
+          // SPECIAL CASE: If resident is marked as finalized but has verifiedIncome = 0 and hasNoIncome = true,
+          // they should not trigger a discrepancy modal (they were properly marked as no income)
+          if (resident.incomeFinalized && resident.verifiedIncome === 0 && resident.hasNoIncome) {
+            console.log(`[DISCREPANCY DEBUG] ${resident.name} is properly marked as no income - skipping discrepancy check`);
+            return false; // Skip this resident
+          }
+          
           // If there's a discrepancy AND the resident has been finalized, check if they already
           // resolved it through "Accept Verified Income" which updates annualizedIncome to match calculatedAnnualizedIncome
           const wasResolvedByAcceptingVerifiedIncome = resident.incomeFinalized && 
