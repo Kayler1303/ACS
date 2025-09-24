@@ -28,6 +28,11 @@ export default function SnapshotSelector({
   const [deleteDialog, setDeleteDialog] = useState<{
     isOpen: boolean;
     snapshot: Snapshot | null;
+    error?: string;
+    errorDetails?: {
+      isActive: boolean;
+      rentRollCount: number;
+    };
   }>({
     isOpen: false,
     snapshot: null
@@ -79,7 +84,20 @@ export default function SnapshotSelector({
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to delete snapshot');
+        // Parse error details for better user experience
+        const errorDetails = {
+          isActive: snapshot.isActive,
+          rentRollCount: data.error?.includes('associated rent roll') ? 1 : 0
+        };
+        
+        // Show error in dialog instead of closing it
+        setDeleteDialog({ 
+          isOpen: true, 
+          snapshot, 
+          error: data.error,
+          errorDetails 
+        });
+        return;
       }
 
       // Success - refresh snapshots
@@ -94,7 +112,11 @@ export default function SnapshotSelector({
       }
     } catch (error) {
       console.error('Error deleting snapshot:', error);
-      alert(error instanceof Error ? error.message : 'Failed to delete snapshot');
+      setDeleteDialog({ 
+        isOpen: true, 
+        snapshot, 
+        error: error instanceof Error ? error.message : 'Failed to delete snapshot'
+      });
     }
   };
 
@@ -212,7 +234,7 @@ export default function SnapshotSelector({
                   
                   {!snapshot.isActive && (
                     <button
-                      onClick={() => setDeleteDialog({ isOpen: true, snapshot })}
+                      onClick={() => setDeleteDialog({ isOpen: true, snapshot, error: undefined, errorDetails: undefined })}
                       className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200"
                     >
                       Delete
@@ -230,13 +252,17 @@ export default function SnapshotSelector({
       )}
 
       {/* Delete Dialog */}
-      <SnapshotDeleteDialog
-        isOpen={deleteDialog.isOpen}
-        onClose={() => setDeleteDialog({ isOpen: false, snapshot: null })}
-        onConfirm={() => deleteDialog.snapshot && handleDeleteSnapshot(deleteDialog.snapshot)}
-        snapshot={deleteDialog.snapshot!}
-        isAdmin={false}
-      />
+      {deleteDialog.snapshot && (
+        <SnapshotDeleteDialog
+          isOpen={deleteDialog.isOpen}
+          onClose={() => setDeleteDialog({ isOpen: false, snapshot: null })}
+          onConfirm={() => deleteDialog.snapshot && handleDeleteSnapshot(deleteDialog.snapshot)}
+          snapshot={deleteDialog.snapshot}
+          isAdmin={false}
+          requiresForce={!!deleteDialog.error}
+          errorDetails={deleteDialog.errorDetails}
+        />
+      )}
     </div>
   );
 } 

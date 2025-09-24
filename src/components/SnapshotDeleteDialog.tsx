@@ -47,9 +47,7 @@ export default function SnapshotDeleteDialog({
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+      day: 'numeric'
     });
   };
 
@@ -59,7 +57,7 @@ export default function SnapshotDeleteDialog({
         return "This is the active snapshot. Deleting it may cause the property to lose its current data state.";
       }
       if (errorDetails.rentRollCount > 0) {
-        return `This snapshot has ${errorDetails.rentRollCount} associated rent roll(s). Deleting it will permanently remove this historical data.`;
+        return `This snapshot contains compliance data and cannot be deleted to prevent data loss. Only empty snapshots can be deleted.`;
       }
     }
     return null;
@@ -67,6 +65,8 @@ export default function SnapshotDeleteDialog({
 
   const warningMessage = getWarningMessage();
   const showForceOption = isAdmin && requiresForce;
+  const hasError = !!errorDetails && (errorDetails.isActive || errorDetails.rentRollCount > 0);
+  const canDelete = !hasError || (showForceOption && forceDelete);
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
@@ -87,14 +87,14 @@ export default function SnapshotDeleteDialog({
             
             <div className="mb-4 p-3 bg-gray-50 rounded-lg">
               <div className="text-sm font-medium text-gray-900">
-                {snapshot.filename || 'Unnamed File'}
+                {formatDate(snapshot.uploadDate)}
               </div>
               <div className="text-xs text-gray-500">
-                {formatDate(snapshot.uploadDate)}
+                {snapshot.filename && !snapshot.filename.startsWith('Upload ') && !snapshot.filename.includes('Compliance Upload') ? snapshot.filename : 'Data Snapshot'}
               </div>
               {snapshot.isActive && (
                 <div className="text-xs text-green-600 font-medium mt-1">
-                  Active Snapshot
+                  Default Snapshot
                 </div>
               )}
             </div>
@@ -148,7 +148,7 @@ export default function SnapshotDeleteDialog({
             <button
               type="button"
               onClick={handleConfirm}
-              disabled={isDeleting || (showForceOption && !forceDelete)}
+              disabled={isDeleting || !canDelete}
               className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isDeleting ? (
