@@ -28,17 +28,40 @@ export async function POST(
       return NextResponse.json({ error: 'Resident IDs are required.' }, { status: 400 });
     }
 
-    // 1. Verify the target lease is a valid, provisional lease owned by the user
+    // 1. Verify the target lease is a valid lease owned by the user
     const targetLease = await prisma.lease.findFirst({
       where: {
         id: targetLeaseId,
         Unit: { Property: { ownerId: session.user.id } },
-        Tenancy: null, // Must be provisional
       },
+      include: {
+        Resident: true, // Include residents to check if lease is empty
+      }
     });
 
     if (!targetLease) {
-      return NextResponse.json({ error: 'Target lease not found, is not provisional, or access denied.' }, { status: 404 });
+      return NextResponse.json({ error: 'Target lease not found or access denied.' }, { status: 404 });
+    }
+
+    // Check if this is a valid target for copying residents:
+    // 1. Either it's a provisional lease (no Tenancy record), OR
+    // 2. It's a newly created manual lease (has Tenancy but no residents yet)
+    const isProvisionalLease = !targetLease.Tenancy;
+    const isNewManualLease = targetLease.Tenancy && targetLease.Resident.length === 0;
+    
+    console.log(`[COPY RESIDENTS DEBUG] Lease ${targetLeaseId}:`, {
+      leaseName: targetLease.name,
+      hasTenancy: !!targetLease.Tenancy,
+      residentCount: targetLease.Resident.length,
+      isProvisionalLease,
+      isNewManualLease,
+      canCopyResidents: isProvisionalLease || isNewManualLease
+    });
+    
+    if (!isProvisionalLease && !isNewManualLease) {
+      return NextResponse.json({ 
+        error: 'Target lease already has residents or is not available for resident copying.' 
+      }, { status: 400 });
     }
 
     // 2. Fetch the source residents to be copied
