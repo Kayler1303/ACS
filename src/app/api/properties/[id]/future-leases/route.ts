@@ -133,7 +133,7 @@ export async function GET(
         // Filter for future leases using consistent date-based classification
         const futureLeases = unit.Lease.filter((lease: any) => {
           // Skip processed leases
-          if (lease.name.startsWith('[PROCESSED]')) {
+          if (lease.name && lease.name.startsWith('[PROCESSED]')) {
             return false;
           }
           
