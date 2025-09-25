@@ -547,7 +547,8 @@ export async function GET(
         console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: No residents with verified income or in-progress verification - returning Out of Date Income Documents`);
       } else if (residentsWithVerifiedIncome === totalResidents) {
         // Check if all residents are marked as "No Income" - this needs attention
-        const allResidentsHaveNoIncome = unit.Lease[0]?.Resident?.every((r: any) => r.hasNoIncome) || false;
+        // Use the processed residents array from the selected targetLease, not unit.Lease[0]
+        const allResidentsHaveNoIncome = residents.every((r: any) => r.hasNoIncome);
         
         if (allResidentsHaveNoIncome && totalResidents > 0) {
           status = 'Needs Income Documentation';
