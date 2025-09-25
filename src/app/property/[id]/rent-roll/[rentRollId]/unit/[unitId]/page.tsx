@@ -819,7 +819,32 @@ export default function ResidentDetailPage() {
   const handleStartVerification = async (leaseId: string, overrideResidents?: Array<{ id: string; name: string }>) => {
     if (!tenancyData) return;
     
-    const lease = tenancyData.unit?.Lease?.find(l => l.id === leaseId);
+    let lease = tenancyData.unit?.Lease?.find(l => l.id === leaseId);
+    
+    // If lease is not found, refresh data first (this can happen with newly created leases)
+    if (!lease) {
+      console.log(`[VERIFICATION] Lease ${leaseId} not found in current data, refreshing...`);
+      
+      // Fetch fresh data directly instead of relying on state
+      try {
+        const res = await fetch(`/api/properties/${propertyId}/rent-roll/${rentRollId}/unit/${unitId}`);
+        if (!res.ok) {
+          throw new Error('Failed to fetch fresh unit data');
+        }
+        const freshData = await res.json();
+        lease = freshData.unit?.Lease?.find((l: any) => l.id === leaseId);
+        
+        if (!lease) {
+          console.error(`[VERIFICATION] Lease ${leaseId} still not found in fresh data`);
+          throw new Error('Lease not found. Please refresh the page and try again.');
+        }
+        
+        console.log(`[VERIFICATION] Found lease in fresh data: ${lease.name}`);
+      } catch (error) {
+        console.error(`[VERIFICATION] Error fetching fresh data:`, error);
+        throw new Error('Failed to load lease data. Please refresh the page and try again.');
+      }
+    }
     
     try {
         const res = await fetch(`/api/leases/${leaseId}/verifications`, {
