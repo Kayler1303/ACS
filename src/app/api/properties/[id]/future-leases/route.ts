@@ -138,11 +138,31 @@ export async function GET(
       console.error(`❌ No valid rent roll with snapshot found for property ${propertyId}`);
       console.error(`❌ Requested rentRollId: ${rentRollId}`);
       console.error(`❌ Available rent rolls:`, property.RentRoll.map(rr => `${rr.id} (snapshot: ${rr.snapshotId})`));
-      return NextResponse.json({ 
-        units: [],
-        totalFutureLeases: 0,
-        processingTime: 0
-      }, { status: 200 });
+      
+      // Fallback: try to use any available rent roll (even without snapshot)
+      if (rentRollId) {
+        const fallbackRentRoll = property.RentRoll.find(rr => rr.id === rentRollId);
+        if (fallbackRentRoll) {
+          console.error(`🔄 Using fallback rent roll without snapshot: ${fallbackRentRoll.id}`);
+          targetRentRoll = fallbackRentRoll;
+        }
+      }
+      
+      // If still no rent roll, try the most recent one
+      if (!targetRentRoll && property.RentRoll.length > 0) {
+        targetRentRoll = property.RentRoll[0]; // Most recent
+        console.error(`🔄 Using most recent rent roll as fallback: ${targetRentRoll.id}`);
+      }
+      
+      // If still no rent roll, return empty
+      if (!targetRentRoll) {
+        console.error(`❌ No rent rolls available at all for property ${propertyId}`);
+        return NextResponse.json({ 
+          units: [],
+          totalFutureLeases: 0,
+          processingTime: 0
+        }, { status: 200 });
+      }
     }
     
     console.error(`🎯 Selected rent roll: ${targetRentRoll.id} (${targetRentRoll.uploadDate}) with snapshot: ${targetRentRoll.snapshotId}`);
