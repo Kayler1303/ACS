@@ -1933,6 +1933,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                       'In Progress - Finalize to Process': 0,
                       'Out of Date Income Documents': 0,
                       'Waiting for Admin Review': 0,
+                      'Needs Income Documentation': 0,
                       'Vacant': 0,
                       'Other': 0
                     };
@@ -1952,6 +1953,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                       'In Progress - Finalize to Process', 
                       'Out of Date Income Documents',
                       'Waiting for Admin Review',
+                      'Needs Income Documentation',
                       'Vacant'
                     ];
 
@@ -1964,6 +1966,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                         'In Progress - Finalize to Process': 'Units pending admin review/finalization',
                         'Out of Date Income Documents': 'Units requiring updated documentation',
                         'Waiting for Admin Review': 'Units waiting for admin to review documents',
+                        'Needs Income Documentation': 'Units with all residents marked as no income - needs follow-up',
                         'Vacant': 'Currently vacant units'
                       };
 
@@ -1972,6 +1975,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
                         'In Progress - Finalize to Process': 'bg-blue-50 text-blue-700',
                         'Out of Date Income Documents': 'bg-red-50 text-red-700',
                         'Waiting for Admin Review': 'bg-orange-50 text-orange-700',
+                        'Needs Income Documentation': 'bg-yellow-50 text-yellow-700',
                         'Vacant': 'bg-gray-50 text-gray-700'
                       };
 
