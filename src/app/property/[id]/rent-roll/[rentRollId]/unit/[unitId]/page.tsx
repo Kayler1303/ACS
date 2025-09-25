@@ -762,7 +762,10 @@ export default function ResidentDetailPage() {
       }
 
       // If this was a new lease workflow, automatically start income verification
+      console.log(`[COPY RESIDENTS] isNewLeaseWorkflow: ${isNewLeaseWorkflow}, selectedLeaseForResident: ${selectedLeaseForResident?.id}`);
       if (isNewLeaseWorkflow && selectedLeaseForResident) {
+        console.log(`[COPY RESIDENTS] Starting automatic verification workflow for lease ${selectedLeaseForResident.id}`);
+        
         // Fetch fresh data to get all current residents
         await fetchTenancyData(false);
         
@@ -772,16 +775,22 @@ export default function ResidentDetailPage() {
         const currentLease = freshData?.unit?.Lease?.find((l: any) => l.id === selectedLeaseForResident.id);
         const currentResidents = currentLease?.Resident?.map((r: any) => ({ id: r.id, name: r.name })) || [];
         
+        console.log(`[COPY RESIDENTS] Found ${currentResidents.length} residents for verification:`, currentResidents);
+        
         setTimeout(() => {
+          console.log(`[COPY RESIDENTS] Calling handleStartVerification with lease ${selectedLeaseForResident.id}`);
           handleStartVerification(selectedLeaseForResident.id, currentResidents);
         }, 200); // Small delay to ensure everything is ready
         setIsNewLeaseWorkflow(false); // Reset the flag
       } else {
+        console.log(`[COPY RESIDENTS] Not starting verification - isNewLeaseWorkflow: ${isNewLeaseWorkflow}, selectedLeaseForResident: ${!!selectedLeaseForResident}`);
         fetchTenancyData(false);
       }
     } catch (error: unknown) {
       console.error('Error adding residents:', error);
       toast.error((error instanceof Error ? error.message : 'An error occurred while adding residents.'));
+      // Don't reset the workflow flag on error - let the user try again
+      console.log(`[COPY RESIDENTS] Error occurred, not resetting workflow flag`);
       throw error;
     }
   };
@@ -817,7 +826,11 @@ export default function ResidentDetailPage() {
 
   // Simplified verification creation (now only used internally by Upload Documents buttons)
   const handleStartVerification = async (leaseId: string, overrideResidents?: Array<{ id: string; name: string }>) => {
-    if (!tenancyData) return;
+    console.log(`[START VERIFICATION] Called with leaseId: ${leaseId}, overrideResidents:`, overrideResidents);
+    if (!tenancyData) {
+      console.log(`[START VERIFICATION] No tenancyData available, returning`);
+      return;
+    }
     
     let lease = tenancyData.unit?.Lease?.find(l => l.id === leaseId);
     
