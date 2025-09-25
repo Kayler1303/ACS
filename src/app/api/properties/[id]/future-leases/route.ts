@@ -110,13 +110,22 @@ export async function GET(
     console.error(`📊 PROPERTY DATA: ${property.Unit.length} units, ${property.RentRoll.length} rent rolls`);
 
     // Get the target rent roll date for filtering future leases
+    // Only use rent rolls that have valid snapshots (exclude orphaned rent rolls)
     let targetRentRoll;
     if (rentRollId) {
-      targetRentRoll = property.RentRoll.find(rr => rr.id === rentRollId);
+      targetRentRoll = property.RentRoll.find(rr => rr.id === rentRollId && rr.snapshotId);
     } else {
-      targetRentRoll = property.RentRoll[0]; // Most recent
+      // Find the most recent rent roll that has a valid snapshot
+      targetRentRoll = property.RentRoll.find(rr => rr.snapshotId);
     }
-    const rentRollDate = targetRentRoll ? new Date(targetRentRoll.uploadDate) : new Date();
+    
+    if (!targetRentRoll) {
+      console.error(`❌ No valid rent roll with snapshot found for property ${propertyId}`);
+      return NextResponse.json([], { status: 200 });
+    }
+    
+    console.error(`🎯 Selected rent roll: ${targetRentRoll.id} (${targetRentRoll.uploadDate}) with snapshot: ${targetRentRoll.snapshotId}`);
+    const rentRollDate = new Date(targetRentRoll.uploadDate);
     
     const processingStart = Date.now();
 
