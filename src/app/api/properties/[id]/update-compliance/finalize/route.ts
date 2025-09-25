@@ -102,9 +102,17 @@ export async function POST(
         }
       });
 
-      console.log(`[COMPLIANCE UPDATE] 🔍 Found ${existingFutureLeases.length} existing future leases with finalized verifications`);
+      console.log(`[COMPLIANCE UPDATE] 🔍 Found ${existingFutureLeases.length} existing future leases total`);
+      
+      // Count how many have finalized verifications
+      const futureLeasesWithFinalizedVerifications = existingFutureLeases.filter(lease => 
+        lease.IncomeVerification.some(verification => verification.status === 'FINALIZED')
+      );
+      console.log(`[COMPLIANCE UPDATE] 🎯 ${futureLeasesWithFinalizedVerifications.length} future leases have finalized verifications`);
+      
       existingFutureLeases.forEach(lease => {
-        console.log(`[COMPLIANCE UPDATE] 📋 Future lease: "${lease.name}" in unit ${lease.Unit.unitNumber}, Start: ${lease.leaseStartDate}, End: ${lease.leaseEndDate}, Residents: ${lease.Resident.length}, Verifications: ${lease.IncomeVerification.length}`);
+        const hasFinalizedVerification = lease.IncomeVerification.some(v => v.status === 'FINALIZED');
+        console.log(`[COMPLIANCE UPDATE] 📋 Future lease: "${lease.name}" in unit ${lease.Unit.unitNumber}, Start: ${lease.leaseStartDate}, End: ${lease.leaseEndDate}, Residents: ${lease.Resident.length}, Verifications: ${lease.IncomeVerification.length} (Finalized: ${hasFinalizedVerification})`);
       });
 
       // Debug: Show which units are in the new rent roll data
@@ -286,6 +294,16 @@ export async function POST(
           const unitNumber = leaseData.unitNumber;
           console.log(`[COMPLIANCE UPDATE] 🔄 Processing unit ${unitNumber} for inheritance matching`);
           
+          // Debug: Show all existing future leases for this unit
+          const allExistingFutureLeasesForUnit = existingFutureLeases.filter(lease => 
+            lease.Unit.unitNumber === unitNumber
+          );
+          console.log(`[COMPLIANCE UPDATE] 🔍 Found ${allExistingFutureLeasesForUnit.length} existing future leases for unit ${unitNumber}`);
+          allExistingFutureLeasesForUnit.forEach(lease => {
+            const hasFinalizedVerification = lease.IncomeVerification.some(v => v.status === 'FINALIZED');
+            console.log(`[COMPLIANCE UPDATE] 📋   - "${lease.name}" (Finalized: ${hasFinalizedVerification})`);
+          });
+          
           // Check if there's an existing future lease for this unit WITH finalized verifications
           // (only these should trigger inheritance modals)
           const existingFutureLeaseForUnit = existingFutureLeases.find(lease => 
@@ -375,6 +393,8 @@ export async function POST(
               futureLeaseMatches.push(matchData);
               console.log(`[COMPLIANCE UPDATE] ✅ Added inheritance match for unit ${unitNumber}:`, matchData);
             }
+          } else {
+            console.log(`[COMPLIANCE UPDATE] ❌ No existing future lease with finalized verification found for unit ${unitNumber}`);
           }
         }
       }
