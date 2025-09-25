@@ -121,7 +121,11 @@ export async function GET(
     
     if (!targetRentRoll) {
       console.error(`❌ No valid rent roll with snapshot found for property ${propertyId}`);
-      return NextResponse.json([], { status: 200 });
+      return NextResponse.json({ 
+        units: [],
+        totalFutureLeases: 0,
+        processingTime: 0
+      }, { status: 200 });
     }
     
     console.error(`🎯 Selected rent roll: ${targetRentRoll.id} (${targetRentRoll.uploadDate}) with snapshot: ${targetRentRoll.snapshotId}`);
