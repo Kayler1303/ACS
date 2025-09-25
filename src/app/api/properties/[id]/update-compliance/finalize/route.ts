@@ -328,7 +328,11 @@ export async function POST(
             const residentsAreSimilar = residentMatchPercentage >= 0.8; // 80% of residents must match
 
             console.log(`[COMPLIANCE UPDATE] 🔍 Lease comparison for unit ${unitNumber}:`);
+            console.log(`[COMPLIANCE UPDATE] - Existing lease dates: ${existingStartTime || 'null'} to ${existingEndTime || 'null'}`);
+            console.log(`[COMPLIANCE UPDATE] - New lease dates: ${newStartTime || 'null'} to ${newEndTime || 'null'}`);
             console.log(`[COMPLIANCE UPDATE] - Dates identical: ${datesAreIdentical}`);
+            console.log(`[COMPLIANCE UPDATE] - Existing residents: ${existingFutureLeaseForUnit.Resident.length} (${existingFutureLeaseForUnit.Resident.map(r => r.name).join(', ')})`);
+            console.log(`[COMPLIANCE UPDATE] - New residents: ${(leaseData.residents || []).length} (${(leaseData.residents || []).map(r => r.name).join(', ')})`);
             console.log(`[COMPLIANCE UPDATE] - Residents similar: ${residentsAreSimilar} (${Math.round(residentMatchPercentage * 100)}% match)`);
             console.log(`[COMPLIANCE UPDATE] - Resident matches:`, residentsMatch);
 
@@ -355,7 +359,7 @@ export async function POST(
                 verifiedIncome: r.calculatedAnnualizedIncome ? parseFloat(r.calculatedAnnualizedIncome.toString()) : 0
               }));
 
-              futureLeaseMatches.push({
+              const matchData = {
                 unitNumber,
                 newLeaseStartDate: leaseData.leaseStartDate,
                 newLeaseEndDate: leaseData.leaseEndDate,
@@ -368,7 +372,8 @@ export async function POST(
                 }
               });
 
-              console.log(`[COMPLIANCE UPDATE] ✅ Added inheritance match for unit ${unitNumber}`);
+              futureLeaseMatches.push(matchData);
+              console.log(`[COMPLIANCE UPDATE] ✅ Added inheritance match for unit ${unitNumber}:`, matchData);
             }
           }
         }
