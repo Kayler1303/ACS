@@ -706,6 +706,10 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
           const data = await res.json();
           console.log(`[PROPERTY PAGE DEBUG] Future leases response:`, data);
           console.log(`[PROPERTY PAGE DEBUG] Setting future leases:`, data.units);
+          console.log(`[PROPERTY PAGE DEBUG] Response keys:`, Object.keys(data));
+          console.log(`[PROPERTY PAGE DEBUG] Units array length:`, data.units?.length || 0);
+          console.log(`[PROPERTY PAGE DEBUG] Total future leases:`, data.totalFutureLeases);
+          console.log(`[PROPERTY PAGE DEBUG] Processing time:`, data.processingTime);
           
           // Log debug information separately for clarity
           if (data.debug) {
@@ -714,7 +718,7 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
             console.log(`[FUTURE LEASE DEBUG] Sample lease dates:`, data.debug.sampleLeases);
           }
           
-          setFutureLeases(data.units);
+          setFutureLeases(data.units || []);
           console.log(`[PROPERTY PAGE DEBUG] Future leases set successfully`);
         } else {
           console.error('Failed to fetch future leases:', res.status, res.statusText);

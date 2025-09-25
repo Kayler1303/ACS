@@ -105,19 +105,39 @@ export async function GET(
     }
 
     console.error(`📊 PROPERTY DATA: ${property.Unit.length} units, ${property.RentRoll.length} rent rolls`);
+    console.error(`📊 RENT ROLLS FOUND:`, property.RentRoll.map(rr => ({
+      id: rr.id,
+      uploadDate: rr.uploadDate,
+      snapshotId: rr.snapshotId,
+      hasSnapshot: !!rr.snapshotId
+    })));
 
     // Get the target rent roll date for filtering future leases
     // Only use rent rolls that have valid snapshots (exclude orphaned rent rolls)
     let targetRentRoll;
     if (rentRollId) {
+      console.error(`🔍 Looking for specific rent roll: ${rentRollId}`);
       targetRentRoll = property.RentRoll.find(rr => rr.id === rentRollId && rr.snapshotId);
+      console.error(`🔍 Found specific rent roll:`, targetRentRoll ? {
+        id: targetRentRoll.id,
+        uploadDate: targetRentRoll.uploadDate,
+        snapshotId: targetRentRoll.snapshotId
+      } : null);
     } else {
+      console.error(`🔍 Looking for most recent rent roll with snapshot`);
       // Find the most recent rent roll that has a valid snapshot
       targetRentRoll = property.RentRoll.find(rr => rr.snapshotId);
+      console.error(`🔍 Found recent rent roll:`, targetRentRoll ? {
+        id: targetRentRoll.id,
+        uploadDate: targetRentRoll.uploadDate,
+        snapshotId: targetRentRoll.snapshotId
+      } : null);
     }
     
     if (!targetRentRoll) {
       console.error(`❌ No valid rent roll with snapshot found for property ${propertyId}`);
+      console.error(`❌ Requested rentRollId: ${rentRollId}`);
+      console.error(`❌ Available rent rolls:`, property.RentRoll.map(rr => `${rr.id} (snapshot: ${rr.snapshotId})`));
       return NextResponse.json({ 
         units: [],
         totalFutureLeases: 0,
