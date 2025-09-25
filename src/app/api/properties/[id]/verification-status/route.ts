@@ -185,9 +185,16 @@ export async function GET(
       console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: Found ${unitLeases.length} total leases`);
 
       // Filter to leases with tenancy for this specific rent roll AND that started on or before the rent roll date
+      // EXCLUDE [PROCESSED] leases as they are historical snapshots, not active leases
       const rentRollDate = new Date(targetRentRoll.uploadDate);
       const currentLeases = unitLeases.filter((lease: any) => {
         if (!lease.Tenancy || lease.Tenancy.rentRollId !== targetRentRoll.id) {
+          return false;
+        }
+        
+        // Skip processed leases - they are historical snapshots
+        if (lease.name && lease.name.startsWith('[PROCESSED]')) {
+          console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: Skipping processed lease ${lease.id} (${lease.name})`);
           return false;
         }
         
