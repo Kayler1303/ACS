@@ -41,13 +41,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
                 Lease: {
                     where: {
                         OR: [
-                            // Include leases from the current rent roll (current leases)
+                            // Include all leases associated with the current rent roll
                             {
                                 Tenancy: {
                                     rentRollId: rentRollId
                                 }
                             },
-                            // Include future leases (no Tenancy record)
+                            // Include legacy future leases (no Tenancy record)
                             {
                                 Tenancy: null
                             }
@@ -241,23 +241,82 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
             }
         }
 
-        // Find the specific tenancy linked to the rent roll
-        const tenancyLease = unitWithLeases.Lease.find((l: { Tenancy: { rentRollId: string; } | null; }) => l.Tenancy?.rentRollId === rentRollId);
+        // Get the rent roll information for date-based lease classification
+        const rentRoll = await prisma.rentRoll.findFirst({
+            where: { id: rentRollId },
+            select: { uploadDate: true }
+        });
+
+        if (!rentRoll) {
+            return NextResponse.json({ error: 'Rent roll not found' }, { status: 404 });
+        }
+
+        const rentRollDate = new Date(rentRoll.uploadDate);
+
+        // Classify leases as current or future based on dates and tenancy
+        const currentLeases = unitWithLeases.Lease.filter(lease => {
+            // A lease is current if:
+            // 1. It has a tenancy record for this rent roll AND
+            // 2. Its start date is on or before the rent roll date (or no start date for imported leases)
+            const hasCurrentTenancy = lease.Tenancy?.rentRollId === rentRollId;
+            if (!hasCurrentTenancy) return false;
+            
+            // If no lease start date, it's likely an imported lease (current)
+            if (!lease.leaseStartDate) return true;
+            
+            // Check if lease start date is on or before rent roll date
+            const leaseStartDate = new Date(lease.leaseStartDate);
+            return leaseStartDate <= rentRollDate;
+        });
+
+        const futureLeases = unitWithLeases.Lease.filter(lease => {
+            // A lease is future if:
+            // 1. It has no tenancy record (legacy future lease) OR
+            // 2. It has a tenancy record but start date is after rent roll date
+            const hasNoTenancy = !lease.Tenancy;
+            const hasCurrentTenancy = lease.Tenancy?.rentRollId === rentRollId;
+            
+            if (hasNoTenancy) return true;
+            
+            if (hasCurrentTenancy) {
+                // If no start date but has tenancy, it's likely current (imported)
+                if (!lease.leaseStartDate) return false;
+                
+                // Check if lease start date is after rent roll date
+                const leaseStartDate = new Date(lease.leaseStartDate);
+                return leaseStartDate > rentRollDate;
+            }
+            
+            return false;
+        });
+
+        console.log(`[UNIT DEBUG] Unit ${unitWithLeases.unitNumber} - Rent Roll Date: ${rentRollDate.toISOString()}`);
+        console.log(`[UNIT DEBUG] Unit ${unitWithLeases.unitNumber} - Current Leases: ${currentLeases.length}`, currentLeases.map(l => ({ name: l.name, startDate: l.leaseStartDate, hasTenancy: !!l.Tenancy })));
+        console.log(`[UNIT DEBUG] Unit ${unitWithLeases.unitNumber} - Future Leases: ${futureLeases.length}`, futureLeases.map(l => ({ name: l.name, startDate: l.leaseStartDate, hasTenancy: !!l.Tenancy })));
+
+        // Find the primary current lease (should be only one)
+        const tenancyLease = currentLeases[0];
         const tenancy = tenancyLease ? {
             id: tenancyLease.Tenancy?.id,
             lease: tenancyLease,
-            unit: unitWithLeases,
+            unit: {
+                ...unitWithLeases,
+                Lease: [...currentLeases, ...futureLeases] // Include both current and future leases
+            },
             rentRoll: tenancyLease.Tenancy?.RentRoll,
         } : null;
 
-        // If no tenancy found, this is a vacant unit - return vacant unit data instead of error
+        // If no current lease found, this is a vacant unit - but may have future leases
         if (!tenancy) {
-            // For vacant units, return unit data with empty lease information
+            // For vacant units, return unit data with future leases if any
             const vacantUnitData = {
                 id: null, // No tenancy ID for vacant units
                 lease: null, // No current lease
-                unit: unitWithLeases, // Unit information is still available
-                rentRoll: null,
+                unit: {
+                    ...unitWithLeases,
+                    Lease: futureLeases // Include any future leases
+                },
+                rentRoll: rentRoll,
                 isVacant: true // Flag to indicate this is a vacant unit
             };
 
