@@ -106,6 +106,7 @@ interface Unit {
 interface RentRoll {
   id: string;
   date: string;
+  uploadDate: string;
 }
 
 interface Lease {
@@ -520,7 +521,7 @@ export default function ResidentDetailPage() {
   // Delete lease handlers
   const handleDeleteFutureLease = (lease: any) => {
     // Check if this is a future lease (relative to snapshot date, not current date)
-    const snapshotDate = tenancyData?.rentRoll?.date;
+    const snapshotDate = tenancyData?.rentRoll?.uploadDate;
     const leaseStartDate = lease.leaseStartDate;
     
     const isFutureLease = 
@@ -2109,7 +2110,7 @@ export default function ResidentDetailPage() {
                             // 2. Lease start date > snapshot date = future lease
                             // 3. Provisional leases (no Tenancy) = always deletable
                             
-                            const snapshotDate = tenancyData?.rentRoll?.date;
+                            const snapshotDate = tenancyData?.rentRoll?.uploadDate;
                             const leaseStartDate = period.leaseStartDate;
                             
                             const isFutureLease = 
