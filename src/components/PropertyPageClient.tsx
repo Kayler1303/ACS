@@ -686,7 +686,18 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
         const baseUrl = `/api/properties/${property.id}/future-leases`;
         const params = new URLSearchParams();
         // Get the first rent roll from the selected snapshot to use as the rentRollId parameter
+        console.log(`[FUTURE LEASES DEBUG] Looking for rent roll with snapshotId: ${selectedSnapshotId}`);
+        console.log(`[FUTURE LEASES DEBUG] Available rent rolls:`, property.RentRoll.map(rr => ({
+          id: rr.id,
+          uploadDate: rr.uploadDate,
+          snapshotId: rr.snapshotId
+        })));
         const selectedRentRoll = property.RentRoll.find((rr: FullRentRoll) => rr.snapshotId === selectedSnapshotId);
+        console.log(`[FUTURE LEASES DEBUG] Found rent roll:`, selectedRentRoll ? {
+          id: selectedRentRoll.id,
+          uploadDate: selectedRentRoll.uploadDate,
+          snapshotId: selectedRentRoll.snapshotId
+        } : null);
         const rentRollId = selectedRentRoll?.id;
         if (rentRollId) {
           params.append('rentRollId', rentRollId);
