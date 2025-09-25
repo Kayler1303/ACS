@@ -210,8 +210,35 @@ export default function ReconciliationPage() {
         setShowNotificationModal(true);
         // Don't redirect immediately - let user dismiss the notification first
       } else {
-        // If user accepted rent roll income and no more discrepancies, redirect immediately
+        // If user accepted rent roll income and no more discrepancies, check for future lease inheritance
         if (updatedDiscrepancies.length === 0) {
+          console.log(`[RECONCILIATION] All discrepancies resolved, checking for future lease inheritance...`);
+          
+          // Call the finalize API to check for future lease matches now that discrepancies are resolved
+          try {
+            const finalizeRes = await fetch(`/api/properties/${propertyId}/update-compliance/check-inheritance`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ rentRollId })
+            });
+            
+            if (finalizeRes.ok) {
+              const finalizeResult = await finalizeRes.json();
+              
+              // Check if there are future lease matches that need user confirmation
+              if (finalizeResult.hasFutureLeaseMatches && finalizeResult.futureLeaseMatches.length > 0) {
+                console.log(`[RECONCILIATION] Future lease matches detected after discrepancy resolution:`, finalizeResult.futureLeaseMatches);
+                // TODO: Show future lease inheritance modal here
+                // For now, just redirect and let the user handle it manually
+                router.push(`/property/${propertyId}`);
+                router.refresh();
+                return;
+              }
+            }
+          } catch (error) {
+            console.warn(`[RECONCILIATION] Failed to check future lease inheritance:`, error);
+          }
+          
           router.push(`/property/${propertyId}`);
           router.refresh();
         }
