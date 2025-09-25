@@ -58,11 +58,8 @@ export async function GET(
           include: {
             Lease: {
               where: {
-                // Only get leases that could potentially be future leases
-                OR: [
-                  { leaseStartDate: null }, // Manual future leases with no date
-                  { leaseStartDate: { gt: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000) } } // Leases within last year
-                ]
+                // Get all leases - we'll filter for future leases in the application logic
+                // This ensures we don't miss any manually created future leases
               },
               include: {
                 Resident: {
@@ -143,15 +140,29 @@ export async function GET(
           unitNumber: unit.unitNumber
         };
 
+        // Debug: Log all leases for this unit
+        console.log(`[FUTURE LEASES DEBUG] Unit ${unit.unitNumber} has ${unit.Lease.length} total leases:`, 
+          unit.Lease.map((l: any) => ({
+            name: l.name,
+            startDate: l.leaseStartDate,
+            isProcessed: l.name?.startsWith('[PROCESSED]'),
+            hasTenancy: !!l.Tenancy,
+            tenancyRentRollId: l.Tenancy?.rentRollId
+          }))
+        );
+
         // Filter for future leases using consistent date-based classification
         const futureLeases = unit.Lease.filter((lease: any) => {
           // Skip processed leases
           if (lease.name && lease.name.startsWith('[PROCESSED]')) {
+            console.log(`[FUTURE LEASES DEBUG] Skipping processed lease: ${lease.name}`);
             return false;
           }
           
           // Use consistent date-based classification
-          return isFutureLease(lease, rentRollDate);
+          const isFuture = isFutureLease(lease, rentRollDate);
+          console.log(`[FUTURE LEASES DEBUG] Lease ${lease.name}: ${isFuture ? 'FUTURE' : 'CURRENT'} (start: ${lease.leaseStartDate}, rentRoll: ${rentRollDate.toISOString()})`);
+          return isFuture;
         });
         
         if (futureLeases.length > 0) {
