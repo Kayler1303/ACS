@@ -19,7 +19,7 @@ type FullUnit = Unit & {
   Lease: ExtendedLease[];
 };
 
-export type VerificationStatus = "Verified" | "Needs Investigation" | "Out of Date Income Documents" | "Vacant" | "In Progress - Finalize to Process" | "Waiting for Admin Review";
+export type VerificationStatus = "Verified" | "Needs Investigation" | "Out of Date Income Documents" | "Vacant" | "In Progress - Finalize to Process" | "Waiting for Admin Review" | "Needs Income Documentation";
 
 /**
  * Determines the income verification status for a single unit based on its lease, residents, and documents.
@@ -68,6 +68,14 @@ export function getLeaseVerificationStatus(lease: ExtendedLease): VerificationSt
 
   // Check if all residents are finalized
   if (finalizedResidents.length === allResidents.length) {
+    // Special case: If ALL residents are marked as "No Income", this needs attention
+    const allResidentsHaveNoIncome = allResidents.every((r: ExtendedResident) => r.hasNoIncome);
+    
+    if (allResidentsHaveNoIncome && allResidents.length > 0) {
+      console.log(`[LEASE VERIFICATION DEBUG] Lease ${lease.id}: All residents marked as no income - returning Needs Income Documentation`);
+      return "Needs Income Documentation";
+    }
+    
     console.log(`[LEASE VERIFICATION DEBUG] Lease ${lease.id}: All residents finalized - returning Verified`);
     return "Verified";
   }
@@ -291,6 +299,16 @@ export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Da
     incomeDifference,
     result: incomeDifference > 1.00 ? "Needs Investigation" : "Verified"
   });
+
+  // Before returning "Verified", check if all residents are marked as "No Income"
+  if (incomeDifference <= 1.00) {
+    const allResidentsHaveNoIncome = allResidents.every((r: ExtendedResident) => r.hasNoIncome);
+    
+    if (allResidentsHaveNoIncome && allResidents.length > 0) {
+      console.log(`[VERIFICATION SERVICE] Unit ${unit.unitNumber}: All residents marked as no income - returning Needs Income Documentation`);
+      return "Needs Income Documentation";
+    }
+  }
 
   return incomeDifference > 1.00 ? "Needs Investigation" : "Verified";
 }

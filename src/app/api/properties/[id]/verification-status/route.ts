@@ -539,7 +539,15 @@ export async function GET(
         status = 'Out of Date Income Documents';
         console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: No residents with verified income or in-progress verification - returning Out of Date Income Documents`);
       } else if (residentsWithVerifiedIncome === totalResidents) {
-        status = 'Verified';
+        // Check if all residents are marked as "No Income" - this needs attention
+        const allResidentsHaveNoIncome = unit.Lease[0]?.Resident?.every((r: any) => r.hasNoIncome) || false;
+        
+        if (allResidentsHaveNoIncome && totalResidents > 0) {
+          status = 'Needs Income Documentation';
+          console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: All residents marked as no income - returning Needs Income Documentation`);
+        } else {
+          status = 'Verified';
+        }
       } else {
         // Any unit with mixed verification states (some verified, some not) = In Progress
         status = 'In Progress - Finalize to Process';
