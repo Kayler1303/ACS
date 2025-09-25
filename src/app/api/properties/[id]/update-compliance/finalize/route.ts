@@ -337,8 +337,10 @@ export async function POST(
 
             if (shouldAutoInherit) {
               console.log(`[COMPLIANCE UPDATE] ✅ Future lease matches exactly (dates + residents) - automatic inheritance, no modal needed.`);
+              console.log(`[COMPLIANCE UPDATE] ✅ Unit ${unitNumber}: "${existingFutureLeaseForUnit.name}" will be automatically preserved in new snapshot`);
             } else {
               console.log(`[COMPLIANCE UPDATE] 🎯 Future lease differs (dates or residents) - inheritance decision needed.`);
+              console.log(`[COMPLIANCE UPDATE] 🎯 Unit ${unitNumber}: "${existingFutureLeaseForUnit.name}" requires user decision`);
             }
 
             if (!shouldTriggerModal) {
