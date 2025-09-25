@@ -103,6 +103,18 @@ export async function POST(
       });
 
       console.log(`[COMPLIANCE UPDATE] 🔍 Found ${existingFutureLeases.length} existing future leases with finalized verifications`);
+      existingFutureLeases.forEach(lease => {
+        console.log(`[COMPLIANCE UPDATE] 📋 Future lease: "${lease.name}" in unit ${lease.Unit.unitNumber}, Start: ${lease.leaseStartDate}, End: ${lease.leaseEndDate}, Residents: ${lease.Resident.length}, Verifications: ${lease.IncomeVerification.length}`);
+      });
+
+      // Debug: Show which units are in the new rent roll data
+      const newRentRollUnits = Object.keys(unitGroups || {});
+      console.log(`[COMPLIANCE UPDATE] 🔍 New rent roll contains ${newRentRollUnits.length} units:`, newRentRollUnits.sort());
+      
+      // Debug: Check for potential matches
+      const futureLeaseUnits = existingFutureLeases.map(lease => lease.Unit.unitNumber);
+      const potentialMatches = futureLeaseUnits.filter(unit => newRentRollUnits.includes(unit));
+      console.log(`[COMPLIANCE UPDATE] 🎯 Potential matches between future leases and new rent roll:`, potentialMatches);
 
       // STEP 2: Create snapshot of current state (BEFORE processing new data)
       const snapshot = await tx.rentRollSnapshot.create({
@@ -374,6 +386,15 @@ export async function POST(
         totalExistingFutureLeases: existingFutureLeases.length,
         unitGroupsKeys: Object.keys(unitGroups || {})
       };
+
+      // Final debugging before return
+      console.log(`[COMPLIANCE UPDATE] 🎯 FINAL RESULT:`);
+      console.log(`[COMPLIANCE UPDATE] - Future lease matches found: ${futureLeaseMatches.length}`);
+      console.log(`[COMPLIANCE UPDATE] - hasFutureLeaseMatches: ${futureLeaseMatches.length > 0}`);
+      console.log(`[COMPLIANCE UPDATE] - requiresInheritanceDecision: ${futureLeaseMatches.length > 0}`);
+      if (futureLeaseMatches.length > 0) {
+        console.log(`[COMPLIANCE UPDATE] - Matches:`, futureLeaseMatches.map(match => `Unit ${match.unitNumber}: ${match.existingLease.name} -> ${match.newLease.name}`));
+      }
 
       return {
         success: true,
