@@ -294,8 +294,29 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         console.log(`[UNIT DEBUG] Unit ${unitWithLeases.unitNumber} - Current Leases: ${currentLeases.length}`, currentLeases.map(l => ({ name: l.name, startDate: l.leaseStartDate, hasTenancy: !!l.Tenancy })));
         console.log(`[UNIT DEBUG] Unit ${unitWithLeases.unitNumber} - Future Leases: ${futureLeases.length}`, futureLeases.map(l => ({ name: l.name, startDate: l.leaseStartDate, hasTenancy: !!l.Tenancy })));
 
-        // Find the primary current lease (should be only one)
-        const tenancyLease = currentLeases[0];
+        // Find the primary current lease - prioritize finalized leases
+        let tenancyLease = currentLeases[0];
+        
+        if (currentLeases.length > 1) {
+            console.log(`[UNIT DEBUG] Multiple current leases found for unit ${unitWithLeases.unitNumber}, selecting best one`);
+            
+            // Priority 1: Lease with finalized income verification
+            const finalizedLease = currentLeases.find(lease => 
+                lease.IncomeVerification?.some(v => v.status === 'FINALIZED')
+            );
+            
+            if (finalizedLease) {
+                console.log(`[UNIT DEBUG] Selected finalized lease: ${finalizedLease.name}`);
+                tenancyLease = finalizedLease;
+            } else {
+                // Priority 2: Most recently created lease
+                const sortedByCreation = [...currentLeases].sort((a, b) => 
+                    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+                );
+                tenancyLease = sortedByCreation[0];
+                console.log(`[UNIT DEBUG] Selected most recent lease: ${tenancyLease.name}`);
+            }
+        }
         const tenancy = tenancyLease ? {
             id: tenancyLease.Tenancy?.id,
             lease: tenancyLease,
