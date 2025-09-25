@@ -381,13 +381,64 @@ export async function POST(
         }
       }
 
+      // STEP: Link preserved future leases to the new rent roll
+      // Find future leases that were preserved for this snapshot (created in finalize API)
+      // but don't have Tenancy records yet
+      const preservedFutureLeases = await tx.lease.findMany({
+        where: {
+          Unit: {
+            propertyId: propertyId
+          },
+          // Future leases that don't have Tenancy records
+          Tenancy: null,
+          // Exclude processed leases
+          NOT: {
+            name: {
+              startsWith: '[PROCESSED]'
+            }
+          },
+          // Only leases that start after the rent roll date (future leases)
+          OR: [
+            {
+              leaseStartDate: {
+                gt: reportDate
+              }
+            },
+            {
+              leaseStartDate: null // Manually created future leases
+            }
+          ]
+        },
+        include: {
+          Unit: true
+        }
+      });
+
+      console.log(`[DATA IMPORT] 🔗 Found ${preservedFutureLeases.length} preserved future leases to link to new rent roll`);
+
+      // Create Tenancy records for preserved future leases to link them to the new snapshot
+      for (const futureLease of preservedFutureLeases) {
+        await tx.tenancy.create({
+          data: {
+            id: randomUUID(),
+            leaseId: futureLease.id,
+            rentRollId: newRentRoll.id,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }
+        });
+        
+        console.log(`[DATA IMPORT] ✅ Linked preserved future lease "${futureLease.name}" (Unit ${futureLease.Unit.unitNumber}) to new rent roll ${newRentRoll.id}`);
+      }
+
       return {
         success: true,
         snapshotId: snapshot.id,
         rentRollId: newRentRoll.id,
         leasesCreated: leasesData.length,
         residentsCreated: residentsData.length,
-        inheritanceProcessed: inheritanceChoices ? Object.keys(inheritanceChoices).length : 0
+        inheritanceProcessed: inheritanceChoices ? Object.keys(inheritanceChoices).length : 0,
+        preservedFutureLeasesLinked: preservedFutureLeases.length
       };
     });
 
