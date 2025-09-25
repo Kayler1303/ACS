@@ -123,9 +123,7 @@ export async function POST(
         leaseStartDate: lease.leaseStartDate?.toISOString(),
         leaseEndDate: lease.leaseEndDate?.toISOString(),
         residents: lease.Resident.map(r => ({
-          name: r.name,
-          firstName: r.firstName,
-          lastName: r.lastName
+          name: r.name
         }))
       });
     });

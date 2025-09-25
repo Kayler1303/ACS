@@ -370,7 +370,7 @@ export async function POST(
                   leaseEndDate: existingFutureLeaseForUnit.leaseEndDate,
                   residents: residents
                 }
-              });
+              };
 
               futureLeaseMatches.push(matchData);
               console.log(`[COMPLIANCE UPDATE] ✅ Added inheritance match for unit ${unitNumber}:`, matchData);
