@@ -40,7 +40,8 @@ export async function POST(
     console.log(`🚀 [DATA IMPORT] Snapshot ID:`, snapshotId);
     console.log(`🚀 [DATA IMPORT] Inheritance choices:`, inheritanceChoices);
 
-    const reportDate = rentRollDate ? new Date(rentRollDate) : new Date();
+    // Handle date properly to avoid timezone issues
+    const reportDate = rentRollDate ? new Date(rentRollDate + 'T12:00:00') : new Date();
 
     const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // First, process inheritance decisions if provided

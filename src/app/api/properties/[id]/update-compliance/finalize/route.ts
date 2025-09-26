@@ -40,7 +40,8 @@ export async function POST(
     console.log(`🚀 [COMPLIANCE UPDATE] Property: ${propertyId}`);
     console.log(`🚀 [COMPLIANCE UPDATE] Rent roll date: ${rentRollDate}`);
 
-    const reportDate = rentRollDate ? new Date(rentRollDate) : new Date();
+    // Handle date properly to avoid timezone issues
+    const reportDate = rentRollDate ? new Date(rentRollDate + 'T12:00:00') : new Date();
 
     // First, get property data for HUD income limits
     const property = await prisma.property.findUnique({

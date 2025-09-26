@@ -93,7 +93,7 @@ export async function POST(
         data: {
           id: crypto.randomUUID(),
           propertyId,
-          uploadDate: new Date(date),
+          uploadDate: new Date(date + 'T12:00:00'),
         },
       });
 
@@ -157,7 +157,7 @@ export async function POST(
               name: `Rent Roll ${format(new Date(date), 'MM/yyyy')} - Unit ${unitNumber}`,
               unitId: unit.id,
               leaseRent: row.leaseRent ? parseFloat(row.leaseRent) : null,
-              leaseStartDate: new Date(date),
+              leaseStartDate: new Date(date + 'T12:00:00'),
               leaseEndDate: null, // Rent roll leases are point-in-time snapshots
               updatedAt: new Date(),
             }
