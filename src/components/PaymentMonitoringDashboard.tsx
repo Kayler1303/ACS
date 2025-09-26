@@ -81,6 +81,8 @@ export default function PaymentMonitoringDashboard() {
         return 'text-red-600 bg-red-100';
       case 'DEGRADED':
         return 'text-orange-600 bg-orange-100';
+      case 'UNKNOWN':
+        return 'text-gray-600 bg-gray-100';
       default:
         return 'text-gray-600 bg-gray-100';
     }
@@ -157,16 +159,16 @@ export default function PaymentMonitoringDashboard() {
             <div className="flex items-center space-x-3">
               <span
                 className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(
-                  health.webhookHealth.status
+                  health.webhookHealth?.status || 'UNKNOWN'
                 )}`}
               >
-                {health.webhookHealth.status}
+                {health.webhookHealth?.status || 'UNKNOWN'}
               </span>
               <span className="text-gray-600">Webhook Health</span>
             </div>
           </div>
           
-          {health.recommendations.length > 0 && (
+          {health.recommendations && health.recommendations.length > 0 && (
             <div className="mt-4 p-4 bg-blue-50 rounded-lg">
               <h4 className="font-medium text-blue-900 mb-2">Recommendations:</h4>
               <ul className="list-disc list-inside space-y-1 text-blue-800">
