@@ -194,7 +194,6 @@ export default function UnitListUploadForm({ propertyId }: UnitListUploadFormPro
                 <span>Upload a file</span>
                 <input id="file-upload" name="file-upload" type="file" className="sr-only" onChange={handleFileChange} accept=".csv,.xlsx,.xls" />
               </label>
-              <p className="pl-1">or drag and drop</p>
             </div>
             <p className="text-xs text-gray-500">CSV, XLSX, or XLS up to 10MB</p>
             {file && <p className="text-sm text-gray-600 mt-2">{file.name}</p>}
