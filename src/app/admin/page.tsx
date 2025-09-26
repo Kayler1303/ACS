@@ -2862,6 +2862,7 @@ function PaymentsTab({
 }) {
   const [propertiesWithPayments, setPropertiesWithPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [paymentSubTab, setPaymentSubTab] = useState<'monitoring' | 'management'>('monitoring');
 
   useEffect(() => {
     fetchPropertiesWithPayments();
@@ -2911,8 +2912,6 @@ function PaymentsTab({
       </div>
     );
   }
-
-  const [paymentSubTab, setPaymentSubTab] = useState<'monitoring' | 'management'>('monitoring');
 
   return (
     <div className="space-y-6">
