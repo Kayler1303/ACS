@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { checkPropertyAccess } from '@/lib/permissions';
 import { isFutureLease, filterFutureLeases, debugLeaseClassification } from '@/lib/lease-classification';
+import { getUnitVerificationStatus } from '@/services/verification';
 import * as fs from 'fs';
 
 export async function GET(
@@ -528,44 +529,11 @@ export async function GET(
         documentStatuses: []
       }`);
 
-      // Check if any resident has documents that need admin review (PRIORITY CHECK)
-      const hasDocumentsNeedingReview = residents.some((resident: any) =>
-        (resident.IncomeDocument || []).some((doc: any) => doc.status === 'NEEDS_REVIEW')
-      );
-
-      // Determine overall status
-      // Valid statuses: Verified, In Progress - Finalize to Process, Out of Date Income Documents, Waiting for Admin Review, Vacant
-      let status: string;
-      if (totalResidents === 0) {
-        status = 'Vacant';
-      } else if (hasDocumentsNeedingReview) {
-        // PRIORITY: If any documents need admin review, status is "Waiting for Admin Review"
-        status = 'Waiting for Admin Review';
-        console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: Has documents needing admin review - returning Waiting for Admin Review`);
-      } else if (residentsWithVerifiedIncome === 0 && residentsWithInProgressVerification === 0) {
-        status = 'Out of Date Income Documents';
-        console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: No residents with verified income or in-progress verification - returning Out of Date Income Documents`);
-      } else if (residentsWithVerifiedIncome === totalResidents) {
-        // Check if all residents are marked as "No Income" - this needs attention
-        // Use the processed residents array from the selected targetLease, not unit.Lease[0]
-        const allResidentsHaveNoIncome = residents.every((r: any) => r.hasNoIncome);
-        
-        if (allResidentsHaveNoIncome && totalResidents > 0) {
-          status = 'Needs Income Documentation';
-          console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: All residents marked as no income - returning Needs Income Documentation`);
-        } else {
-          status = 'Verified';
-        }
-      } else {
-        // Any unit with mixed verification states (some verified, some not) = In Progress
-        status = 'In Progress - Finalize to Process';
-        const statusMsg = `[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: ✅ MIXED VERIFICATION STATES: residentsWithVerifiedIncome (${residentsWithVerifiedIncome}) < totalResidents (${totalResidents}) - returning In Progress - Finalize to Process`;
-        console.log(statusMsg);
-        if (unitNum === '102' || unitNum === '107' || unitNum === '0102' || unitNum === '0107' || 
-            unitNum === '801-104' || unitNum === '805-206') {
-          fs.writeFileSync(logFile, statusMsg + '\n', { flag: 'a' });
-        }
-      }
+      // Use the standardized verification service to calculate status
+      // This ensures consistency between property summary and unit details pages
+      const status = getUnitVerificationStatus(unit as any, new Date(targetRentRoll.uploadDate));
+      
+      console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: Standardized verification service returned status: ${status}`);
 
       return {
         unitId: unit.id,
