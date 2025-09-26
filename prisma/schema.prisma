@@ -81,6 +81,7 @@ model Lease {
   leaseStartDate     DateTime?
   leaseEndDate       DateTime?
   leaseRent          Decimal?
+  leaseType          LeaseType            @default(CURRENT)
   createdAt          DateTime             @default(now())
   updatedAt          DateTime
   unitId             String
@@ -90,6 +91,7 @@ model Lease {
   Tenancy            Tenancy?
 
   @@index([unitId])
+  @@index([leaseType])
 }
 
 model OverrideRequest {
@@ -440,6 +442,11 @@ enum VerificationReason {
   LEASE_RENEWAL
   INCOME_CHANGE
   COMPLIANCE_AUDIT
+}
+
+enum LeaseType {
+  CURRENT
+  FUTURE
 }
 
 enum VerificationStatus {

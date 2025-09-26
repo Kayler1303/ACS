@@ -81,6 +81,17 @@ export async function POST(
         { status: 400 }
       );
     }
+    // Determine lease type based on dates and rent roll context
+    const rentRollDate = new Date(targetRentRoll.uploadDate);
+    const leaseStartDateObj = leaseStartDate ? new Date(leaseStartDate) : null;
+    
+    // Classify as FUTURE if lease starts after rent roll date, otherwise CURRENT
+    const leaseType = leaseStartDateObj && leaseStartDateObj > rentRollDate ? 'FUTURE' : 'CURRENT';
+    
+    console.log(`[MANUAL LEASE CREATION] Classifying lease as ${leaseType}:`);
+    console.log(`  Rent roll date: ${rentRollDate.toISOString()}`);
+    console.log(`  Lease start date: ${leaseStartDateObj?.toISOString() || 'null'}`);
+
     // Create lease and tenancy in a transaction
     const result = await prisma.$transaction(async (tx) => {
       const leaseId = randomUUID();
@@ -89,6 +100,7 @@ export async function POST(
       const leaseData: {
         id: string;
         name: string;
+        leaseType: 'CURRENT' | 'FUTURE';
         Unit: { connect: { id: string } };
         leaseStartDate?: Date;
         leaseEndDate?: Date;
@@ -97,6 +109,7 @@ export async function POST(
       } = {
         id: leaseId,
         name,
+        leaseType,
         Unit: {
           connect: {
             id: unitId,

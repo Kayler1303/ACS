@@ -187,6 +187,9 @@ export async function POST(
             leaseEndDate = new Date(leaseData.leaseEndDate);
           }
 
+          // Determine lease type: FUTURE if starts after rent roll date, otherwise CURRENT
+          const leaseType = leaseStartDate && leaseStartDate > reportDate ? 'FUTURE' : 'CURRENT';
+
           // Create lease
           leasesData.push({
             id: leaseId,
@@ -194,6 +197,7 @@ export async function POST(
             leaseStartDate: leaseStartDate,
             leaseEndDate: leaseEndDate,
             leaseRent: leaseData.leaseRent ? new Prisma.Decimal(leaseData.leaseRent) : null,
+            leaseType: leaseType,
             unitId: actualUnitId, // Use the actual unit ID, not the unit number
             createdAt: new Date(),
             updatedAt: new Date()

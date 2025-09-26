@@ -5,7 +5,7 @@ import { prisma } from '../../../../../lib/prisma';
 import { getActualAmiBucket } from '../../../../../services/income';
 import { getHudIncomeLimits } from '../../../../../services/hud';
 import { getLeaseVerificationStatus } from '../../../../../services/verification';
-import { isFutureLease, debugLeaseClassification } from '../../../../../lib/lease-classification';
+import { debugLeaseClassification } from '../../../../../lib/lease-classification';
 
 // Disable caching for this route
 export const dynamic = 'force-dynamic';
@@ -191,7 +191,7 @@ export async function GET(
           }))
         );
 
-        // Filter for future leases using consistent date-based classification
+        // Filter for future leases using explicit leaseType field
         const futureLeases = unit.Lease.filter((lease: any) => {
           // Skip processed leases
           if (lease.name && lease.name.startsWith('[PROCESSED]')) {
@@ -199,9 +199,9 @@ export async function GET(
             return false;
           }
           
-          // Use consistent date-based classification
-          const isFuture = isFutureLease(lease, rentRollDate);
-          console.log(`[FUTURE LEASES DEBUG] Lease ${lease.name}: ${isFuture ? 'FUTURE' : 'CURRENT'} (start: ${lease.leaseStartDate}, rentRoll: ${rentRollDate.toISOString()})`);
+          // Use explicit leaseType field instead of date-based classification
+          const isFuture = lease.leaseType === 'FUTURE';
+          console.log(`[FUTURE LEASES DEBUG] Lease ${lease.name}: ${lease.leaseType} (explicit type)`);
           return isFuture;
         });
         

@@ -78,7 +78,7 @@ export async function POST(
           Unit: {
             propertyId: propertyId
           },
-          Tenancy: null, // Future leases don't have Tenancy records
+          leaseType: 'FUTURE', // Use explicit lease type instead of Tenancy null check
           NOT: {
             name: {
               startsWith: '[PROCESSED]' // Exclude already processed leases
@@ -163,6 +163,7 @@ export async function POST(
             leaseStartDate: futureLease.leaseStartDate,
             leaseEndDate: futureLease.leaseEndDate,
             leaseRent: futureLease.leaseRent,
+            leaseType: 'FUTURE', // Preserved future leases remain FUTURE
             unitId: futureLease.unitId,
             createdAt: futureLease.createdAt, // Preserve original creation date
             updatedAt: new Date()
