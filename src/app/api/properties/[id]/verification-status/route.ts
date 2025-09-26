@@ -279,8 +279,8 @@ export async function GET(
             return false;
           }
           
-          // Use consistent date-based classification
-          return isFutureLease(lease, targetRentRoll.uploadDate);
+          // Use explicit leaseType classification
+          return isFutureLease(lease);
         });
         
         console.log(`[VERIFICATION STATUS DEBUG] Unit ${unit.unitNumber}: Found ${futureLeases.length} future leases`);

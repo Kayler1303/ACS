@@ -103,9 +103,9 @@ export async function GET(
     const transitions: FutureToCurrentTransition[] = [];
 
     for (const unit of units) {
-      // Find current lease for this unit using date-based classification
+      // Find current lease for this unit using explicit leaseType
       const currentLease = unit.Lease.find(lease => 
-        isCurrentLease(lease, currentRentRoll.uploadDate) && 
+        isCurrentLease(lease) && 
         lease.Tenancy && Array.isArray(lease.Tenancy) && lease.Tenancy.some((t: any) => t.rentRollId === rentRollId)
       );
 
@@ -117,9 +117,9 @@ export async function GET(
       );
       const previousLease = previousTenancy?.Lease;
 
-      // Find any future leases for this unit using date-based classification
+      // Find any future leases for this unit using explicit leaseType
       const futureLeases = unit.Lease.filter(lease => 
-        isFutureLease(lease, currentRentRoll.uploadDate)
+        isFutureLease(lease)
       );
 
       // Check if current lease changed from previous AND there are future leases
