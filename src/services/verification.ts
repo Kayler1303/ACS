@@ -90,32 +90,79 @@ export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Da
     allLeases: (unit.Lease || []).map(l => ({
       id: l.id,
       hasTenancy: !!l.Tenancy,
+      leaseType: (l as any).leaseType,
       tenancyType: typeof l.Tenancy,
       tenancyData: l.Tenancy
     }))
   });
 
-  const leasesWithTenancy = (unit.Lease || []).filter((l: ExtendedLease) => l.Tenancy !== null);
-  console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber} - Filtered leases:`, {
-    leasesWithTenancy: leasesWithTenancy.map(l => ({
+  // First, try to find current leases using explicit leaseType
+  const currentLeases = (unit.Lease || []).filter((l: ExtendedLease) => 
+    (l as any).leaseType === 'CURRENT' && 
+    !l.name?.startsWith('[PROCESSED]') // Exclude processed leases
+  );
+  
+  console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber} - Current leases:`, {
+    currentLeases: currentLeases.map(l => ({
       id: l.id,
+      leaseType: (l as any).leaseType,
       tenancyCreatedAt: l.Tenancy?.createdAt,
       tenancyCreatedAtType: typeof l.Tenancy?.createdAt
     }))
   });
 
-  const currentLease = leasesWithTenancy
+  const currentLease = currentLeases
     .sort((a: ExtendedLease, b: ExtendedLease) => new Date(b.Tenancy!.createdAt).getTime() - new Date(a.Tenancy!.createdAt).getTime())[0];
 
   console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}:`, {
     totalLeases: (unit.Lease || []).length,
-    leasesWithTenancy: leasesWithTenancy.length,
+    currentLeases: currentLeases.length,
     selectedLease: currentLease?.id,
     leaseStartDate: currentLease?.leaseStartDate
   });
 
-  if (!currentLease || !currentLease.Tenancy) {
-    console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: No current lease with tenancy - returning Vacant`);
+  // If no current lease, check for future leases
+  if (!currentLease) {
+    console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: No current lease - checking for future leases`);
+    
+    // Look for future leases using explicit leaseType field
+    const futureLeases = (unit.Lease || []).filter((l: ExtendedLease) => 
+      (l as any).leaseType === 'FUTURE' && 
+      !l.name?.startsWith('[PROCESSED]') // Exclude processed leases
+    );
+    
+    console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: Found ${futureLeases.length} future leases`);
+    
+    if (futureLeases.length > 0) {
+      // Use the most recent future lease
+      const futureLease = futureLeases.sort((a: ExtendedLease, b: ExtendedLease) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      )[0];
+      
+      console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: Using future lease ${futureLease.id} for status calculation`);
+      
+      // For future leases, if they have no residents or no income documents, they need documentation
+      const residents = futureLease.Resident || [];
+      if (residents.length === 0) {
+        console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: Future lease has no residents - returning Out of Date Income Documents`);
+        return "Out of Date Income Documents";
+      }
+      
+      // Check if any residents have started income verification
+      const hasAnyDocuments = residents.some((r: ExtendedResident) => 
+        (r.IncomeDocument || []).length > 0
+      );
+      
+      if (!hasAnyDocuments) {
+        console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: Future lease residents have no documents - returning Out of Date Income Documents`);
+        return "Out of Date Income Documents";
+      }
+      
+      // If there are documents, use the lease verification status
+      return getLeaseVerificationStatus(futureLease);
+    }
+    
+    console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: No current or future leases - returning Vacant`);
     return "Vacant";
   }
 
