@@ -47,9 +47,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
                                     rentRollId: rentRollId
                                 }
                             },
-                            // Include legacy future leases (no Tenancy record)
+                            // Include future leases (using explicit leaseType)
                             {
-                                Tenancy: null
+                                leaseType: 'FUTURE',
+                                NOT: {
+                                    name: {
+                                        startsWith: '[PROCESSED]'
+                                    }
+                                }
                             }
                         ]
                     },

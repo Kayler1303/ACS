@@ -38,10 +38,16 @@ export function getLeaseVerificationStatus(lease: ExtendedLease): VerificationSt
   console.log(`[LEASE VERIFICATION DEBUG] Lease ${lease.id}:`, {
     leaseName: lease.name,
     totalResidents: allResidents.length,
-    isFutureLease: !lease.Tenancy
+    leaseType: (lease as any).leaseType,
+    isFutureLease: (lease as any).leaseType === 'FUTURE'
   });
 
   if (allResidents.length === 0) {
+    // For future leases with no residents, they need income documentation
+    if ((lease as any).leaseType === 'FUTURE') {
+      console.log(`[LEASE VERIFICATION DEBUG] Lease ${lease.id}: Future lease with no residents - returning Out of Date Income Documents`);
+      return "Out of Date Income Documents";
+    }
     console.log(`[LEASE VERIFICATION DEBUG] Lease ${lease.id}: No residents - returning Vacant`);
     return "Vacant";
   }
@@ -55,6 +61,18 @@ export function getLeaseVerificationStatus(lease: ExtendedLease): VerificationSt
     hasNoIncome: r.hasNoIncome,
     isFinalized: r.incomeFinalized || r.hasNoIncome
   })));
+
+  // For future leases with residents but no documents, they need documentation
+  if ((lease as any).leaseType === 'FUTURE') {
+    const hasAnyDocuments = allResidents.some((resident: ExtendedResident) => 
+      (resident.IncomeDocument || []).length > 0
+    );
+    
+    if (!hasAnyDocuments) {
+      console.log(`[LEASE VERIFICATION DEBUG] Lease ${lease.id}: Future lease with residents but no documents - returning Out of Date Income Documents`);
+      return "Out of Date Income Documents";
+    }
+  }
 
   // Check if any resident has documents that need review
   const hasDocumentsNeedingReview = allResidents.some((resident: ExtendedResident) =>
