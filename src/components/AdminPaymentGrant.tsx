@@ -163,12 +163,12 @@ export default function AdminPaymentGrant({ property, onGrantUpdated }: AdminPay
                 <h4 className="text-sm font-medium text-gray-900 mb-1">Property Owner</h4>
                 <div className="space-y-1">
                   <p className="text-sm text-gray-700">
-                    <span className="font-medium">Name:</span> {property.User.name || 'Not provided'}
+                    <span className="font-medium">Name:</span> {property.User?.name || 'Not provided'}
                   </p>
                   <p className="text-sm text-gray-700">
-                    <span className="font-medium">Email:</span> {property.User.email}
+                    <span className="font-medium">Email:</span> {property.User?.email || 'Not provided'}
                   </p>
-                  {property.User.company && (
+                  {property.User?.company && (
                     <p className="text-sm text-gray-700">
                       <span className="font-medium">Company:</span> {property.User.company}
                     </p>
@@ -195,7 +195,7 @@ export default function AdminPaymentGrant({ property, onGrantUpdated }: AdminPay
               <div>
                 <p className="text-sm font-medium text-blue-800">Free Access Granted</p>
                 <p className="text-xs text-blue-600">
-                  By {activeGrant.grantedBy.name || activeGrant.grantedBy.email} on{' '}
+                  By {activeGrant.grantedBy?.name || activeGrant.grantedBy?.email || 'Admin'} on{' '}
                   {new Date(activeGrant.grantedAt).toLocaleDateString()}
                 </p>
                 {activeGrant.reason && (
