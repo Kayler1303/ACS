@@ -99,12 +99,22 @@ export async function POST(
     const snapshotReportDate = new Date(rentRollWithSnapshot.snapshot.uploadDate + 'T12:00:00'); // Add time to avoid timezone issues
     const leaseStartDateObj = leaseStartDate ? new Date(leaseStartDate + 'T12:00:00') : null;
     
-    // Classify as FUTURE if lease starts after snapshot report date, otherwise CURRENT
-    const leaseType = leaseStartDateObj && leaseStartDateObj > snapshotReportDate ? 'FUTURE' : 'CURRENT';
+    // Classify lease type:
+    // 1. If no lease start date provided → manually created future lease → FUTURE
+    // 2. If lease start date provided → compare with snapshot date
+    let leaseType: 'CURRENT' | 'FUTURE';
     
-    console.log(`[MANUAL LEASE CREATION] Classifying lease as ${leaseType}:`);
-    console.log(`  Snapshot report date: ${snapshotReportDate.toISOString()}`);
-    console.log(`  Lease start date: ${leaseStartDateObj?.toISOString() || 'null'}`);
+    if (!leaseStartDateObj) {
+      // No start date = manually created future lease
+      leaseType = 'FUTURE';
+      console.log(`[MANUAL LEASE CREATION] No start date provided - classifying as FUTURE lease`);
+    } else {
+      // Has start date - compare with snapshot date
+      leaseType = leaseStartDateObj > snapshotReportDate ? 'FUTURE' : 'CURRENT';
+      console.log(`[MANUAL LEASE CREATION] Classifying lease as ${leaseType} based on dates:`);
+      console.log(`  Snapshot report date: ${snapshotReportDate.toISOString()}`);
+      console.log(`  Lease start date: ${leaseStartDateObj.toISOString()}`);
+    }
 
     // Create lease and tenancy in a transaction
     const result = await prisma.$transaction(async (tx) => {
