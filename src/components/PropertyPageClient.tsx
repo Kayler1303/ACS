@@ -1073,11 +1073,19 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
 
     // Process each unit (including synthetic units from future leases)
     const processed = allUnits.map((unit: any) => {
-      // Find tenancy for this unit in any of the selected snapshot's rent rolls
+      // Find CURRENT tenancy for this unit in any of the selected snapshot's rent rolls
+      // Only include leases that are CURRENT type (not FUTURE)
       let tenancy = null;
       for (const rentRoll of selectedRentRolls) {
-        tenancy = rentRoll.Tenancy.find((t: FullTenancy) => t.Lease?.unitId === unit.id);
-        if (tenancy) break;
+        const candidateTenancy = rentRoll.Tenancy.find((t: FullTenancy) => 
+          t.Lease?.unitId === unit.id && 
+          t.Lease?.leaseType === 'CURRENT' && // Only include CURRENT leases
+          !t.Lease?.name?.startsWith('[PROCESSED]') // Exclude processed leases
+        );
+        if (candidateTenancy) {
+          tenancy = candidateTenancy;
+          break;
+        }
       }
       
       const residents = tenancy?.Lease?.Resident || [];
@@ -1209,11 +1217,19 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
 
     // Apply 140% rule for compliance buckets
     const processedWithCompliance = processed.map((unit: ProcessedUnit) => {
-      // Find tenancy for this unit in any of the selected snapshot's rent rolls
+      // Find CURRENT tenancy for this unit in any of the selected snapshot's rent rolls
+      // Only include leases that are CURRENT type (not FUTURE)
       let tenancy = null;
       for (const rentRoll of selectedRentRolls) {
-        tenancy = rentRoll.Tenancy.find((t: FullTenancy) => t.Lease?.unitId === unit.id);
-        if (tenancy) break;
+        const candidateTenancy = rentRoll.Tenancy.find((t: FullTenancy) => 
+          t.Lease?.unitId === unit.id && 
+          t.Lease?.leaseType === 'CURRENT' && // Only include CURRENT leases
+          !t.Lease?.name?.startsWith('[PROCESSED]') // Exclude processed leases
+        );
+        if (candidateTenancy) {
+          tenancy = candidateTenancy;
+          break;
+        }
       }
       const complianceBucket = getComplianceBucket(
         unit,
@@ -1514,7 +1530,11 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
         const activeLeasesArray = processedTenancies.filter(unit => unit.actualBucket !== 'Vacant');
         
         const incomeOnly60 = activeLeasesArray.filter(unit => {
-          const tenancy = currentRentRoll.Tenancy.find((t: FullTenancy) => t.Lease.unitId === unit.id);
+          const tenancy = currentRentRoll.Tenancy.find((t: FullTenancy) => 
+            t.Lease.unitId === unit.id && 
+            t.Lease?.leaseType === 'CURRENT' && // Only include CURRENT leases
+            !t.Lease?.name?.startsWith('[PROCESSED]') // Exclude processed leases
+          );
           const residents = tenancy?.Lease?.Resident || [];
           const totalIncome = residents.reduce((acc: number, res: any) => acc + Number(res.annualizedIncome || 0), 0);
           return hudIncomeLimits && getActualBucket(totalIncome, residents.length, hudIncomeLimits, complianceOption) === '60% AMI';
@@ -1522,7 +1542,11 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
         
         const rentOnly60 = activeLeasesArray.filter(unit => {
           const maxRent60 = (lihtcRentData?.lihtcMaxRents as any)?.['60percent']?.[`${unit.bedroomCount}br`] || 0;
-          const tenancy = currentRentRoll.Tenancy.find((t: FullTenancy) => t.Lease.unitId === unit.id);
+          const tenancy = currentRentRoll.Tenancy.find((t: FullTenancy) => 
+            t.Lease.unitId === unit.id && 
+            t.Lease?.leaseType === 'CURRENT' && // Only include CURRENT leases
+            !t.Lease?.name?.startsWith('[PROCESSED]') // Exclude processed leases
+          );
           const leaseRent = Number(tenancy?.Lease.leaseRent || 0);
           const utilityAllowance = includeUtilityAllowances ? (utilityAllowances[unit.bedroomCount] || 0) : 0;
           const adjustedMaxRent = maxRent60 + utilityAllowance;
