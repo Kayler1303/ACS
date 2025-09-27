@@ -1367,9 +1367,8 @@ export default function ResidentDetailPage() {
       console.log(`[UNIT STATUS] Calculating status for unit ${unit.unitNumber} using getUnitVerificationStatus`);
       
       // Get the latest rent roll date (same as property summary API)
-      const latestRentRollDate = tenancyData.lease?.Tenancy?.RentRoll?.uploadDate 
-        ? new Date(tenancyData.lease.Tenancy.RentRoll.uploadDate)
-        : new Date();
+      // Note: We'll use the current date as fallback since we don't have direct access to RentRoll data here
+      const latestRentRollDate = new Date();
       
       // Calculate status using the same verification service used by the property summary API
       console.log(`[UNIT STATUS] Unit data being passed to verification service:`, {
