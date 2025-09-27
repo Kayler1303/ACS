@@ -42,50 +42,63 @@ export function getLeaseVerificationStatus(lease: ExtendedLease): VerificationSt
     isFutureLease: (lease as any).leaseType === 'FUTURE'
   });
 
+  // 1. If no residents -> "Vacant"
   if (allResidents.length === 0) {
-    // For future leases with no residents, they need income documentation
-    if ((lease as any).leaseType === 'FUTURE') {
-      console.log(`[LEASE VERIFICATION DEBUG] Lease ${lease.id}: Future lease with no residents - returning Out of Date Income Documents`);
-      return "Out of Date Income Documents";
-    }
     console.log(`[LEASE VERIFICATION DEBUG] Lease ${lease.id}: No residents - returning Vacant`);
     return "Vacant";
   }
 
   const finalizedResidents = allResidents.filter((r: ExtendedResident) => r.incomeFinalized || r.hasNoIncome);
+  const allFinalized = finalizedResidents.length === allResidents.length;
+  const noneFinalized = finalizedResidents.length === 0;
+  const someFinalized = finalizedResidents.length > 0 && finalizedResidents.length < allResidents.length;
   
-  console.log(`[LEASE VERIFICATION DEBUG] Lease ${lease.id}: ${finalizedResidents.length}/${allResidents.length} residents finalized`);
-  console.log(`[LEASE VERIFICATION DEBUG] Lease ${lease.id} resident details:`, allResidents.map(r => ({
-    name: r.name,
-    incomeFinalized: r.incomeFinalized,
-    hasNoIncome: r.hasNoIncome,
-    isFinalized: r.incomeFinalized || r.hasNoIncome
-  })));
-
-  // For future leases with residents but no documents, they need documentation
-  if ((lease as any).leaseType === 'FUTURE') {
-    const hasAnyDocuments = allResidents.some((resident: ExtendedResident) => 
-      (resident.IncomeDocument || []).length > 0
-    );
-    
-    if (!hasAnyDocuments) {
-      console.log(`[LEASE VERIFICATION DEBUG] Lease ${lease.id}: Future lease with residents but no documents - returning Out of Date Income Documents`);
-      return "Out of Date Income Documents";
-    }
-  }
+  // Check if any resident has uploaded documents
+  const hasAnyDocuments = allResidents.some((resident: ExtendedResident) => 
+    (resident.IncomeDocument || []).length > 0
+  );
 
   // Check if any resident has documents that need review
   const hasDocumentsNeedingReview = allResidents.some((resident: ExtendedResident) =>
     (resident.IncomeDocument || []).some((doc: IncomeDocument) => doc.status === 'NEEDS_REVIEW')
   );
 
+  console.log(`[LEASE VERIFICATION DEBUG] Lease ${lease.id} analysis:`, {
+    totalResidents: allResidents.length,
+    finalizedResidents: finalizedResidents.length,
+    allFinalized,
+    noneFinalized,
+    someFinalized,
+    hasAnyDocuments,
+    hasDocumentsNeedingReview,
+    residents: allResidents.map(r => ({
+      name: r.name,
+      incomeFinalized: r.incomeFinalized,
+      hasNoIncome: r.hasNoIncome,
+      documentsCount: (r.IncomeDocument || []).length
+    }))
+  });
+
+  // Handle documents needing admin review first
   if (hasDocumentsNeedingReview) {
     console.log(`[LEASE VERIFICATION DEBUG] Lease ${lease.id}: Has documents needing review - returning Waiting for Admin Review`);
     return "Waiting for Admin Review";
   }
 
-  // Check if all residents are finalized
-  if (finalizedResidents.length === allResidents.length) {
+  // 2. If residents and some have been finalized but not all have been finalized -> "In Progress - Finalize to Process"
+  if (someFinalized) {
+    console.log(`[LEASE VERIFICATION DEBUG] Lease ${lease.id}: Some residents finalized (${finalizedResidents.length}/${allResidents.length}) - returning In Progress - Finalize to Process`);
+    return "In Progress - Finalize to Process";
+  }
+
+  // 3. If residents and none have been finalized but there has been one or more income document uploaded -> "In Progress - Finalize to Process"
+  if (noneFinalized && hasAnyDocuments) {
+    console.log(`[LEASE VERIFICATION DEBUG] Lease ${lease.id}: No residents finalized but has documents - returning In Progress - Finalize to Process`);
+    return "In Progress - Finalize to Process";
+  }
+
+  // 6. If all finalized -> "Verified" (but check for special cases first)
+  if (allFinalized) {
     // Special case: If ALL residents are marked as "No Income", this needs attention
     const allResidentsHaveNoIncome = allResidents.every((r: ExtendedResident) => r.hasNoIncome);
     
@@ -93,14 +106,22 @@ export function getLeaseVerificationStatus(lease: ExtendedLease): VerificationSt
       console.log(`[LEASE VERIFICATION DEBUG] Lease ${lease.id}: All residents marked as no income - returning Needs Income Documentation`);
       return "Needs Income Documentation";
     }
-    
+
+    // TODO: Add logic for #4 - check if income documents are out of date
+    // For now, if all finalized, return Verified
     console.log(`[LEASE VERIFICATION DEBUG] Lease ${lease.id}: All residents finalized - returning Verified`);
     return "Verified";
   }
 
-  // If some but not all residents are finalized
-  console.log(`[LEASE VERIFICATION DEBUG] Lease ${lease.id}: Partial finalization - returning In Progress - Finalize to Process`);
-  return "In Progress - Finalize to Process";
+  // 5. If residents but none have been finalized and none of them have had any income documents -> "Out of Date Income Documents"
+  if (noneFinalized && !hasAnyDocuments) {
+    console.log(`[LEASE VERIFICATION DEBUG] Lease ${lease.id}: No residents finalized and no documents - returning Out of Date Income Documents`);
+    return "Out of Date Income Documents";
+  }
+
+  // Fallback (should not reach here with current logic)
+  console.log(`[LEASE VERIFICATION DEBUG] Lease ${lease.id}: Fallback case - returning Out of Date Income Documents`);
+  return "Out of Date Income Documents";
 }
 
 export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Date): VerificationStatus {
