@@ -1995,7 +1995,7 @@ export default function ResidentDetailPage() {
                                       }
                                       
                                       if (verificationId) {
-                                        handleMarkResidentNoIncome(resident.id, verificationId);
+                                        handleMarkNoIncome(lease.id, verificationId, resident.id, resident.name);
                                       }
                                     }}
                                     className="inline-flex items-center px-3 py-1 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50"
