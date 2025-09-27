@@ -1891,22 +1891,6 @@ export default function ResidentDetailPage() {
             </div>
           </div>
 
-          {/* Current Lease Status */}
-          <div className="bg-white p-6 rounded-lg shadow-md mb-8">
-            <h2 className="text-2xl font-semibold text-brand-blue mb-4">Current Lease Status</h2>
-            <div className="text-center py-8">
-              <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-gray-100 mb-4">
-                <svg className="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-4m-5 0H9m0 0H5m0 0h2M7 3h10M9 9h6m-6 4h6m-6 4h6" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No Current Lease</h3>
-              <p className="text-gray-600">
-                This unit is currently vacant for this rent roll period.
-              </p>
-            </div>
-          </div>
-
           {/* Future Leases Section */}
           <div className="bg-white p-6 rounded-lg shadow-md mb-8">
             <h2 className="text-2xl font-semibold text-brand-blue mb-4">Future Leases</h2>
@@ -2031,6 +2015,22 @@ export default function ResidentDetailPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+
+          {/* Current Lease Status */}
+          <div className="bg-white p-6 rounded-lg shadow-md mb-8">
+            <h2 className="text-2xl font-semibold text-brand-blue mb-4">Current Lease Status</h2>
+            <div className="text-center py-8">
+              <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-gray-100 mb-4">
+                <svg className="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-4m-5 0H9m0 0H5m0 0h2M7 3h10M9 9h6m-6 4h6m-6 4h6" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No Current Lease</h3>
+              <p className="text-gray-600">
+                This unit is currently vacant for this rent roll period.
+              </p>
             </div>
           </div>
 
