@@ -22,6 +22,34 @@ type FullUnit = Unit & {
 export type VerificationStatus = "Verified" | "Needs Investigation" | "Out of Date Income Documents" | "Vacant" | "In Progress - Finalize to Process" | "Waiting for Admin Review" | "Needs Income Documentation";
 
 /**
+ * Helper function to check if a document is timely based on the same rules used during upload
+ */
+function isDocumentTimely(doc: IncomeDocument, leaseStartDate: Date): boolean {
+  if (doc.documentType === DocumentType.W2) {
+    if (!doc.taxYear) {
+      return false; // W2 missing tax year is not timely
+    }
+    const leaseStartYear = getYear(leaseStartDate);
+    const leaseStartMonth = leaseStartDate.getMonth(); // 0-indexed (0=Jan, 1=Feb, 2=Mar)
+
+    const isTimely = leaseStartMonth <= 2 
+      ? (doc.taxYear === leaseStartYear - 1 || doc.taxYear === leaseStartYear - 2)
+      : (doc.taxYear === leaseStartYear - 1);
+    
+    return isTimely;
+  } else {
+    // For non-W2 documents: must be within 6 months prior to lease start OR on/after lease start
+    const documentDate = new Date(doc.documentDate || doc.payPeriodEndDate || doc.uploadDate);
+    const sixMonthsBeforeLeaseStart = subMonths(leaseStartDate, 6);
+    const tenYearsAfterLeaseStart = new Date(new Date(leaseStartDate).setFullYear(leaseStartDate.getFullYear() + 10));
+    
+    const isTimely = isWithinInterval(documentDate, { start: sixMonthsBeforeLeaseStart, end: tenYearsAfterLeaseStart });
+    
+    return isTimely;
+  }
+}
+
+/**
  * Determines the income verification status for a single unit based on its lease, residents, and documents.
  * This function implements the business rules for income verification compliance.
  *
@@ -97,7 +125,7 @@ export function getLeaseVerificationStatus(lease: ExtendedLease): VerificationSt
     return "In Progress - Finalize to Process";
   }
 
-  // 6. If all finalized -> "Verified" (but check for special cases first)
+  // 6. If all finalized -> check for out of date documents first, then "Verified"
   if (allFinalized) {
     // Special case: If ALL residents are marked as "No Income", this needs attention
     const allResidentsHaveNoIncome = allResidents.every((r: ExtendedResident) => r.hasNoIncome);
@@ -107,9 +135,22 @@ export function getLeaseVerificationStatus(lease: ExtendedLease): VerificationSt
       return "Needs Income Documentation";
     }
 
-    // TODO: Add logic for #4 - check if income documents are out of date
-    // For now, if all finalized, return Verified
-    console.log(`[LEASE VERIFICATION DEBUG] Lease ${lease.id}: All residents finalized - returning Verified`);
+    // 4. If all finalized but documents are out of date -> "Out of Date Income Documents"
+    const leaseStartDate = lease.leaseStartDate ? new Date(lease.leaseStartDate) : null;
+    if (leaseStartDate) {
+      const hasOutOfDateDocuments = allResidents.some((resident: ExtendedResident) => {
+        return (resident.IncomeDocument || []).some((doc: IncomeDocument) => {
+          return !isDocumentTimely(doc, leaseStartDate);
+        });
+      });
+
+      if (hasOutOfDateDocuments) {
+        console.log(`[LEASE VERIFICATION DEBUG] Lease ${lease.id}: All residents finalized but has out of date documents - returning Out of Date Income Documents`);
+        return "Out of Date Income Documents";
+      }
+    }
+
+    console.log(`[LEASE VERIFICATION DEBUG] Lease ${lease.id}: All residents finalized and documents are timely - returning Verified`);
     return "Verified";
   }
 
