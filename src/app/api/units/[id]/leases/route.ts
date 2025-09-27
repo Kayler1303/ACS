@@ -81,15 +81,29 @@ export async function POST(
         { status: 400 }
       );
     }
+    // Get the snapshot date (report date) from the rent roll's snapshot
+    const rentRollWithSnapshot = await prisma.rentRoll.findFirst({
+      where: { id: targetRentRoll.id },
+      include: { snapshot: true }
+    });
+
+    if (!rentRollWithSnapshot?.snapshot) {
+      return NextResponse.json(
+        { error: 'Rent roll snapshot not found' },
+        { status: 400 }
+      );
+    }
+
     // Determine lease type based on dates and rent roll context
-    const rentRollDate = new Date(targetRentRoll.uploadDate);
-    const leaseStartDateObj = leaseStartDate ? new Date(leaseStartDate) : null;
+    // Use the snapshot's report date, not the rent roll upload date
+    const snapshotReportDate = new Date(rentRollWithSnapshot.snapshot.uploadDate + 'T12:00:00'); // Add time to avoid timezone issues
+    const leaseStartDateObj = leaseStartDate ? new Date(leaseStartDate + 'T12:00:00') : null;
     
-    // Classify as FUTURE if lease starts after rent roll date, otherwise CURRENT
-    const leaseType = leaseStartDateObj && leaseStartDateObj > rentRollDate ? 'FUTURE' : 'CURRENT';
+    // Classify as FUTURE if lease starts after snapshot report date, otherwise CURRENT
+    const leaseType = leaseStartDateObj && leaseStartDateObj > snapshotReportDate ? 'FUTURE' : 'CURRENT';
     
     console.log(`[MANUAL LEASE CREATION] Classifying lease as ${leaseType}:`);
-    console.log(`  Rent roll date: ${rentRollDate.toISOString()}`);
+    console.log(`  Snapshot report date: ${snapshotReportDate.toISOString()}`);
     console.log(`  Lease start date: ${leaseStartDateObj?.toISOString() || 'null'}`);
 
     // Create lease and tenancy in a transaction

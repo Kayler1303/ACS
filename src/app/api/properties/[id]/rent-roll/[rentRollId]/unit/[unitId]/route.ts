@@ -258,41 +258,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
         const rentRollDate = new Date(rentRoll.uploadDate);
 
-        // Classify leases as current or future based on dates and tenancy
+        // Classify leases as current or future using explicit leaseType field
         const currentLeases = unitWithLeases.Lease.filter(lease => {
             // A lease is current if:
-            // 1. It has a tenancy record for this rent roll AND
-            // 2. Its start date is on or before the rent roll date (or no start date for imported leases)
+            // 1. It has leaseType = 'CURRENT' AND has a tenancy record for this rent roll
+            const isCurrentType = (lease as any).leaseType === 'CURRENT';
             const hasCurrentTenancy = lease.Tenancy?.rentRollId === rentRollId;
-            if (!hasCurrentTenancy) return false;
-            
-            // If no lease start date, it's likely an imported lease (current)
-            if (!lease.leaseStartDate) return true;
-            
-            // Check if lease start date is on or before rent roll date
-            const leaseStartDate = new Date(lease.leaseStartDate);
-            return leaseStartDate <= rentRollDate;
+            return isCurrentType && hasCurrentTenancy;
         });
 
         const futureLeases = unitWithLeases.Lease.filter(lease => {
-            // A lease is future if:
-            // 1. It has no tenancy record (legacy future lease) OR
-            // 2. It has a tenancy record but start date is after rent roll date
-            const hasNoTenancy = !lease.Tenancy;
-            const hasCurrentTenancy = lease.Tenancy?.rentRollId === rentRollId;
-            
-            if (hasNoTenancy) return true;
-            
-            if (hasCurrentTenancy) {
-                // If no start date but has tenancy, it's likely current (imported)
-                if (!lease.leaseStartDate) return false;
-                
-                // Check if lease start date is after rent roll date
-                const leaseStartDate = new Date(lease.leaseStartDate);
-                return leaseStartDate > rentRollDate;
-            }
-            
-            return false;
+            // A lease is future if it has leaseType = 'FUTURE'
+            const isFutureType = (lease as any).leaseType === 'FUTURE';
+            // Exclude processed leases
+            const isNotProcessed = !lease.name?.startsWith('[PROCESSED]');
+            return isFutureType && isNotProcessed;
         });
 
         console.log(`[UNIT DEBUG] Unit ${unitWithLeases.unitNumber} - Rent Roll Date: ${rentRollDate.toISOString()}`);
