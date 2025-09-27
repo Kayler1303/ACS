@@ -1354,39 +1354,41 @@ export default function ResidentDetailPage() {
     }
   };
 
-  // Function to fetch verification status for this unit using the same logic as the property summary API
+  // Function to fetch verification status for this specific lease
   const fetchUnitVerificationStatus = async () => {
-    if (!tenancyData?.unit) return;
+    if (!tenancyData?.lease) return;
     
     try {
-      // Import the verification service to use the same logic as the property summary API
-      const { getUnitVerificationStatus } = await import('@/services/verification');
+      // Import the verification service to calculate lease-level status
+      const { getLeaseVerificationStatus } = await import('@/services/verification');
       
-      // Use the same unit-level logic as the property summary API
-      const unit = tenancyData.unit;
-      console.log(`[UNIT STATUS] Calculating status for unit ${unit.unitNumber} using getUnitVerificationStatus`);
+      // Use lease-level logic since this page shows details for a specific lease
+      const lease = tenancyData.lease;
+      console.log(`[LEASE STATUS] Calculating status for lease ${lease.id} using getLeaseVerificationStatus`);
       
-      // Get the latest rent roll date (same as property summary API)
-      // Note: We'll use the current date as fallback since we don't have direct access to RentRoll data here
-      const latestRentRollDate = new Date();
-      
-      // Calculate status using the same verification service used by the property summary API
-      console.log(`[UNIT STATUS] Unit data being passed to verification service:`, {
-        unitId: unit.id,
-        unitNumber: unit.unitNumber,
-        totalLeases: unit.Lease?.length || 0,
-        currentLeases: unit.Lease?.filter((l: any) => l.leaseType === 'CURRENT').length || 0,
-        futureLeases: unit.Lease?.filter((l: any) => l.leaseType === 'FUTURE').length || 0,
-        latestRentRollDate: latestRentRollDate.toISOString()
+      // Calculate status using lease-level verification logic
+      console.log(`[LEASE STATUS] Lease data being passed to verification service:`, {
+        leaseId: lease.id,
+        leaseType: (lease as any).leaseType,
+        residentsCount: lease.Resident?.length || 0,
+        verificationsCount: lease.IncomeVerification?.length || 0
       });
       
-      const status = getUnitVerificationStatus(unit as any, latestRentRollDate);
-      console.log(`[UNIT STATUS] getUnitVerificationStatus returned: ${status}`);
+      let status = getLeaseVerificationStatus(lease as any);
+      console.log(`[LEASE STATUS] getLeaseVerificationStatus returned: ${status}`);
+      
+      // Apply override logic if verification is finalized
+      if (status === 'In Progress - Finalize to Process' && 
+          lease.IncomeVerification && 
+          lease.IncomeVerification.some((v: any) => v.status === 'FINALIZED')) {
+        console.log(`[LEASE STATUS] Overriding status: ${status} -> Verified (has FINALIZED verification)`);
+        status = 'Verified';
+      }
       
       setUnitVerificationStatus(status);
       
     } catch (error) {
-      console.error('Error calculating unit verification status:', error);
+      console.error('Error calculating lease verification status:', error);
     }
   };
 
