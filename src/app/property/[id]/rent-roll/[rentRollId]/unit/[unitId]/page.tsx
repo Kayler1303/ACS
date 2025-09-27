@@ -1354,49 +1354,35 @@ export default function ResidentDetailPage() {
     }
   };
 
-  // Function to fetch verification status for this unit using the same logic as the APIs
+  // Function to fetch verification status for this unit using the same logic as the property summary API
   const fetchUnitVerificationStatus = async () => {
-    if (!tenancyData?.unit || !tenancyData?.lease) return;
+    if (!tenancyData?.unit) return;
     
     try {
-      // Import the verification service to use the same logic as the APIs
-      const { getLeaseVerificationStatus } = await import('@/services/verification');
+      // Import the verification service to use the same logic as the property summary API
+      const { getUnitVerificationStatus } = await import('@/services/verification');
       
-      // Use the same logic as the future leases API and property summary
-      const lease = tenancyData.lease;
-      console.log(`[UNIT STATUS] Calculating status for lease ${lease.id} using verification service`);
+      // Use the same unit-level logic as the property summary API
+      const unit = tenancyData.unit;
+      console.log(`[UNIT STATUS] Calculating status for unit ${unit.unitNumber} using getUnitVerificationStatus`);
       
-      // Calculate status using the same verification service used by the APIs
-      console.log(`[UNIT STATUS] Lease data being passed to verification service:`, {
-        leaseId: lease.id,
-        residents: lease.Resident?.map(r => ({
-          name: r.name,
-          incomeFinalized: r.incomeFinalized,
-          hasNoIncome: r.hasNoIncome,
-          isFinalized: r.incomeFinalized || r.hasNoIncome
-        })) || []
+      // Get the latest rent roll date (same as property summary API)
+      const latestRentRollDate = tenancyData.lease?.Tenancy?.RentRoll?.uploadDate 
+        ? new Date(tenancyData.lease.Tenancy.RentRoll.uploadDate)
+        : new Date();
+      
+      // Calculate status using the same verification service used by the property summary API
+      console.log(`[UNIT STATUS] Unit data being passed to verification service:`, {
+        unitId: unit.id,
+        unitNumber: unit.unitNumber,
+        totalLeases: unit.Lease?.length || 0,
+        currentLeases: unit.Lease?.filter((l: any) => l.leaseType === 'CURRENT').length || 0,
+        futureLeases: unit.Lease?.filter((l: any) => l.leaseType === 'FUTURE').length || 0,
+        latestRentRollDate: latestRentRollDate.toISOString()
       });
       
-      let status = getLeaseVerificationStatus(lease as any);
-      console.log(`[UNIT STATUS] Verification service returned: ${status}`);
-      
-      // Apply the same override logic as the future leases API
-      console.log(`[UNIT STATUS DEBUG] Unit ${tenancyData.unit.unitNumber} Lease ${lease.id}:`, {
-        initialStatus: status,
-        hasIncomeVerification: !!lease.IncomeVerification,
-        verificationCount: lease.IncomeVerification?.length || 0,
-        verificationStatuses: lease.IncomeVerification?.map((v: any) => v.status) || [],
-        shouldOverride: status === 'In Progress - Finalize to Process' && 
-                       lease.IncomeVerification && 
-                       lease.IncomeVerification.some((v: any) => v.status === 'FINALIZED')
-      });
-      
-      if (status === 'In Progress - Finalize to Process' && 
-          lease.IncomeVerification && 
-          lease.IncomeVerification.some((v: any) => v.status === 'FINALIZED')) {
-        console.log(`[UNIT STATUS] Overriding status: ${status} -> Verified (has FINALIZED verification)`);
-        status = 'Verified';
-      }
+      const status = getUnitVerificationStatus(unit as any, latestRentRollDate);
+      console.log(`[UNIT STATUS] getUnitVerificationStatus returned: ${status}`);
       
       setUnitVerificationStatus(status);
       
