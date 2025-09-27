@@ -1940,14 +1940,71 @@ export default function ResidentDetailPage() {
                       <div className="space-y-2">
                         {lease.Resident.map((resident: any) => (
                           <div key={resident.id} className="flex justify-between items-center bg-white p-3 rounded border">
-                            <span className="font-medium">{resident.name}</span>
-                            <span className={`px-2 py-1 rounded text-xs font-medium ${
-                              resident.incomeFinalized || resident.hasNoIncome
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-yellow-100 text-yellow-800'
-                            }`}>
-                              {resident.incomeFinalized || resident.hasNoIncome ? 'Verified' : 'Pending'}
-                            </span>
+                            <div className="flex-1">
+                              <span className="font-medium">{resident.name}</span>
+                              {resident.annualizedIncome && (
+                                <p className="text-sm text-gray-600">
+                                  Rent Roll Income: ${resident.annualizedIncome.toLocaleString()}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex items-center space-x-3">
+                              <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                resident.incomeFinalized || resident.hasNoIncome
+                                  ? 'bg-green-100 text-green-800'
+                                  : 'bg-yellow-100 text-yellow-800'
+                              }`}>
+                                {resident.incomeFinalized || resident.hasNoIncome ? 'Verified' : 'Pending'}
+                              </span>
+                              
+                              {/* Action buttons for pending residents */}
+                              {!resident.incomeFinalized && !resident.hasNoIncome && (
+                                <div className="flex space-x-2">
+                                  <button
+                                    onClick={() => {
+                                      // Start verification for this resident
+                                      handleStartVerification(lease.id, [{ id: resident.id, name: resident.name }]);
+                                    }}
+                                    className="inline-flex items-center px-3 py-1 border border-blue-300 text-xs font-medium rounded text-blue-700 bg-white hover:bg-blue-50"
+                                  >
+                                    Upload Documents
+                                  </button>
+                                  <button
+                                    onClick={async () => {
+                                      // Ensure income verification exists, then mark as no income
+                                      let verificationId = lease.IncomeVerification?.[0]?.id;
+                                      
+                                      if (!verificationId) {
+                                        // Create income verification first
+                                        try {
+                                          const response = await fetch(`/api/leases/${lease.id}/verifications`, {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ reason: 'FUTURE_LEASE_VERIFICATION' })
+                                          });
+                                          
+                                          if (response.ok) {
+                                            const verification = await response.json();
+                                            verificationId = verification.id;
+                                          }
+                                        } catch (error) {
+                                          console.error('Error creating verification:', error);
+                                          alert('Failed to create income verification');
+                                          return;
+                                        }
+                                      }
+                                      
+                                      if (verificationId) {
+                                        handleMarkResidentNoIncome(resident.id, verificationId);
+                                      }
+                                    }}
+                                    className="inline-flex items-center px-3 py-1 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50"
+                                  >
+                                    No Income
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>
