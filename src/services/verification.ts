@@ -139,48 +139,19 @@ export function getUnitVerificationStatus(unit: FullUnit, latestRentRollDate: Da
     leaseStartDate: currentLease?.leaseStartDate
   });
 
-  // If no current lease, check for future leases
+  // If no current lease, the unit is vacant for the current period
   if (!currentLease) {
-    console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: No current lease - checking for future leases`);
+    console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: No current lease - returning Vacant`);
     
-    // Look for future leases using explicit leaseType field
+    // Note: Future leases don't affect the main unit verification status
+    // They are handled separately in the future lease column
     const futureLeases = (unit.Lease || []).filter((l: ExtendedLease) => 
       (l as any).leaseType === 'FUTURE' && 
       !l.name?.startsWith('[PROCESSED]') // Exclude processed leases
     );
     
-    console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: Found ${futureLeases.length} future leases`);
+    console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: Found ${futureLeases.length} future leases (handled separately)`);
     
-    if (futureLeases.length > 0) {
-      // Use the most recent future lease
-      const futureLease = futureLeases.sort((a: ExtendedLease, b: ExtendedLease) => 
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      )[0];
-      
-      console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: Using future lease ${futureLease.id} for status calculation`);
-      
-      // For future leases, if they have no residents or no income documents, they need documentation
-      const residents = futureLease.Resident || [];
-      if (residents.length === 0) {
-        console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: Future lease has no residents - returning Out of Date Income Documents`);
-        return "Out of Date Income Documents";
-      }
-      
-      // Check if any residents have started income verification
-      const hasAnyDocuments = residents.some((r: ExtendedResident) => 
-        (r.IncomeDocument || []).length > 0
-      );
-      
-      if (!hasAnyDocuments) {
-        console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: Future lease residents have no documents - returning Out of Date Income Documents`);
-        return "Out of Date Income Documents";
-      }
-      
-      // If there are documents, use the lease verification status
-      return getLeaseVerificationStatus(futureLease);
-    }
-    
-    console.log(`[VERIFICATION SERVICE DEBUG] Unit ${unit.unitNumber}: No current or future leases - returning Vacant`);
     return "Vacant";
   }
 
