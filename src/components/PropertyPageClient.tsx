@@ -1736,34 +1736,36 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
       )}
       
       {/* Actions Panel */}
-      <div className="mb-6 bg-gray-50 border border-gray-200 rounded-lg">
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <span className="text-base font-bold text-gray-700">Actions:</span>
-              <a
-                href={`/property/${property.id}/update-compliance`}
-                className="inline-flex items-center px-4 py-2 text-base font-bold text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-blue transition-colors"
-              >
-                📁 Update Compliance Data
-              </a>
-              <button
-                onClick={() => setShowAmiCheckModal(true)}
-                className="inline-flex items-center px-4 py-2 text-base font-bold text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-blue transition-colors"
-              >
-                🏠 AMI Check
-              </button>
-              <button
-                onClick={() => {
-                  const url = `/api/properties/${property.id}/export-discrepancies`;
-                  window.open(url, '_blank');
-                }}
-                className="inline-flex items-center px-4 py-2 text-base font-bold text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-blue transition-colors"
-              >
-                📊 Export Property Management System Updates
-              </button>
+      <div className="mb-8 bg-white border border-gray-200 rounded-lg shadow-sm">
+        <div className="px-6 py-5">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+            <div className="flex flex-col sm:flex-row sm:items-center space-y-3 sm:space-y-0 sm:space-x-6">
+              <h3 className="text-lg font-semibold text-gray-900">Actions</h3>
+              <div className="flex flex-wrap items-center gap-3">
+                <a
+                  href={`/property/${property.id}/update-compliance`}
+                  className="inline-flex items-center px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-blue transition-colors"
+                >
+                  📁 Update Compliance Data
+                </a>
+                <button
+                  onClick={() => setShowAmiCheckModal(true)}
+                  className="inline-flex items-center px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-blue transition-colors"
+                >
+                  🏠 AMI Check
+                </button>
+                <button
+                  onClick={() => {
+                    const url = `/api/properties/${property.id}/export-discrepancies`;
+                    window.open(url, '_blank');
+                  }}
+                  className="inline-flex items-center px-4 py-2.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-blue transition-colors"
+                >
+                  📊 Export Property Management System Updates
+                </button>
+              </div>
             </div>
-            <div className="text-sm text-gray-500">
+            <div className="text-sm text-gray-500 lg:text-right lg:max-w-xs">
               Upload new resident & rent roll data to refresh analysis
             </div>
           </div>
@@ -1772,9 +1774,9 @@ export default function PropertyPageClient({ initialProperty }: PropertyPageClie
 
       {/* Compliance Analysis & Controls */}
       <div className="mb-8 bg-white rounded-lg shadow-md overflow-hidden">
-        <div className="bg-gradient-to-r from-brand-blue to-brand-accent px-6 py-4">
-          <h2 className="text-lg font-semibold text-white">Compliance Analysis & Controls</h2>
-          <p className="text-blue-100 text-sm mt-1">Configure your analysis parameters and take action</p>
+        <div className="bg-gradient-to-r from-brand-blue to-brand-accent px-6 py-5">
+          <h2 className="text-xl font-semibold text-white">Compliance Analysis & Controls</h2>
+          <p className="text-blue-100 text-sm mt-2">Configure your analysis parameters and take action</p>
         </div>
         
         <div className="p-6">
