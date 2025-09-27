@@ -1713,7 +1713,10 @@ export default function ResidentDetailPage() {
   }
 
   // Handle vacant units with a special UI
-  if (tenancyData.isVacant) {
+  // Only show "No Current or Future Leases" if there are truly no leases at all
+  const hasFutureLeases = tenancyData.unit?.Lease && tenancyData.unit.Lease.length > 0;
+  
+  if (tenancyData.isVacant && !hasFutureLeases) {
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="container mx-auto px-4 py-8">
@@ -1845,7 +1848,185 @@ export default function ResidentDetailPage() {
     );
   }
 
+  // Handle vacant units that have future leases
+  if (tenancyData.isVacant && hasFutureLeases) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="container mx-auto px-4 py-8">
+          <BackToPropertyLink 
+            propertyId={propertyId as string}
+            className="text-brand-blue hover:underline mb-4 inline-block"
+          />
+          
+          <h1 className="text-4xl font-bold text-brand-blue mb-6">
+            Unit {formatUnitNumber(tenancyData?.unit?.unitNumber || '')} - Vacant Unit with Future Leases
+          </h1>
+          
+          {/* Unit Information */}
+          <div className="bg-white p-6 rounded-lg shadow-md mb-8">
+            <h2 className="text-2xl font-semibold text-brand-blue mb-4">Unit Information</h2>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <p className="text-sm font-medium text-gray-500">Unit Number</p>
+                <p className="text-lg font-semibold text-gray-900">{formatUnitNumber(tenancyData?.unit?.unitNumber || '')}</p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Square Footage</p>
+                <p className="text-lg font-semibold text-gray-900">
+                  {tenancyData?.unit?.squareFootage ? tenancyData.unit.squareFootage.toLocaleString() : 'N/A'}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Bedrooms</p>
+                <p className="text-lg font-semibold text-gray-900">
+                  {tenancyData?.unit?.bedroomCount ?? 'N/A'}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-500">Status</p>
+                <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800">
+                  Vacant
+                </span>
+              </div>
+            </div>
+          </div>
 
+          {/* Current Lease Status */}
+          <div className="bg-white p-6 rounded-lg shadow-md mb-8">
+            <h2 className="text-2xl font-semibold text-brand-blue mb-4">Current Lease Status</h2>
+            <div className="text-center py-8">
+              <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-gray-100 mb-4">
+                <svg className="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-4m-5 0H9m0 0H5m0 0h2M7 3h10M9 9h6m-6 4h6m-6 4h6" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No Current Lease</h3>
+              <p className="text-gray-600">
+                This unit is currently vacant for this rent roll period.
+              </p>
+            </div>
+          </div>
+
+          {/* Future Leases Section */}
+          <div className="bg-white p-6 rounded-lg shadow-md mb-8">
+            <h2 className="text-2xl font-semibold text-brand-blue mb-4">Future Leases</h2>
+            <div className="space-y-4">
+              {tenancyData.unit.Lease.map((lease: any) => (
+                <div key={lease.id} className="bg-purple-50 border border-purple-200 rounded-lg p-6">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <h3 className="text-lg font-medium text-purple-900">{lease.name}</h3>
+                      <p className="text-sm text-purple-700">
+                        {lease.leaseStartDate && lease.leaseEndDate
+                          ? `${new Date(lease.leaseStartDate).toLocaleDateString()} - ${new Date(lease.leaseEndDate).toLocaleDateString()}`
+                          : 'Dates TBD'
+                        }
+                      </p>
+                      {lease.leaseRent && (
+                        <p className="text-sm text-purple-700">
+                          Rent: ${lease.leaseRent.toLocaleString()}
+                        </p>
+                      )}
+                    </div>
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                      Future Lease
+                    </span>
+                  </div>
+                  
+                  {/* Show residents if any */}
+                  {lease.Resident && lease.Resident.length > 0 ? (
+                    <div className="mb-4">
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">Residents ({lease.Resident.length}):</h4>
+                      <div className="space-y-2">
+                        {lease.Resident.map((resident: any) => (
+                          <div key={resident.id} className="flex justify-between items-center bg-white p-3 rounded border">
+                            <span className="font-medium">{resident.name}</span>
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${
+                              resident.incomeFinalized || resident.hasNoIncome
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {resident.incomeFinalized || resident.hasNoIncome ? 'Verified' : 'Pending'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded">
+                      <p className="text-sm text-yellow-800">
+                        <strong>No residents added yet.</strong> This future lease needs residents to proceed with income verification.
+                      </p>
+                    </div>
+                  )}
+                  
+                  {/* Action buttons */}
+                  <div className="flex space-x-3">
+                    <button
+                      onClick={() => {
+                        // Navigate to the lease details
+                        window.location.href = `/property/${propertyId}/lease/${lease.id}`;
+                      }}
+                      className="inline-flex items-center px-4 py-2 border border-purple-300 text-sm font-medium rounded-md text-purple-700 bg-white hover:bg-purple-50"
+                    >
+                      View Details
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Create Additional Future Lease Button */}
+          <div className="text-center">
+            <button
+              onClick={() => setCreateLeaseDialogOpen(true)}
+              className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-brand-blue hover:bg-blue-700"
+            >
+              <svg className="mr-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              Create Additional Future Lease
+            </button>
+          </div>
+        </div>
+
+        {/* Create Lease Dialog */}
+        {isCreateLeaseDialogOpen && (
+          <CreateLeaseDialog
+            isOpen={isCreateLeaseDialogOpen}
+            onClose={() => setCreateLeaseDialogOpen(false)}
+            unitId={unitId as string}
+            onSubmit={async (leaseData) => {
+              try {
+                const response = await fetch(`/api/units/${unitId}/leases`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    ...leaseData,
+                    rentRollId: rentRollId as string,
+                  }),
+                });
+
+                if (!response.ok) {
+                  const errorData = await response.json();
+                  throw new Error(errorData.error || 'Failed to create lease');
+                }
+
+                setCreateLeaseDialogOpen(false);
+                fetchTenancyData(false);
+              } catch (error) {
+                console.error('Error creating lease:', error);
+                alert(error instanceof Error ? error.message : 'Failed to create lease');
+              }
+            }}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
