@@ -160,6 +160,7 @@ export async function POST(
       });
 
       // Create the tenancy record to link lease to rent roll
+      // Both CURRENT and FUTURE leases should be linked to rent rolls (part of snapshot)
       await tx.tenancy.create({
         data: {
           id: tenancyId,
@@ -169,7 +170,7 @@ export async function POST(
         },
       });
 
-      console.log(`[MANUAL LEASE CREATION] Created lease "${name}" (${leaseId}) with tenancy (${tenancyId}) linked to rent roll ${targetRentRoll.id}`);
+      console.log(`[MANUAL LEASE CREATION] Created ${leaseType} lease "${name}" (${leaseId}) with tenancy (${tenancyId}) linked to rent roll ${targetRentRoll.id}`);
 
       return newLease;
     });
